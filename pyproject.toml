@@ -1,0 +1,27 @@
+[project]
+name = "borgboi"
+version = "0.1.0"
+description = "Add your description here"
+license = "MIT"
+readme = "README.md"
+authors = [
+    { name = "Zach Fuller", email = "zach.fuller1222@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "boto3>=1.35.92",
+    "click>=8.1.8",
+    "pydantic>=2.10.4",
+    "rich>=13.9.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "boto3-stubs[essential]>=1.35.92",
+    "mypy>=1.14.1",
+    "ruff>=0.8.6",
+]
