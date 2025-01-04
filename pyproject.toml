@@ -19,6 +19,9 @@ dependencies = [
 borgboi = "borgboi.cli:main"
 bb = "borgboi.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/fullerzz/borgboi"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
