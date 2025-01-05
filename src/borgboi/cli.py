@@ -4,7 +4,7 @@ import click
 from rich.traceback import install
 
 
-from borgboi import backups, rich_utils
+from borgboi import backups, rich_utils, s3_sync
 
 install()
 console = rich_utils.get_console()
@@ -36,6 +36,7 @@ def daily_backup(repo_path: str) -> None:
     console.log(
         ":heavy_check_mark: [bold green]Pruning and compaction completed successfully[/]"
     )
+    s3_sync.sync_repo(repo)
 
 
 @cli.command()
