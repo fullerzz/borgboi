@@ -10,3 +10,7 @@ wheels/
 .venv
 
 logs/
+
+terraform/.terraform
+**/*.tfstate
+**/*.tfstate.backup
