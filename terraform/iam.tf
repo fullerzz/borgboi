@@ -12,7 +12,7 @@ data "aws_iam_policy_document" "borgboi" {
     sid     = "AllowS3Access"
     actions = ["s3:*"]
     resources = [
-      s3-arn,
+      aws_s3_bucket.borgboi.arn,
       "${aws_s3_bucket.borgboi.arn}/*",
       aws_s3_bucket.borgboi-logs.arn,
       "${aws_s3_bucket.borgboi-logs.arn}/*"
