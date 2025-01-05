@@ -31,6 +31,7 @@ class BorgRepo(BaseModel):
             "'home/*/.cache/*'",
             f"{self.path.as_posix()}::{title}",
             dir_to_backup.as_posix(),
+            # TODO: Add a way to log the output of the command and display it in real time
             "2>>",
             "/home/zach/Code/Python/borgboi/logs/borg_create_archive.log",
         ]
