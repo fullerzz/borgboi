@@ -41,10 +41,10 @@ def run_and_log_sp_popen(
     console = get_console()
     print_cmd_parts(cmd_parts)
     proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
-
+    status = f"{status_message}: [bold blue]{" ".join(cmd_parts)}[/]"
     # Borg logs to stderr so that's a use-case where this would be used
     out_stream = proc.stdout if not use_stderr else proc.stderr
-    with console.status(status_message, spinner=spinner):
+    with console.status(status, spinner=spinner):
         while out_stream.readable():  # type: ignore
             line = out_stream.readline()  # type: ignore
             print(line.decode("utf-8"), end="")
