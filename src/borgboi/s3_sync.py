@@ -1,7 +1,7 @@
 from os import environ
 import boto3
 import subprocess as sp
-from borgboi.rich_utils import print_cmd_parts, get_console, print_successful_s3_sync
+from borgboi.rich_utils import print_cmd_parts, get_console
 
 from borgboi.backups import BorgRepo
 
@@ -16,7 +16,6 @@ class S3Client:
 
 
 def sync_repo(repo: BorgRepo) -> None:
-    # s3_client = S3Client(bucket_name=environ["BORG_S3_BUCKET"])
     sync_source = repo.path.as_posix()
     s3_destination_uri = f"s3://{environ["BORG_S3_BUCKET"]}/home"
     cmd_parts = [
@@ -32,19 +31,19 @@ def sync_repo(repo: BorgRepo) -> None:
     proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
 
     with console.status(
-        "[bold green]Syncing with S3 Bucket[/]", spinner="arrow", refresh_per_second=5
+        "[bold green]Syncing with S3 Bucket[/]", spinner="arrow", refresh_per_second=8
     ):
         while proc.stdout.readable():  # type: ignore
             line = proc.stdout.readline()  # type: ignore
-            # TODO: Test out changing next line to console.print(...)
             print(line.decode("utf-8"), end="")
             if not line:
                 break
+    # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0 and returncode != 1:
         console.print(
             f"[bold red]Error syncing with S3 bucket. Return code: {proc.returncode}[/]"
         )
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd_parts)
-
-    print_successful_s3_sync()
+    # Log success if error not raised
+    console.log(":heavy_check_mark: [bold green]Successfully synced with S3 bucket[/]")

@@ -2,6 +2,7 @@ from functools import lru_cache
 from rich.console import Console
 from rich.panel import Panel
 from rich.columns import Columns
+import subprocess as sp
 
 
 @lru_cache(maxsize=1)
@@ -29,12 +30,29 @@ def print_create_archive_output(stdout: str, stderr: str) -> None:
     console.print(columns)
 
 
-def print_successful_s3_sync() -> None:
+def run_and_log_sp_popen(
+    cmd_parts: list[str],
+    status_message: str,
+    success_message: str,
+    error_message: str,
+    spinner: str = "arrow",
+) -> None:
     console = get_console()
-    console.print(
-        Panel(
-            "[bold green]Successfully synced with S3 bucket[/]",
-            title="S3 Sync Complete",
-            expand=False,
+    print_cmd_parts(cmd_parts)
+    proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
+
+    with console.status(status_message, spinner=spinner):
+        while proc.stdout.readable():  # type: ignore
+            line = proc.stdout.readline()  # type: ignore
+            print(line.decode("utf-8"), end="")
+            if not line:
+                break
+
+    # stdout no longer readable so wait for return code
+    returncode = proc.wait()
+    if returncode != 0 and returncode != 1:
+        console.print(
+            f":x: [bold red]{error_message} - Return code: {proc.returncode}[/]"
         )
-    )
+        raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd_parts)
+    console.print(f":heavy_check_mark: [bold green]{success_message}[/]")
