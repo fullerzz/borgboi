@@ -4,7 +4,7 @@ import click
 from rich.traceback import install
 
 
-from borgboi import backups, rich_utils, s3_sync
+from borgboi import backups, rich_utils
 
 install()
 console = rich_utils.get_console()
@@ -19,24 +19,17 @@ def cli() -> None:
 @click.option("--repo-path", "-r", required=True, type=click.Path(exists=True))
 def daily_backup(repo_path: str) -> None:
     """Create a new archive of the home directory with borg and perform pruning and compaction."""
-    console.rule("Preparing to perform backup")
+    # console.rule("Preparing to perform backup")
     repo = backups.BorgRepo(
         path=Path(repo_path),
         passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
     )
     dir_to_backup = Path.home()
-    console.log(
-        f"Creating new archive of [bold cyan]{dir_to_backup.as_posix()}[/] inside the borg repo at [bold cyan]{repo.path.as_posix()}[/]"
-    )
     repo.create_archive(dir_to_backup=dir_to_backup)
-    console.log(":heavy_check_mark: [bold green]Backup completed successfully[/]")
-    console.rule("Pruning old backups and compacting the repo")
+    # console.rule("Pruning old backups and compacting the repo")
     repo.prune()
     repo.compact()
-    console.log(
-        ":heavy_check_mark: [bold green]Pruning and compaction completed successfully[/]"
-    )
-    s3_sync.sync_repo(repo)
+    repo.sync_with_s3()
 
 
 @cli.command()

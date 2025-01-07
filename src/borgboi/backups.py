@@ -1,9 +1,9 @@
+from os import environ
 from pathlib import Path
 from pydantic import BaseModel, SecretStr
 from pydantic.types import DirectoryPath
 from datetime import UTC, datetime
 from borgboi import rich_utils
-import subprocess as sp
 
 
 def _create_archive_title() -> str:
@@ -23,6 +23,7 @@ class BorgRepo(BaseModel):
             "--progress",
             "--filter",
             "AME",
+            "--list",
             "--stats",
             "--show-rc",
             "--compression=zstd,1",
@@ -32,33 +33,15 @@ class BorgRepo(BaseModel):
             f"{self.path.as_posix()}::{title}",
             dir_to_backup.as_posix(),
         ]
-        rich_utils.print_cmd_parts(cmd_parts)
-        console = rich_utils.get_console()
 
-        proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
-
-        with console.status("[bold blue]Creating new archive[/]", spinner="pong"):
-            while proc.stdout.readable():  # type: ignore
-                line = proc.stdout.readline()  # type: ignore
-                print(line.decode("utf-8"), end="")
-                if not line:
-                    break
-
-        # stdout no longer readable so wait for return code
-        returncode = proc.wait()
-        if returncode != 0 and returncode != 1:
-            console.print(
-                f"[bold red]Error creating archive. Return code: {proc.returncode}[/]"
-            )
-            raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd_parts)
-
-        # result = sp.run(cmd_parts, capture_output=True, text=True)
-        # print_create_archive_output(stdout=result.stdout, stderr=result.stderr)
-
-        # if result.returncode != 0 and result.returncode != 1:
-        #     raise sp.CalledProcessError(
-        #         returncode=result.returncode, cmd=result.args, output=result.stdout
-        #     )
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Creating new archive[/]",
+            success_message="Archive created successfully",
+            error_message="Error creating archive",
+            spinner="pong",
+            use_stderr=True,
+        )
 
     def prune(
         self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2
@@ -78,7 +61,8 @@ class BorgRepo(BaseModel):
             status_message="[bold blue]Pruning old backups[/]",
             success_message="Pruning completed successfully",
             error_message="Error pruning backups",
-            spinner="pong",
+            spinner="dots",
+            use_stderr=True,
         )
 
     def compact(self) -> None:
@@ -88,14 +72,31 @@ class BorgRepo(BaseModel):
             "--progress",
             self.path.as_posix(),
         ]
-        rich_utils.print_cmd_parts(cmd_parts)
 
-        result = sp.run(cmd_parts, capture_output=True, text=True)
-        rich_utils.print_create_archive_output(
-            stdout=result.stdout, stderr=result.stderr
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Compacting borg repo[/]",
+            success_message="Compacting completed successfully",
+            error_message="Error compacting repo",
+            spinner="aesthetic",
+            use_stderr=True,
         )
 
-        if result.returncode != 0 and result.returncode != 1:
-            raise sp.CalledProcessError(
-                returncode=result.returncode, cmd=result.args, output=result.stdout
-            )
+    def sync_with_s3(self) -> None:
+        sync_source = self.path.as_posix()
+        s3_destination_uri = f"s3://{environ["BORG_S3_BUCKET"]}/home"
+        cmd_parts = [
+            "aws",
+            "s3",
+            "sync",
+            sync_source,
+            s3_destination_uri,
+        ]
+
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold green]Syncing with S3 Bucket[/]",
+            success_message="Successfully synced with S3 bucket",
+            error_message="Error syncing with S3 bucket",
+            spinner="arrow",
+        )

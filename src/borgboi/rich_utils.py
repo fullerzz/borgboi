@@ -36,14 +36,17 @@ def run_and_log_sp_popen(
     success_message: str,
     error_message: str,
     spinner: str = "arrow",
+    use_stderr: bool = False,
 ) -> None:
     console = get_console()
     print_cmd_parts(cmd_parts)
     proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
 
+    # Borg logs to stderr so that's a use-case where this would be used
+    out_stream = proc.stdout if not use_stderr else proc.stderr
     with console.status(status_message, spinner=spinner):
-        while proc.stdout.readable():  # type: ignore
-            line = proc.stdout.readline()  # type: ignore
+        while out_stream.readable():  # type: ignore
+            line = out_stream.readline()  # type: ignore
             print(line.decode("utf-8"), end="")
             if not line:
                 break
