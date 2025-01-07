@@ -27,3 +27,14 @@ def print_create_archive_output(stdout: str, stderr: str) -> None:
         equal=True,
     )
     console.print(columns)
+
+
+def print_successful_s3_sync() -> None:
+    console = get_console()
+    console.print(
+        Panel(
+            "[bold green]Successfully synced with S3 bucket[/]",
+            title="S3 Sync Complete",
+            expand=False,
+        )
+    )

@@ -1,10 +1,7 @@
 from os import environ
-import sys
 import boto3
 import subprocess as sp
-from borgboi.rich_utils import print_cmd_parts, get_console
-from rich.live import Live
-from rich.text import Text
+from borgboi.rich_utils import print_cmd_parts, get_console, print_successful_s3_sync
 
 from borgboi.backups import BorgRepo
 
@@ -31,36 +28,23 @@ def sync_repo(repo: BorgRepo) -> None:
     ]
     print_cmd_parts(cmd_parts)
 
-    # result = sp.run(cmd_parts, capture_output=True, text=True)
-
-    # proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
-    # while proc.stdout.readable():  # type: ignore
-    #     line = proc.stdout.readline()  # type: ignore
-    #     print(line.decode("utf-8"), end="")
     console = get_console()
+    proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
+
     with console.status(
         "[bold green]Syncing with S3 Bucket[/]", spinner="arrow", refresh_per_second=5
     ):
-        # result = sp.run(cmd_parts, stdout=sys.stdout, stderr=sys.stderr)
-        proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
         while proc.stdout.readable():  # type: ignore
             line = proc.stdout.readline()  # type: ignore
+            # TODO: Test out changing next line to console.print(...)
             print(line.decode("utf-8"), end="")
-
             if not line:
                 break
+    returncode = proc.wait()
+    if returncode != 0 and returncode != 1:
+        console.print(
+            f"[bold red]Error syncing with S3 bucket. Return code: {proc.returncode}[/]"
+        )
+        raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd_parts)
 
-    # with Live(
-    #     Text("Syncing with S3 Bucket...\n", style="bold green"),
-    #     console=get_console(),
-    #     refresh_per_second=2,
-    #     transient=True,
-    #     redirect_stdout=False,
-    #     redirect_stderr=False,
-    # ):
-    #     result = sp.run(cmd_parts, stdout=sys.stdout, stderr=sys.stderr)
-
-    # if result.returncode != 0 and result.returncode != 1:
-    #     raise sp.CalledProcessError(
-    #         returncode=result.returncode, cmd=result.args, output=result.stdout
-    #     )
+    print_successful_s3_sync()
