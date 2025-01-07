@@ -37,15 +37,18 @@ def sync_repo(repo: BorgRepo) -> None:
     # while proc.stdout.readable():  # type: ignore
     #     line = proc.stdout.readline()  # type: ignore
     #     print(line.decode("utf-8"), end="")
-    with Live(
-        Text("Syncing with S3 Bucket...\n", style="bold green"),
-        console=get_console(),
-        refresh_per_second=2,
-        transient=True,
-        redirect_stdout=False,
-        redirect_stderr=False,
-    ):
+    console = get_console()
+    with console.status("[bold green]Syncing with S3 Bucket[/]", spinner="arrow"):
         result = sp.run(cmd_parts, stdout=sys.stdout, stderr=sys.stderr)
+    # with Live(
+    #     Text("Syncing with S3 Bucket...\n", style="bold green"),
+    #     console=get_console(),
+    #     refresh_per_second=2,
+    #     transient=True,
+    #     redirect_stdout=False,
+    #     redirect_stderr=False,
+    # ):
+    #     result = sp.run(cmd_parts, stdout=sys.stdout, stderr=sys.stderr)
 
     if result.returncode != 0 and result.returncode != 1:
         raise sp.CalledProcessError(
