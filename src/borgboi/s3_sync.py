@@ -1,9 +1,10 @@
-
 from os import environ
+import sys
 import boto3
 import subprocess as sp
-from borgboi.rich_utils import print_cmd_parts
-
+from borgboi.rich_utils import print_cmd_parts, get_console
+from rich.live import Live
+from rich.text import Text
 
 from borgboi.backups import BorgRepo
 
@@ -15,7 +16,6 @@ class S3Client:
 
     def list_objects(self, prefix: str) -> None:
         pass
-
 
 
 def sync_repo(repo: BorgRepo) -> None:
@@ -31,10 +31,22 @@ def sync_repo(repo: BorgRepo) -> None:
     ]
     print_cmd_parts(cmd_parts)
 
-    result = sp.run(cmd_parts, capture_output=True, text=True)
+    # result = sp.run(cmd_parts, capture_output=True, text=True)
 
-    print(f"{result.stdout=}")
-    print(f"{result.stderr=}")
+    # proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
+    # while proc.stdout.readable():  # type: ignore
+    #     line = proc.stdout.readline()  # type: ignore
+    #     print(line.decode("utf-8"), end="")
+    with Live(
+        Text("Syncing with S3 Bucket...\n", style="bold green"),
+        console=get_console(),
+        refresh_per_second=2,
+        transient=True,
+        redirect_stdout=False,
+        redirect_stderr=False,
+    ):
+        result = sp.run(cmd_parts, stdout=sys.stdout, stderr=sys.stderr)
+
     if result.returncode != 0 and result.returncode != 1:
         raise sp.CalledProcessError(
             returncode=result.returncode, cmd=result.args, output=result.stdout
