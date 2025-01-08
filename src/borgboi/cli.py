@@ -19,14 +19,12 @@ def cli() -> None:
 @click.option("--repo-path", "-r", required=True, type=click.Path(exists=True))
 def daily_backup(repo_path: str) -> None:
     """Create a new archive of the home directory with borg and perform pruning and compaction."""
-    # console.rule("Preparing to perform backup")
     repo = backups.BorgRepo(
         path=Path(repo_path),
         passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
     )
     dir_to_backup = Path.home()
     repo.create_archive(dir_to_backup=dir_to_backup)
-    # console.rule("Pruning old backups and compacting the repo")
     repo.prune()
     repo.compact()
     repo.sync_with_s3()
