@@ -1,9 +1,9 @@
+from os import environ
 from pathlib import Path
 from pydantic import BaseModel, SecretStr
 from pydantic.types import DirectoryPath
 from datetime import UTC, datetime
-from borgboi.rich_utils import print_cmd_parts, print_create_archive_output
-import subprocess as sp
+from borgboi import rich_utils
 
 
 def _create_archive_title() -> str:
@@ -16,6 +16,14 @@ class BorgRepo(BaseModel):
     passphrase: SecretStr
 
     def create_archive(self, dir_to_backup: Path) -> None:
+        """
+        Create a new Borg archive of the specified directory.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/create.html
+
+        Args:
+            dir_to_backup (Path): directory to be used as the source for the borg archive
+        """
         title = _create_archive_title()
         cmd_parts = [
             "borg",
@@ -23,6 +31,7 @@ class BorgRepo(BaseModel):
             "--progress",
             "--filter",
             "AME",
+            "--list",
             "--stats",
             "--show-rc",
             "--compression=zstd,1",
@@ -31,23 +40,30 @@ class BorgRepo(BaseModel):
             "'home/*/.cache/*'",
             f"{self.path.as_posix()}::{title}",
             dir_to_backup.as_posix(),
-            # TODO: Add a way to log the output of the command and display it in real time
-            "2>>",
-            "/home/zach/Code/Python/borgboi/logs/borg_create_archive.log",
         ]
-        print_cmd_parts(cmd_parts)
 
-        result = sp.run(cmd_parts, capture_output=True, text=True)
-        print_create_archive_output(stdout=result.stdout, stderr=result.stderr)
-
-        if result.returncode != 0 and result.returncode != 1:
-            raise sp.CalledProcessError(
-                returncode=result.returncode, cmd=result.args, output=result.stdout
-            )
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Creating new archive[/]",
+            success_message="Archive created successfully",
+            error_message="Error creating archive",
+            spinner="pong",
+            use_stderr=True,
+        )
 
     def prune(
         self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2
     ) -> None:
+        """
+        Run a Borg prune command to remove old backups from the repository.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/prune.html
+
+        Args:
+            keep_daily (int, optional): Number of daily backups to retain. Defaults to 7.
+            keep_weekly (int, optional): Number of weekly backups to retain. Defaults to 3.
+            keep_monthly (int, optional): Number of monthly backups to retain. Defaults to 2.
+        """
         cmd_parts = [
             "borg",
             "prune",
@@ -57,29 +73,53 @@ class BorgRepo(BaseModel):
             f"--keep-monthly={keep_monthly}",
             self.path.as_posix(),
         ]
-        print_cmd_parts(cmd_parts)
 
-        result = sp.run(cmd_parts, capture_output=True, text=True)
-        print_create_archive_output(stdout=result.stdout, stderr=result.stderr)
-
-        if result.returncode != 0 and result.returncode != 1:
-            raise sp.CalledProcessError(
-                returncode=result.returncode, cmd=result.args, output=result.stdout
-            )
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Pruning old backups[/]",
+            success_message="Pruning completed successfully",
+            error_message="Error pruning backups",
+            spinner="dots",
+            use_stderr=True,
+        )
 
     def compact(self) -> None:
+        """
+        Run a Borg compact command to free repository space.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/compact.html
+        """
         cmd_parts = [
             "borg",
             "compact",
             "--progress",
             self.path.as_posix(),
         ]
-        print_cmd_parts(cmd_parts)
 
-        result = sp.run(cmd_parts, capture_output=True, text=True)
-        print_create_archive_output(stdout=result.stdout, stderr=result.stderr)
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Compacting borg repo[/]",
+            success_message="Compacting completed successfully",
+            error_message="Error compacting repo",
+            spinner="aesthetic",
+            use_stderr=True,
+        )
 
-        if result.returncode != 0 and result.returncode != 1:
-            raise sp.CalledProcessError(
-                returncode=result.returncode, cmd=result.args, output=result.stdout
-            )
+    def sync_with_s3(self) -> None:
+        sync_source = self.path.as_posix()
+        s3_destination_uri = f"s3://{environ["BORG_S3_BUCKET"]}/home"
+        cmd_parts = [
+            "aws",
+            "s3",
+            "sync",
+            sync_source,
+            s3_destination_uri,
+        ]
+
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold green]Syncing with S3 Bucket[/]",
+            success_message="Successfully synced with S3 bucket",
+            error_message="Error syncing with S3 bucket",
+            spinner="arrow",
+        )
