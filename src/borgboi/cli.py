@@ -7,7 +7,7 @@ from rich.traceback import install
 from borgboi import backups, rich_utils
 
 install()
-console = rich_utils.get_console()
+console = rich_utils.console
 
 
 @click.group()
@@ -41,11 +41,11 @@ def create_archive() -> None:
         passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
     )
     dir_to_backup = Path.home()
-    console.log(
+    console.print(
         f"Creating new archive of [bold cyan]{dir_to_backup.as_posix()}[/] inside the borg repo at [bold cyan]{repo.path.as_posix()}[/]"
     )
     repo.create_archive(dir_to_backup=dir_to_backup)
-    console.log(":heavy_check_mark: [bold green]Backup completed successfully[/]")
+    console.print(":heavy_check_mark: [bold green]Backup completed successfully[/]")
 
 
 @cli.command()
@@ -56,11 +56,11 @@ def prune() -> None:
         path=Path("/opt/borg-repos/home"),
         passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
     )
-    console.log(
+    console.print(
         f"Pruning old backups in the borg repo at [bold cyan]{repo.path.as_posix()}[/]"
     )
     repo.prune()
-    console.log(":heavy_check_mark: [bold green]Pruning completed successfully[/]")
+    console.print(":heavy_check_mark: [bold green]Pruning completed successfully[/]")
 
 
 @cli.command()
@@ -71,9 +71,9 @@ def compact() -> None:
         path=Path("/opt/borg-repos/home"),
         passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
     )
-    console.log(f"Compacting the borg repo at [bold cyan]{repo.path.as_posix()}[/]")
+    console.print(f"Compacting the borg repo at [bold cyan]{repo.path.as_posix()}[/]")
     repo.compact()
-    console.log(":heavy_check_mark: [bold green]Compaction completed successfully[/]")
+    console.print(":heavy_check_mark: [bold green]Compaction completed successfully[/]")
 
 
 def main() -> None:

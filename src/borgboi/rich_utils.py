@@ -1,33 +1,16 @@
-from functools import lru_cache
 from rich.console import Console
-from rich.panel import Panel
-from rich.columns import Columns
+from rich.text import Text
 import subprocess as sp
 
 
-@lru_cache(maxsize=1)
-def get_console() -> Console:
-    return Console(record=True)
+console = Console(record=True)
 
 
-def print_cmd_parts(cmd_parts: list[str]) -> None:
-    console = get_console()
-    console.print(
-        Panel(f"[bold blue]{" ".join(cmd_parts)}[/]", title="Command to be Executed")
+def _print_cmd_parts(cmd_parts: list[str]) -> None:
+    cmd = Text.assemble(
+        ("Preparing to execute: ", "bold gray"), (" ".join(cmd_parts), "bold blue")
     )
-
-
-def print_create_archive_output(stdout: str, stderr: str) -> None:
-    console = get_console()
-    columns = Columns(
-        [
-            Panel(stdout, title="Standard Output", expand=False),
-            Panel(stderr, title="Standard Error", expand=False),
-        ],
-        expand=True,
-        equal=True,
-    )
-    console.print(columns)
+    console.print(cmd)
 
 
 def run_and_log_sp_popen(
@@ -38,12 +21,29 @@ def run_and_log_sp_popen(
     spinner: str = "arrow",
     use_stderr: bool = False,
 ) -> None:
-    console = get_console()
-    print_cmd_parts(cmd_parts)
+    """
+    Run a subprocess.Popen command and logs the output to the console.
+    This output is wrapped by a rich console.status context manager to
+    display a spinner while the command is running.
+
+    Args:
+        cmd_parts (list[str]): command inputs to pass to subprocess.Popen
+        status_message (str): status message to display continuously while command runs
+        success_message (str): message to be display upon successful completion of command
+        error_message (str): message to display upon command failure
+        spinner (str, optional): name of spinner animation to use. Defaults to "arrow". See 'python -m rich.spinner' for options.
+        use_stderr (bool, optional): Log stderr instead of stdout to console. Defaults to False.
+
+    Raises:
+        sp.CalledProcessError: Error raised if command exit code isn't 0 or 1
+    """
+    _print_cmd_parts(cmd_parts)
     proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
-    status = f"{status_message}: [bold blue]{" ".join(cmd_parts)}[/]"
-    # Borg logs to stderr so that's a use-case where this would be used
+    status = status_message
+
+    # Borg logs to stderr so that's a use-case where use_stderr would be True
     out_stream = proc.stdout if not use_stderr else proc.stderr
+
     with console.status(status, spinner=spinner):
         while out_stream.readable():  # type: ignore
             line = out_stream.readline()  # type: ignore
@@ -59,3 +59,10 @@ def run_and_log_sp_popen(
         )
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd_parts)
     console.print(f":heavy_check_mark: [bold green]{success_message}[/]")
+
+
+def save_console_output() -> None:
+    """
+    Save the console output to an HTML file.
+    """
+    console.save_html("borgboi_output.html")

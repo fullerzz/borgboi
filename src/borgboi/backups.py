@@ -16,6 +16,14 @@ class BorgRepo(BaseModel):
     passphrase: SecretStr
 
     def create_archive(self, dir_to_backup: Path) -> None:
+        """
+        Create a new Borg archive of the specified directory.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/create.html
+
+        Args:
+            dir_to_backup (Path): directory to be used as the source for the borg archive
+        """
         title = _create_archive_title()
         cmd_parts = [
             "borg",
@@ -46,6 +54,16 @@ class BorgRepo(BaseModel):
     def prune(
         self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2
     ) -> None:
+        """
+        Run a Borg prune command to remove old backups from the repository.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/prune.html
+
+        Args:
+            keep_daily (int, optional): Number of daily backups to retain. Defaults to 7.
+            keep_weekly (int, optional): Number of weekly backups to retain. Defaults to 3.
+            keep_monthly (int, optional): Number of monthly backups to retain. Defaults to 2.
+        """
         cmd_parts = [
             "borg",
             "prune",
@@ -66,6 +84,11 @@ class BorgRepo(BaseModel):
         )
 
     def compact(self) -> None:
+        """
+        Run a Borg compact command to free repository space.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/compact.html
+        """
         cmd_parts = [
             "borg",
             "compact",
