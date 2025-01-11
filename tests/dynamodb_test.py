@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 from mypy_boto3_dynamodb import DynamoDBClient
-from pydantic import SecretStr
 
 from borgboi.backups import BorgRepo
 
@@ -16,7 +15,7 @@ def repo_storage_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture
 def borgboi_repo(repo_storage_dir: Path) -> BorgRepo:
-    return BorgRepo(path=repo_storage_dir, passphrase=SecretStr("TEST"))
+    return BorgRepo(path=repo_storage_dir)
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
@@ -28,4 +27,4 @@ def test_add_repo_to_table(dynamodb: DynamoDBClient, borgboi_repo: BorgRepo) -> 
     response = dynamodb.get_item(TableName=DYNAMO_TABLE_NAME, Key={"repo_path": {"S": borgboi_repo.path.as_posix()}})
     assert "Item" in response
     assert response["Item"]["repo_path"]["S"] == borgboi_repo.path.as_posix()  # type: ignore
-    assert response["Item"]["hashed_passphrase"]["S"] == borgboi_repo.hashed_password  # type: ignore
+    assert response["Item"]["passphrase_env_var_name"]["S"] == borgboi_repo.passphrase_env_var_name  # type: ignore

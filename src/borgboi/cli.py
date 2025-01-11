@@ -1,12 +1,12 @@
-from os import environ
 from pathlib import Path
 
 import click
+from rich.table import Table
 from rich.traceback import install
 
 from borgboi import backups, dynamodb, rich_utils
 
-install()
+install(suppress=[click])
 console = rich_utils.console
 
 
@@ -16,23 +16,32 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option("--repo-path", "-r", required=True, type=click.Path(exists=False))
+@click.option("--repo-path", "-r", required=True, type=click.Path(exists=False), prompt=True)
 def create_repo(repo_path: str) -> None:
     """Create a new Borg repository."""
-    passphrase = click.prompt("Enter passphrase for the repo", hide_input=True)
-    repo = backups.create_borg_repo(path=repo_path, passphrase=passphrase)
+    env_var_name = click.prompt("Enter the name of the environment variable that contains the passphrase for this repo")
+    repo = backups.create_borg_repo(path=repo_path, passphrase_env_var_name=env_var_name)
     dynamodb.add_repo_to_table(repo)
     console.print(f"Created new Borg repo at [bold cyan]{repo.path.as_posix()}[/]")
+
+
+@cli.command()
+def list_repos() -> None:
+    """Create a new Borg repository."""
+    repos = dynamodb.get_all_repos()
+    table = Table(title="BorgBoi Repositories")
+    table.add_column("Local Path")
+    table.add_column("Passphrase Environment Variable")
+    for repo in repos:
+        table.add_row(repo.path.as_posix(), repo.passphrase_env_var_name)
+    console.print(table)
 
 
 @cli.command()
 @click.option("--repo-path", "-r", required=True, type=click.Path(exists=True))
 def daily_backup(repo_path: str) -> None:
     """Create a new archive of the home directory with borg and perform pruning and compaction."""
-    repo = backups.BorgRepo(
-        path=Path(repo_path),
-        passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
-    )
+    repo = backups.BorgRepo(path=Path(repo_path))
     dir_to_backup = Path.home()
     repo.create_archive(dir_to_backup=dir_to_backup)
     repo.prune()
@@ -44,10 +53,7 @@ def daily_backup(repo_path: str) -> None:
 def create_archive() -> None:
     """Create a new archive of the home directory with borg."""
     console.rule("Preparing to perform daily backup")
-    repo = backups.BorgRepo(
-        path=Path("/opt/borg-repos/home"),
-        passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
-    )
+    repo = backups.BorgRepo(path=Path("/opt/borg-repos/home"))
     dir_to_backup = Path.home()
     console.print(
         f"Creating new archive of [bold cyan]{dir_to_backup.as_posix()}[/] inside the borg repo at [bold cyan]{repo.path.as_posix()}[/]"
@@ -60,10 +66,7 @@ def create_archive() -> None:
 def prune() -> None:
     """Prune old backups from the borg repo."""
     console.rule("Pruning old backups")
-    repo = backups.BorgRepo(
-        path=Path("/opt/borg-repos/home"),
-        passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
-    )
+    repo = backups.BorgRepo(path=Path("/opt/borg-repos/home"))
     console.print(f"Pruning old backups in the borg repo at [bold cyan]{repo.path.as_posix()}[/]")
     repo.prune()
     console.print(":heavy_check_mark: [bold green]Pruning completed successfully[/]")
@@ -73,10 +76,7 @@ def prune() -> None:
 def compact() -> None:
     """Compact the borg repo."""
     console.rule("Compacting the borg repo")
-    repo = backups.BorgRepo(
-        path=Path("/opt/borg-repos/home"),
-        passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
-    )
+    repo = backups.BorgRepo(path=Path("/opt/borg-repos/home"))
     console.print(f"Compacting the borg repo at [bold cyan]{repo.path.as_posix()}[/]")
     repo.compact()
     console.print(":heavy_check_mark: [bold green]Compaction completed successfully[/]")

@@ -1,9 +1,8 @@
 from datetime import UTC, datetime
 from functools import cached_property
-from os import environ
+from os import environ, getenv
 from pathlib import Path
 
-import bcrypt
 from pydantic import BaseModel, SecretStr, computed_field
 from pydantic.types import DirectoryPath
 
@@ -17,12 +16,12 @@ def _create_archive_title() -> str:
 
 class BorgRepo(BaseModel):
     path: DirectoryPath
-    passphrase: SecretStr
+    passphrase_env_var_name: str = "BORG_PASSPHRASE"  # noqa: S105
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
-    def hashed_password(self) -> str:
-        return bcrypt.hashpw(self.passphrase.get_secret_value().encode(), bcrypt.gensalt()).decode()
+    def passphrase(self) -> SecretStr:
+        return SecretStr(getenv(self.passphrase_env_var_name, ""))
 
     def create_archive(self, dir_to_backup: Path) -> None:
         """
@@ -132,8 +131,13 @@ class BorgRepo(BaseModel):
         )
 
 
-def create_borg_repo(path: str, passphrase: str) -> BorgRepo:
+def create_borg_repo(path: str, passphrase_env_var_name: str) -> BorgRepo:
+    repo_path = Path(path)
+    if repo_path.is_file():
+        raise ValueError(f"Path {repo_path} is a file, not a directory")
+    if not repo_path.exists():
+        repo_path.mkdir()
     return BorgRepo(
-        path=Path(path),
-        passphrase=SecretStr(passphrase),
+        path=repo_path,
+        passphrase_env_var_name=passphrase_env_var_name,
     )
