@@ -1,15 +1,13 @@
-from rich.console import Console
-from rich.text import Text
 import subprocess as sp
 
+from rich.console import Console
+from rich.text import Text
 
 console = Console(record=True)
 
 
 def _print_cmd_parts(cmd_parts: list[str]) -> None:
-    cmd = Text.assemble(
-        ("Preparing to execute: ", "bold gray"), (" ".join(cmd_parts), "bold blue")
-    )
+    cmd = Text.assemble(("Preparing to execute: ", "bold gray"), (" ".join(cmd_parts), "bold blue"))
     console.print(cmd)
 
 
@@ -38,7 +36,7 @@ def run_and_log_sp_popen(
         sp.CalledProcessError: Error raised if command exit code isn't 0 or 1
     """
     _print_cmd_parts(cmd_parts)
-    proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)
+    proc = sp.Popen(cmd_parts, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     status = status_message
 
     # Borg logs to stderr so that's a use-case where use_stderr would be True
@@ -47,16 +45,14 @@ def run_and_log_sp_popen(
     with console.status(status, spinner=spinner):
         while out_stream.readable():  # type: ignore
             line = out_stream.readline()  # type: ignore
-            print(line.decode("utf-8"), end="")
+            print(line.decode("utf-8"), end="")  # noqa: T201
             if not line:
                 break
 
     # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0 and returncode != 1:
-        console.print(
-            f":x: [bold red]{error_message} - Return code: {proc.returncode}[/]"
-        )
+        console.print(f":x: [bold red]{error_message} - Return code: {proc.returncode}[/]")
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd_parts)
     console.print(f":heavy_check_mark: [bold green]{success_message}[/]")
 

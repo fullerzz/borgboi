@@ -1,10 +1,10 @@
 from os import environ
 from pathlib import Path
+
 import click
 from rich.traceback import install
 
-
-from borgboi import backups, rich_utils
+from borgboi import backups, dynamodb, rich_utils
 
 install()
 console = rich_utils.console
@@ -13,6 +13,16 @@ console = rich_utils.console
 @click.group()
 def cli() -> None:
     pass
+
+
+@cli.command()
+@click.option("--repo-path", "-r", required=True, type=click.Path(exists=False))
+def create_repo(repo_path: str) -> None:
+    """Create a new Borg repository."""
+    passphrase = click.prompt("Enter passphrase for the repo", hide_input=True)
+    repo = backups.create_borg_repo(path=repo_path, passphrase=passphrase)
+    dynamodb.add_repo_to_table(repo)
+    console.print(f"Created new Borg repo at [bold cyan]{repo.path.as_posix()}[/]")
 
 
 @cli.command()
@@ -54,9 +64,7 @@ def prune() -> None:
         path=Path("/opt/borg-repos/home"),
         passphrase=environ["BORG_PASSPHRASE"],  # type: ignore
     )
-    console.print(
-        f"Pruning old backups in the borg repo at [bold cyan]{repo.path.as_posix()}[/]"
-    )
+    console.print(f"Pruning old backups in the borg repo at [bold cyan]{repo.path.as_posix()}[/]")
     repo.prune()
     console.print(":heavy_check_mark: [bold green]Pruning completed successfully[/]")
 

@@ -1,8 +1,12 @@
+from datetime import UTC, datetime
+from functools import cached_property
 from os import environ
 from pathlib import Path
-from pydantic import BaseModel, SecretStr
+
+import bcrypt
+from pydantic import BaseModel, SecretStr, computed_field
 from pydantic.types import DirectoryPath
-from datetime import UTC, datetime
+
 from borgboi import rich_utils
 
 
@@ -14,6 +18,11 @@ def _create_archive_title() -> str:
 class BorgRepo(BaseModel):
     path: DirectoryPath
     passphrase: SecretStr
+
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
+    def hashed_password(self) -> str:
+        return bcrypt.hashpw(self.passphrase.get_secret_value().encode(), bcrypt.gensalt()).decode()
 
     def create_archive(self, dir_to_backup: Path) -> None:
         """
@@ -51,9 +60,7 @@ class BorgRepo(BaseModel):
             use_stderr=True,
         )
 
-    def prune(
-        self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2
-    ) -> None:
+    def prune(self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2) -> None:
         """
         Run a Borg prune command to remove old backups from the repository.
 
@@ -123,3 +130,10 @@ class BorgRepo(BaseModel):
             error_message="Error syncing with S3 bucket",
             spinner="arrow",
         )
+
+
+def create_borg_repo(path: str, passphrase: str) -> BorgRepo:
+    return BorgRepo(
+        path=Path(path),
+        passphrase=SecretStr(passphrase),
+    )
