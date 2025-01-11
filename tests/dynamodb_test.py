@@ -15,7 +15,7 @@ def repo_storage_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture
 def borgboi_repo(repo_storage_dir: Path) -> BorgRepo:
-    return BorgRepo(path=repo_storage_dir)
+    return BorgRepo(path=repo_storage_dir, name="test-repo")
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")

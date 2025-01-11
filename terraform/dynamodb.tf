@@ -12,4 +12,17 @@ resource "aws_dynamodb_table" "borg-repo-table" {
     name = "repo_path"
     type = "S"
   }
+
+  attribute {
+    name = "name"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "name_gsi"
+    hash_key        = "name"
+    write_capacity  = 5
+    read_capacity   = 5
+    projection_type = "ALL"
+  }
 }

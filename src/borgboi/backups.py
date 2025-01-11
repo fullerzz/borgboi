@@ -17,6 +17,9 @@ def _create_archive_title() -> str:
 class BorgRepo(BaseModel):
     path: DirectoryPath
     passphrase_env_var_name: str = "BORG_PASSPHRASE"  # noqa: S105
+    name: str
+    last_backup: datetime | None = None
+    last_s3_sync: datetime | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
@@ -58,6 +61,7 @@ class BorgRepo(BaseModel):
             spinner="pong",
             use_stderr=True,
         )
+        self.last_backup = datetime.now(UTC)
 
     def prune(self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2) -> None:
         """
@@ -129,15 +133,13 @@ class BorgRepo(BaseModel):
             error_message="Error syncing with S3 bucket",
             spinner="arrow",
         )
+        self.last_s3_sync = datetime.now(UTC)
 
 
-def create_borg_repo(path: str, passphrase_env_var_name: str) -> BorgRepo:
+def create_borg_repo(path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
     repo_path = Path(path)
     if repo_path.is_file():
         raise ValueError(f"Path {repo_path} is a file, not a directory")
     if not repo_path.exists():
         repo_path.mkdir()
-    return BorgRepo(
-        path=repo_path,
-        passphrase_env_var_name=passphrase_env_var_name,
-    )
+    return BorgRepo(path=repo_path, passphrase_env_var_name=passphrase_env_var_name, name=name)
