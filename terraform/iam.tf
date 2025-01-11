@@ -25,6 +25,16 @@ data "aws_iam_policy_document" "borgboi" {
     actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
     resources = ["*"]
   }
+
+  statement {
+    effect  = "Allow"
+    sid     = "AllowDynamoAccess"
+    actions = ["dynamodb:*"]
+    resources = [
+      aws_dynamodb_table.borg-repo-table.arn,
+      "${aws_dynamodb_table.borg-repo-table.arn}/*",
+    ]
+  }
 }
 
 resource "aws_iam_user_policy" "borgboi" {

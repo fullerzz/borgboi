@@ -1,8 +1,11 @@
-from os import environ
-from pathlib import Path
-from pydantic import BaseModel, SecretStr
-from pydantic.types import DirectoryPath
 from datetime import UTC, datetime
+from functools import cached_property
+from os import environ, getenv
+from pathlib import Path
+
+from pydantic import BaseModel, SecretStr, computed_field
+from pydantic.types import DirectoryPath
+
 from borgboi import rich_utils
 
 
@@ -13,7 +16,15 @@ def _create_archive_title() -> str:
 
 class BorgRepo(BaseModel):
     path: DirectoryPath
-    passphrase: SecretStr
+    passphrase_env_var_name: str = "BORG_PASSPHRASE"  # noqa: S105
+    name: str
+    last_backup: datetime | None = None
+    last_s3_sync: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
+    def passphrase(self) -> SecretStr:
+        return SecretStr(getenv(self.passphrase_env_var_name, ""))
 
     def create_archive(self, dir_to_backup: Path) -> None:
         """
@@ -50,10 +61,9 @@ class BorgRepo(BaseModel):
             spinner="pong",
             use_stderr=True,
         )
+        self.last_backup = datetime.now(UTC)
 
-    def prune(
-        self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2
-    ) -> None:
+    def prune(self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2) -> None:
         """
         Run a Borg prune command to remove old backups from the repository.
 
@@ -107,7 +117,7 @@ class BorgRepo(BaseModel):
 
     def sync_with_s3(self) -> None:
         sync_source = self.path.as_posix()
-        s3_destination_uri = f"s3://{environ["BORG_S3_BUCKET"]}/home"
+        s3_destination_uri = f"s3://{environ['BORG_S3_BUCKET']}/home"
         cmd_parts = [
             "aws",
             "s3",
@@ -123,3 +133,4 @@ class BorgRepo(BaseModel):
             error_message="Error syncing with S3 bucket",
             spinner="arrow",
         )
+        self.last_s3_sync = datetime.now(UTC)
