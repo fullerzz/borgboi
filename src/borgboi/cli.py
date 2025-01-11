@@ -22,7 +22,6 @@ def create_repo(repo_path: str) -> None:
     env_var_name = click.prompt("Enter the name of the environment variable that contains the passphrase for this repo")
     name = click.prompt("Enter a name for this repository")
     repo = orchestrator.create_borg_repo(path=repo_path, passphrase_env_var_name=env_var_name, name=name)
-    dynamodb.add_repo_to_table(repo)
     console.print(f"Created new Borg repo at [bold cyan]{repo.path.as_posix()}[/]")
 
 

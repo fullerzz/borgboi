@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from borgboi.backups import BorgRepo
-from borgboi.dynamodb import get_repo_by_name, get_repo_by_path, update_repo
+from borgboi.dynamodb import add_repo_to_table, get_repo_by_name, get_repo_by_path, update_repo
 
 
 def create_borg_repo(path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
@@ -10,7 +10,10 @@ def create_borg_repo(path: str, passphrase_env_var_name: str, name: str) -> Borg
         raise ValueError(f"Path {repo_path} is a file, not a directory")
     if not repo_path.exists():
         repo_path.mkdir()
-    return BorgRepo(path=repo_path, passphrase_env_var_name=passphrase_env_var_name, name=name)
+
+    new_repo = BorgRepo(path=repo_path, passphrase_env_var_name=passphrase_env_var_name, name=name)
+    add_repo_to_table(new_repo)
+    return new_repo
 
 
 def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
