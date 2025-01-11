@@ -1,3 +1,4 @@
+from datetime import datetime
 from os import environ
 from pathlib import Path
 
@@ -12,6 +13,8 @@ class BorgRepoTableItem(BaseModel):
     repo_path: str
     passphrase_env_var_name: str
     name: str
+    last_backup: str | None = None
+    last_s3_sync: str | None = None
 
 
 def _convert_repo_to_table_item(repo: BorgRepo) -> BorgRepoTableItem:
@@ -25,7 +28,11 @@ def _convert_repo_to_table_item(repo: BorgRepo) -> BorgRepoTableItem:
         BorgRepoTableItem: Borg repository converted to a DynamoDB table item
     """
     return BorgRepoTableItem(
-        repo_path=repo.path.as_posix(), passphrase_env_var_name=repo.passphrase_env_var_name, name=repo.name
+        repo_path=repo.path.as_posix(),
+        passphrase_env_var_name=repo.passphrase_env_var_name,
+        name=repo.name,
+        last_backup=repo.last_backup.isoformat() if repo.last_backup else None,
+        last_s3_sync=repo.last_s3_sync.isoformat() if repo.last_s3_sync else None,
     )
 
 
@@ -39,7 +46,20 @@ def _convert_table_item_to_repo(repo: BorgRepoTableItem) -> BorgRepo:
     Returns:
         BorgRepo: Borg repository
     """
-    return BorgRepo(path=Path(repo.repo_path), passphrase_env_var_name=repo.passphrase_env_var_name, name=repo.name)
+    last_backup = None
+    last_s3_sync = None
+    if repo.last_backup:
+        last_backup = datetime.fromisoformat(repo.last_backup)
+    if repo.last_s3_sync:
+        last_s3_sync = datetime.fromisoformat(repo.last_s3_sync)
+
+    return BorgRepo(
+        path=Path(repo.repo_path),
+        passphrase_env_var_name=repo.passphrase_env_var_name,
+        name=repo.name,
+        last_backup=last_backup,
+        last_s3_sync=last_s3_sync,
+    )
 
 
 def add_repo_to_table(repo: BorgRepo) -> None:
@@ -99,3 +119,15 @@ def get_repo_by_name(repo_name: str) -> BorgRepo:
         Limit=1,
     )
     return _convert_table_item_to_repo(BorgRepoTableItem(**response["Items"][0]))  # type: ignore
+
+
+def update_repo(repo: BorgRepo) -> None:
+    """
+    Update a Borg repository in the DynamoDB table.
+
+    Args:
+        repo (BorgRepo): Borg repository to update
+    """
+    table = boto3.resource("dynamodb").Table(environ["BORG_DYNAMODB_TABLE"])
+    table.put_item(Item=_convert_repo_to_table_item(repo).model_dump())
+    console.print(f"Updated repo in DynamoDB table: [bold cyan]{repo.path.as_posix()}[/]")

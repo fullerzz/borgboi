@@ -134,12 +134,3 @@ class BorgRepo(BaseModel):
             spinner="arrow",
         )
         self.last_s3_sync = datetime.now(UTC)
-
-
-def create_borg_repo(path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
-    repo_path = Path(path)
-    if repo_path.is_file():
-        raise ValueError(f"Path {repo_path} is a file, not a directory")
-    if not repo_path.exists():
-        repo_path.mkdir()
-    return BorgRepo(path=repo_path, passphrase_env_var_name=passphrase_env_var_name, name=name)
