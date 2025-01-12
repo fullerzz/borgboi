@@ -1,10 +1,9 @@
 from pathlib import Path
 
 import click
-from rich.table import Table
 from rich.traceback import install
 
-from borgboi import backups, dynamodb, orchestrator, rich_utils
+from borgboi import backups, orchestrator, rich_utils
 
 install(suppress=[click])
 console = rich_utils.console
@@ -28,14 +27,7 @@ def create_repo(repo_path: str) -> None:
 @cli.command()
 def list_repos() -> None:
     """Create a new Borg repository."""
-    repos = dynamodb.get_all_repos()
-    table = Table(title="BorgBoi Repositories")
-    table.add_column("Name")
-    table.add_column("Local Path")
-    table.add_column("Passphrase Environment Variable")
-    for repo in repos:
-        table.add_row(repo.name, repo.path.as_posix(), repo.passphrase_env_var_name)
-    console.print(table)
+    orchestrator.list_repos()
 
 
 @cli.command()
