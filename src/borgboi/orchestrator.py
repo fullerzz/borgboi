@@ -1,7 +1,10 @@
 from pathlib import Path
 
+from rich.table import Table
+
 from borgboi.backups import BorgRepo
-from borgboi.dynamodb import add_repo_to_table, get_repo_by_name, get_repo_by_path, update_repo
+from borgboi.dynamodb import add_repo_to_table, get_all_repos, get_repo_by_name, get_repo_by_path, update_repo
+from borgboi.rich_utils import console
 
 
 def create_borg_repo(path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
@@ -23,6 +26,32 @@ def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
         return get_repo_by_name(repo_name)
     else:
         raise ValueError("Either repo_name or repo_path must be provided")
+
+
+def list_repos() -> None:
+    repos = get_all_repos()
+    table = Table(title="BorgBoi Repositories", show_lines=True)
+    table.add_column("Name")
+    table.add_column("Local Path")
+    table.add_column("Passphrase Environment Variable")
+    table.add_column("Last Archive Date")
+    table.add_column("Last S3 Sync Date")
+    table.add_column("Archival Target")
+
+    for repo in repos:
+        name = f"[bold cyan]{repo.name}[/]"
+        local_path = f"[bold blue]{repo.path.as_posix()}[/]"
+        env_var_name = f"[bold green]{repo.passphrase_env_var_name}[/]"
+        if repo.last_backup:
+            archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
+        else:
+            archive_date = "[italic red]Never[/]"
+        if repo.last_s3_sync:
+            sync_date = f"[bold yellow]{repo.last_s3_sync.strftime('%a %b %d, %Y')}[/]"
+        else:
+            sync_date = "[italic red]Never[/]"
+        table.add_row(name, local_path, env_var_name, archive_date, sync_date)
+    console.print(table)
 
 
 def perform_daily_backup(repo_path: str) -> None:
