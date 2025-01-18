@@ -4,7 +4,7 @@ from pathlib import Path
 
 from rich.table import Table
 
-from borgboi import dynamodb
+from borgboi import dynamodb, validator
 from borgboi.backups import BorgRepo
 from borgboi.rich_utils import console
 
@@ -37,6 +37,13 @@ def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
         return dynamodb.get_repo_by_name(repo_name)
     else:
         raise ValueError("Either repo_name or repo_path must be provided")
+
+
+def get_repo_info(repo_path: str | None, repo_name: str | None) -> None:
+    repo = lookup_repo(repo_path, repo_name)
+    if validator.repo_is_local(repo) is False:
+        raise ValueError("Repository must be local to view info")
+    repo.info()
 
 
 def list_repos() -> None:

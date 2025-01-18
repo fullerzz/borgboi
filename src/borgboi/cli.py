@@ -61,8 +61,7 @@ def export_repo_key(repo_path: str) -> None:
 @click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
 def repo_info(repo_path: str | None, repo_name: str | None) -> None:
     """List a local Borg repository's info."""
-    repo = orchestrator.lookup_repo(repo_path, repo_name)
-    repo.info()
+    orchestrator.get_repo_info(repo_path, repo_name)
 
 
 def main() -> None:
