@@ -1,3 +1,5 @@
+import os
+import socket
 from pathlib import Path
 
 from rich.table import Table
@@ -7,14 +9,23 @@ from borgboi.dynamodb import add_repo_to_table, get_all_repos, get_repo_by_name,
 from borgboi.rich_utils import console
 
 
-def create_borg_repo(path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
+def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
+    if os.getenv("BORG_NEW_PASSPHRASE") is None:
+        raise ValueError("Environment variable BORG_NEW_PASSPHRASE must be set")
     repo_path = Path(path)
     if repo_path.is_file():
         raise ValueError(f"Path {repo_path} is a file, not a directory")
     if not repo_path.exists():
         repo_path.mkdir()
 
-    new_repo = BorgRepo(path=repo_path, passphrase_env_var_name=passphrase_env_var_name, name=name)
+    new_repo = BorgRepo(
+        path=repo_path,
+        backup_target=Path(backup_path),
+        passphrase_env_var_name=passphrase_env_var_name,
+        name=name,
+        hostname=socket.gethostname(),
+    )
+    new_repo.init_repository()
     add_repo_to_table(new_repo)
     return new_repo
 
@@ -56,8 +67,7 @@ def list_repos() -> None:
 
 def perform_daily_backup(repo_path: str) -> None:
     repo = lookup_repo(repo_path, None)
-    dir_to_backup = Path.home()
-    repo.create_archive(dir_to_backup=dir_to_backup)
+    repo.create_archive()
     repo.prune()
     repo.compact()
     repo.sync_with_s3()

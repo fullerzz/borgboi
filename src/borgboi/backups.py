@@ -1,7 +1,6 @@
 from datetime import UTC, datetime
 from functools import cached_property
 from os import environ, getenv
-from pathlib import Path
 
 from pydantic import BaseModel, SecretStr, computed_field
 from pydantic.types import DirectoryPath
@@ -16,8 +15,10 @@ def _create_archive_title() -> str:
 
 class BorgRepo(BaseModel):
     path: DirectoryPath
+    backup_target: DirectoryPath
     passphrase_env_var_name: str = "BORG_PASSPHRASE"  # noqa: S105
     name: str
+    hostname: str
     last_backup: datetime | None = None
     last_s3_sync: datetime | None = None
 
@@ -26,14 +27,45 @@ class BorgRepo(BaseModel):
     def passphrase(self) -> SecretStr:
         return SecretStr(getenv(self.passphrase_env_var_name, ""))
 
-    def create_archive(self, dir_to_backup: Path) -> None:
+    def init_repository(self) -> None:
         """
-        Create a new Borg archive of the specified directory.
+        Initialize a new Borg repository at the specified path.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/init.html
+        """
+        cmd_parts = [
+            "borg",
+            "init",
+            "--progress",
+            "--encryption=repokey",
+            "--storage-quota=100G",
+            self.path.as_posix(),
+        ]
+
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Initializing new repository[/]",
+            success_message="Repository initialized successfully",
+            error_message="Error initializing repository",
+            spinner="arc",
+            use_stderr=True,
+        )
+
+        config_cmd_parts = ["borg", "config", self.path.as_posix(), "additional_free_space", "2G"]
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=config_cmd_parts,
+            status_message="[bold blue]Configuring additional_free_space[/]",
+            success_message="Configuration applied successfully",
+            error_message="Error configuration additional_free_space",
+            spinner="arc",
+            use_stderr=True,
+        )
+
+    def create_archive(self) -> None:
+        """
+        Create a new Borg archive of the backup target directory.
 
         https://borgbackup.readthedocs.io/en/stable/usage/create.html
-
-        Args:
-            dir_to_backup (Path): directory to be used as the source for the borg archive
         """
         title = _create_archive_title()
         cmd_parts = [
@@ -50,7 +82,7 @@ class BorgRepo(BaseModel):
             "--exclude",
             "'home/*/.cache/*'",
             f"{self.path.as_posix()}::{title}",
-            dir_to_backup.as_posix(),
+            self.backup_target.as_posix(),
         ]
 
         rich_utils.run_and_log_sp_popen(
