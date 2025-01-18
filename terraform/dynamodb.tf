@@ -14,13 +14,13 @@ resource "aws_dynamodb_table" "borg-repo-table" {
   }
 
   attribute {
-    name = "name"
+    name = "common_name"
     type = "S"
   }
 
   global_secondary_index {
     name            = "name_gsi"
-    hash_key        = "name"
+    hash_key        = "common_name"
     write_capacity  = 5
     read_capacity   = 5
     projection_type = "ALL"

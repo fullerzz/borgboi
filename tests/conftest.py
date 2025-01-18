@@ -67,14 +67,14 @@ def create_dynamodb_table(dynamodb: DynamoDBClient) -> None:
         ],
         AttributeDefinitions=[
             {"AttributeName": "repo_path", "AttributeType": "S"},
-            {"AttributeName": "name", "AttributeType": "S"},
+            {"AttributeName": "common_name", "AttributeType": "S"},
         ],
         ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
         GlobalSecondaryIndexes=[
             {
                 "IndexName": "name_gsi",
                 "KeySchema": [
-                    {"AttributeName": "name", "KeyType": "HASH"},
+                    {"AttributeName": "common_name", "KeyType": "HASH"},
                 ],
                 "Projection": {
                     "ProjectionType": "ALL",
