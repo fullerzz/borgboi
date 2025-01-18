@@ -7,7 +7,7 @@ console = Console(record=True)
 
 
 def _print_cmd_parts(cmd_parts: list[str]) -> None:
-    cmd = Text.assemble(("Preparing to execute: ", "bold gray"), (" ".join(cmd_parts), "bold blue"))
+    cmd = Text.assemble(("Preparing to execute: ", "orange3"), (" ".join(cmd_parts), "bold blue"))
     console.print(cmd)
 
 
