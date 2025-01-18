@@ -163,6 +163,28 @@ class BorgRepo(BaseModel):
             use_stderr=True,
         )
 
+    def info(self) -> None:
+        """
+        Run a Borg info command to display information about the repository.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/info.html
+        """
+        cmd_parts = [
+            "borg",
+            "info",
+            # "--json",
+            self.path.as_posix(),
+        ]
+
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Getting repo info[/]",
+            success_message="Repo info retrieved successfully",
+            error_message="Error getting repo info",
+            spinner="triangle",
+            use_stderr=False,
+        )
+
     def export_repo_key(self) -> None:
         """
         Exports the Borg repository key to a file in the user's home directory.

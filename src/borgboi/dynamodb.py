@@ -120,7 +120,7 @@ def get_repo_by_name(repo_name: str) -> BorgRepo:
     table = boto3.resource("dynamodb").Table(environ["BORG_DYNAMODB_TABLE"])
     response = table.query(
         IndexName="name_gsi",
-        KeyConditionExpression="name = :name",
+        KeyConditionExpression="common_name = :name",
         ExpressionAttributeValues={":name": repo_name},
         Limit=1,
     )
