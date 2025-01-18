@@ -60,6 +60,7 @@ def mocked_aws(aws_credentials: None) -> Generator[None, Any, None]:
 
 @pytest.fixture
 def create_dynamodb_table(dynamodb: DynamoDBClient) -> None:
+    # TODO: Add GSI to table
     dynamodb.create_table(
         TableName=DYNAMO_TABLE_NAME,
         KeySchema=[
