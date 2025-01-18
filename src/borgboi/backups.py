@@ -3,7 +3,7 @@ from functools import cached_property
 from os import environ, getenv
 
 from pydantic import BaseModel, SecretStr, computed_field
-from pydantic.types import DirectoryPath
+from pydantic.types import DirectoryPath, NewPath
 
 from borgboi import rich_utils
 
@@ -14,8 +14,8 @@ def _create_archive_title() -> str:
 
 
 class BorgRepo(BaseModel):
-    path: DirectoryPath
-    backup_target: DirectoryPath
+    path: DirectoryPath | NewPath
+    backup_target: DirectoryPath | NewPath
     passphrase_env_var_name: str = "BORG_PASSPHRASE"  # noqa: S105
     name: str
     hostname: str
