@@ -57,6 +57,14 @@ def run_and_log_sp_popen(
     console.print(f":heavy_check_mark: [bold green]{success_message}[/]")
 
 
+def output_init_instructions(repo_path: str) -> None:
+    """
+    Print instructions for initializing a new Borg repository.
+    """
+    console.print("To initialize the Borg repository, run the following command:")
+    console.print(f"[bold blue]borg init --progress --encryption=repokey --storage-quota=100G {repo_path}[/]")
+
+
 def save_console_output() -> None:
     """
     Save the console output to an HTML file.

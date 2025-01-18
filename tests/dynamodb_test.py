@@ -14,8 +14,13 @@ def repo_storage_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture
-def borgboi_repo(repo_storage_dir: Path) -> BorgRepo:
-    return BorgRepo(path=repo_storage_dir, name="test-repo")
+def backup_target_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("borgboi-test-backup-target")
+
+
+@pytest.fixture
+def borgboi_repo(repo_storage_dir: Path, backup_target_dir: Path) -> BorgRepo:
+    return BorgRepo(path=repo_storage_dir, backup_target=backup_target_dir, name="test-repo", hostname="test-host")
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
@@ -26,5 +31,5 @@ def test_add_repo_to_table(dynamodb: DynamoDBClient, borgboi_repo: BorgRepo) -> 
 
     response = dynamodb.get_item(TableName=DYNAMO_TABLE_NAME, Key={"repo_path": {"S": borgboi_repo.path.as_posix()}})
     assert "Item" in response
-    assert response["Item"]["repo_path"]["S"] == borgboi_repo.path.as_posix()  # type: ignore
-    assert response["Item"]["passphrase_env_var_name"]["S"] == borgboi_repo.passphrase_env_var_name  # type: ignore
+    assert response["Item"]["repo_path"]["S"] == borgboi_repo.path.as_posix()  # pyright: ignore[reportTypedDictNotRequiredAccess]
+    assert response["Item"]["passphrase_env_var_name"]["S"] == borgboi_repo.passphrase_env_var_name  # pyright: ignore[reportTypedDictNotRequiredAccess]

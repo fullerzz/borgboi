@@ -11,8 +11,10 @@ from borgboi.rich_utils import console
 
 class BorgRepoTableItem(BaseModel):
     repo_path: str
+    backup_target_path: str
     passphrase_env_var_name: str
     name: str
+    hostname: str
     last_backup: str | None = None
     last_s3_sync: str | None = None
 
@@ -29,8 +31,10 @@ def _convert_repo_to_table_item(repo: BorgRepo) -> BorgRepoTableItem:
     """
     return BorgRepoTableItem(
         repo_path=repo.path.as_posix(),
+        backup_target_path=repo.backup_target.as_posix(),
         passphrase_env_var_name=repo.passphrase_env_var_name,
         name=repo.name,
+        hostname=repo.hostname,
         last_backup=repo.last_backup.isoformat() if repo.last_backup else None,
         last_s3_sync=repo.last_s3_sync.isoformat() if repo.last_s3_sync else None,
     )
@@ -55,8 +59,10 @@ def _convert_table_item_to_repo(repo: BorgRepoTableItem) -> BorgRepo:
 
     return BorgRepo(
         path=Path(repo.repo_path),
+        backup_target=Path(repo.backup_target_path),
         passphrase_env_var_name=repo.passphrase_env_var_name,
         name=repo.name,
+        hostname=repo.hostname,
         last_backup=last_backup,
         last_s3_sync=last_s3_sync,
     )
