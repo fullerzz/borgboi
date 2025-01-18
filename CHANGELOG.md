@@ -1,3 +1,13 @@
+## v0.3.0 (2025-01-18)
+
+### Feat
+
+- add new command to view borg repo info
+
+### Refactor
+
+- move get repo info logic into orchestrator and added validator module
+
 ## v0.2.2 (2025-01-18)
 
 ### Refactor
