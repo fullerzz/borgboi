@@ -23,23 +23,25 @@ def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, monke
 @pytest.mark.usefixtures("create_dynamodb_table")
 @pytest.mark.parametrize(("repo_path", "repo_name"), [(None, "test-repo"), ("/path/to/repo", None)])
 def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: pytest.MonkeyPatch) -> None:
+    import borgboi.dynamodb
     from borgboi.orchestrator import lookup_repo
 
-    path_func_called = False
-    name_func_called = False
-
-    def mock_get_repo_by_path(*args: Any, **kwargs: Any) -> None:
-        path_func_called = True
+    def mock_get_repo_by_path(*args: Any, **kwargs: Any) -> str:
+        # Returns first arg passed into the function which is the repo path
+        return args[0]
 
     def mock_get_repo_by_name(*args: Any, **kwargs: Any) -> None:
-        name_func_called = True
+        # Returns first arg passed into the function which is the repo name
+        return args[0]
 
-    monkeypatch.setattr("borgboi.dynamodb.get_repo_by_path", mock_get_repo_by_path)
-    monkeypatch.setattr("borgboi.dynamodb.get_repo_by_name", mock_get_repo_by_path)
-    lookup_repo(repo_path, repo_name)
+    monkeypatch.setattr(borgboi.dynamodb, "get_repo_by_path", mock_get_repo_by_path)
+    monkeypatch.setattr(borgboi.dynamodb, "get_repo_by_name", mock_get_repo_by_name)
+    resp = lookup_repo(repo_path, repo_name)
     if repo_path:
-        assert path_func_called is True
+        # If repo_path is provided, the mocked function should return the repo path
+        assert resp == repo_path
     elif repo_name:
-        assert name_func_called is True
+        # If repo_name is provided, the mocked function should return the repo name
+        assert resp == repo_name
     else:
         raise AssertionError("Either get_repo_by_path or get_repo_by_name should have been called")
