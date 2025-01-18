@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from functools import cached_property
 from os import environ, getenv
+from pathlib import Path
 
 from pydantic import BaseModel, SecretStr, computed_field
 from pydantic.types import DirectoryPath, NewPath
@@ -79,8 +80,23 @@ class BorgRepo(BaseModel):
             "--show-rc",
             "--compression=zstd,1",
             "--exclude-caches",
+            "--exclude-nodump",
             "--exclude",
             "'home/*/.cache/*'",
+            "--exclude",
+            "'Users/zachfuller/*/.cache/*'",  # NOTE: hardcoded path
+            "--exclude",
+            "'Users/zachfuller/Library/Caches/*'",  # NOTE: hardcoded path
+            "--exclude",
+            "'Users/zachfuller/*/__pycache__/*'",  # NOTE: hardcoded path
+            "--exclude",
+            "'Users/zachfuller/*/.venv/*'",  # NOTE: hardcoded path
+            "--exclude",
+            "'Users/zachfuller/.vscode/*'",  # NOTE: hardcoded path
+            "--exclude",
+            "'Users/zachfuller/*/.rustup/toolchains/*'",  # NOTE: hardcoded path
+            "--exclude",
+            "'Users/zachfuller/.npm/_cacache/*'",  # NOTE: hardcoded path
             f"{self.path.as_posix()}::{title}",
             self.backup_target.as_posix(),
         ]
@@ -143,6 +159,26 @@ class BorgRepo(BaseModel):
             status_message="[bold blue]Compacting borg repo[/]",
             success_message="Compacting completed successfully",
             error_message="Error compacting repo",
+            spinner="aesthetic",
+            use_stderr=True,
+        )
+
+    def export_repo_key(self) -> None:
+        """
+        Exports the Borg repository key to a file in the user's home directory.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/key.html#borg-key-export
+        """
+        borgboi_repo_keys_dir = Path.home() / ".borgboi"
+        borgboi_repo_keys_dir.mkdir(exist_ok=True)
+        key_export_path = borgboi_repo_keys_dir / f"{self.name}-encrypted-key-backup.txt"
+        cmd_parts = ["borg", "key", "export", "--paper", self.path.as_posix(), key_export_path.as_posix()]
+
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Exporting repo key[/]",
+            success_message=f"Repo key exported successfully to {key_export_path.as_posix()}",
+            error_message="Error exporting repo key",
             spinner="aesthetic",
             use_stderr=True,
         )

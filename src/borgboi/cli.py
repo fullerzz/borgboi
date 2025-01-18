@@ -48,6 +48,14 @@ def daily_backup(repo_path: str) -> None:
     orchestrator.perform_daily_backup(repo_path)
 
 
+@cli.command()
+@click.option("--repo-path", "-r", required=True, type=click.Path(exists=True))
+def export_repo_key(repo_path: str) -> None:
+    """Create a new archive of the home directory with borg and perform pruning and compaction."""
+    repo = orchestrator.lookup_repo(repo_path, None)
+    repo.export_repo_key()
+
+
 def main() -> None:
     cli()
 
