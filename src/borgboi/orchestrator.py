@@ -43,16 +43,17 @@ def list_repos() -> None:
     repos = get_all_repos()
     table = Table(title="BorgBoi Repositories", show_lines=True)
     table.add_column("Name")
-    table.add_column("Local Path")
-    table.add_column("Passphrase Environment Variable")
-    table.add_column("Last Archive Date")
-    table.add_column("Last S3 Sync Date")
-    table.add_column("Archival Target")
+    table.add_column("Local Path 📁")
+    table.add_column("Hostname 🖥")
+    table.add_column("Last Archive Date 📆")
+    table.add_column("Last S3 Sync Date 🪣")
+    table.add_column("Backup Target 🎯")
 
     for repo in repos:
         name = f"[bold cyan]{repo.name}[/]"
         local_path = f"[bold blue]{repo.path.as_posix()}[/]"
-        env_var_name = f"[bold green]{repo.passphrase_env_var_name}[/]"
+        env_var_name = f"[bold green]{repo.hostname}[/]"
+        backup_target = f"[bold magenta]{repo.backup_target.as_posix()}[/]"
         if repo.last_backup:
             archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
         else:
@@ -61,7 +62,7 @@ def list_repos() -> None:
             sync_date = f"[bold yellow]{repo.last_s3_sync.strftime('%a %b %d, %Y')}[/]"
         else:
             sync_date = "[italic red]Never[/]"
-        table.add_row(name, local_path, env_var_name, archive_date, sync_date)
+        table.add_row(name, local_path, env_var_name, archive_date, sync_date, backup_target)
     console.print(table)
 
 
