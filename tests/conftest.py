@@ -1,5 +1,6 @@
 import os
 from collections.abc import Generator
+from pathlib import Path
 from typing import Any
 
 import boto3
@@ -14,6 +15,7 @@ DYNAMO_TABLE_NAME = "borg-repos-test"
 @pytest.fixture(autouse=True)
 def _common_env_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BORG_PASSPHRASE", "test")
+    monkeypatch.setenv("BORG_NEW_PASSPHRASE", "test")
     monkeypatch.setenv("BORG_S3_BUCKET", "test")
     monkeypatch.setenv("BORG_DYNAMODB_TABLE", DYNAMO_TABLE_NAME)
 
@@ -70,3 +72,13 @@ def create_dynamodb_table(dynamodb: DynamoDBClient) -> None:
     )
     waiter = dynamodb.get_waiter("table_exists")
     waiter.wait(TableName=DYNAMO_TABLE_NAME, WaiterConfig={"Delay": 2, "MaxAttempts": 10})
+
+
+@pytest.fixture
+def repo_storage_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("borgboi-test-repo")
+
+
+@pytest.fixture
+def backup_target_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("borgboi-test-backup-target")

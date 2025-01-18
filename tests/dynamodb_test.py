@@ -9,16 +9,6 @@ from .conftest import DYNAMO_TABLE_NAME
 
 
 @pytest.fixture
-def repo_storage_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return tmp_path_factory.mktemp("borgboi-test-repo")
-
-
-@pytest.fixture
-def backup_target_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    return tmp_path_factory.mktemp("borgboi-test-backup-target")
-
-
-@pytest.fixture
 def borgboi_repo(repo_storage_dir: Path, backup_target_dir: Path) -> BorgRepo:
     return BorgRepo(path=repo_storage_dir, backup_target=backup_target_dir, name="test-repo", hostname="test-host")
 
