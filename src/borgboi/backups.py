@@ -185,7 +185,7 @@ class BorgRepo(BaseModel):
 
     def sync_with_s3(self) -> None:
         sync_source = self.path.as_posix()
-        s3_destination_uri = f"s3://{environ['BORG_S3_BUCKET']}/home"
+        s3_destination_uri = f"s3://{environ['BORG_S3_BUCKET']}/{self.name}"
         cmd_parts = [
             "aws",
             "s3",
