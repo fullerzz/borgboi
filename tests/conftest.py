@@ -60,7 +60,6 @@ def mocked_aws(aws_credentials: None) -> Generator[None, Any, None]:
 
 @pytest.fixture
 def create_dynamodb_table(dynamodb: DynamoDBClient) -> None:
-    # TODO: Add GSI to table
     dynamodb.create_table(
         TableName=DYNAMO_TABLE_NAME,
         KeySchema=[
@@ -68,8 +67,23 @@ def create_dynamodb_table(dynamodb: DynamoDBClient) -> None:
         ],
         AttributeDefinitions=[
             {"AttributeName": "repo_path", "AttributeType": "S"},
+            {"AttributeName": "name", "AttributeType": "S"},
         ],
         ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "name_gsi",
+                "KeySchema": [
+                    {"AttributeName": "name", "KeyType": "HASH"},
+                ],
+                "Projection": {
+                    "ProjectionType": "ALL",
+                },
+                "ProvisionedThroughput": {"ReadCapacityUnits": 123, "WriteCapacityUnits": 123},
+                "OnDemandThroughput": {"MaxReadRequestUnits": 123, "MaxWriteRequestUnits": 123},
+                "WarmThroughput": {"ReadUnitsPerSecond": 123, "WriteUnitsPerSecond": 123},
+            },
+        ],
     )
     waiter = dynamodb.get_waiter("table_exists")
     waiter.wait(TableName=DYNAMO_TABLE_NAME, WaiterConfig={"Delay": 2, "MaxAttempts": 10})
