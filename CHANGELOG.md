@@ -1,3 +1,9 @@
+## v0.2.1 (2025-01-18)
+
+### Fix
+
+- **s3**: adds s3 prefix of borg repo name before syncing with s3
+
 ## v0.2.0 (2025-01-18)
 
 ### Feat
