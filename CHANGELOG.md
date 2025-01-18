@@ -1,3 +1,9 @@
+## v0.2.2 (2025-01-18)
+
+### Refactor
+
+- renamed dynamo table item field from name to common_name
+
 ## v0.2.1 (2025-01-18)
 
 ### Fix
