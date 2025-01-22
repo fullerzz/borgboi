@@ -169,12 +169,7 @@ class BorgRepo(BaseModel):
 
         https://borgbackup.readthedocs.io/en/stable/usage/info.html
         """
-        cmd_parts = [
-            "borg",
-            "info",
-            # "--json",
-            self.path.as_posix(),
-        ]
+        cmd_parts = ["borg", "info", self.path.as_posix()]
 
         rich_utils.run_and_log_sp_popen(
             cmd_parts=cmd_parts,
@@ -184,6 +179,8 @@ class BorgRepo(BaseModel):
             spinner="triangle",
             use_stderr=False,
         )
+        cmd_parts = ["borg", "info", "--json", self.path.as_posix()]
+        rich_utils.run_and_output_repo_info(cmd_parts)
 
     def export_repo_key(self) -> None:
         """
