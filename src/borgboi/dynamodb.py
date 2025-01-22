@@ -17,6 +17,9 @@ class BorgRepoTableItem(BaseModel):
     hostname: str
     last_backup: str | None = None
     last_s3_sync: str | None = None
+    total_size_gb: str = "0.0"
+    total_csize_gb: str = "0.0"
+    unique_csize_gb: str = "0.0"
 
 
 def _convert_repo_to_table_item(repo: BorgRepo) -> BorgRepoTableItem:
@@ -29,6 +32,19 @@ def _convert_repo_to_table_item(repo: BorgRepo) -> BorgRepoTableItem:
     Returns:
         BorgRepoTableItem: Borg repository converted to a DynamoDB table item
     """
+    if repo.metadata is None:
+        size_metadata = {
+            "total_size_gb": "0.0",
+            "total_csize_gb": "0.0",
+            "unique_csize_gb": "0.0",
+        }
+    else:
+        size_metadata = {
+            "total_size_gb": f"{repo.metadata.cache.total_size_gb:.2f}",
+            "total_csize_gb": f"{repo.metadata.cache.total_csize_gb:.2f}",
+            "unique_csize_gb": f"{repo.metadata.cache.unique_csize_gb:.2f}",
+        }
+
     return BorgRepoTableItem(
         repo_path=repo.path.as_posix(),
         backup_target_path=repo.backup_target.as_posix(),
@@ -37,6 +53,7 @@ def _convert_repo_to_table_item(repo: BorgRepo) -> BorgRepoTableItem:
         hostname=repo.hostname,
         last_backup=repo.last_backup.isoformat() if repo.last_backup else None,
         last_s3_sync=repo.last_s3_sync.isoformat() if repo.last_s3_sync else None,
+        **size_metadata,
     )
 
 
