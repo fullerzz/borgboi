@@ -45,6 +45,7 @@ def get_repo_info(repo_path: str | None, repo_name: str | None) -> None:
         raise ValueError("Repository must be local to view info")
     repo.info()
     repo.collect_json_info()
+    dynamodb.update_repo(repo)
 
 
 def list_repos() -> None:
@@ -80,4 +81,5 @@ def perform_daily_backup(repo_path: str) -> None:
     repo.prune()
     repo.compact()
     repo.sync_with_s3()
+    repo.collect_json_info()
     dynamodb.update_repo(repo)
