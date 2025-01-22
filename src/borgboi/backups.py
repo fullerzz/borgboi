@@ -1,17 +1,69 @@
+import subprocess as sp
 from datetime import UTC, datetime
 from functools import cached_property
 from os import environ, getenv
 from pathlib import Path
 
-from pydantic import BaseModel, SecretStr, computed_field
+from pydantic import BaseModel, Field, SecretStr, computed_field
 from pydantic.types import DirectoryPath, NewPath
 
 from borgboi import rich_utils
+
+GIBIBYTES_IN_GIGABYTE = 0.93132257461548
 
 
 def _create_archive_title() -> str:
     """Returns an archive title in the format of YYYY-MM-DD_HH:MM:SS"""
     return datetime.now(UTC).strftime("%Y-%m-%d_%H:%M:%S")
+
+
+class Stats(BaseModel):
+    total_chunks: int
+    total_csize: int = Field(description="Compressed size")
+    total_size: int = Field(description="Original size")
+    total_unique_chunks: int
+    unique_csize: int = Field(description="Deduplicated size")
+    unique_size: int
+
+
+class RepoCache(BaseModel):
+    path: str
+    stats: Stats
+
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
+    def total_size_gb(self) -> float:
+        """Original size in gigabytes."""
+        return self.stats.total_size / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE
+
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
+    def total_csize_gb(self) -> float:
+        """Compressed size in gigabytes."""
+        return self.stats.total_csize / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE
+
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
+    def unique_csize_gb(self) -> float:
+        """Deduplicated size in gigabytes."""
+        return self.stats.unique_csize / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE
+
+
+class Encryption(BaseModel):
+    mode: str
+
+
+class Repository(BaseModel):
+    id: str
+    last_modified: str
+    location: str
+
+
+class RepoInfo(BaseModel):
+    cache: RepoCache
+    encryption: Encryption
+    repository: Repository
+    security_dir: str
 
 
 class BorgRepo(BaseModel):
@@ -22,6 +74,7 @@ class BorgRepo(BaseModel):
     hostname: str
     last_backup: datetime | None = None
     last_s3_sync: datetime | None = None
+    metadata: RepoInfo | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
@@ -179,8 +232,23 @@ class BorgRepo(BaseModel):
             spinner="triangle",
             use_stderr=False,
         )
+
+    def collect_json_info(self) -> None:
+        """
+        Run a Borg info command with the '--json' option to collect
+        information about the repository in JSON format for programmatic use.
+
+        If successful, this function produces no output to the console.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/info.html
+        """
         cmd_parts = ["borg", "info", "--json", self.path.as_posix()]
-        rich_utils.run_and_output_repo_info(cmd_parts)
+        rich_utils.print_cmd_parts(cmd_parts)
+
+        result = sp.run(cmd_parts, capture_output=True, text=True)  # noqa: PLW1510, S603
+        if result.returncode != 0 and result.returncode != 1:
+            raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd_parts)
+        self.metadata = RepoInfo.model_validate_json(result.stdout)
 
     def export_repo_key(self) -> None:
         """
