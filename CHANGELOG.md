@@ -1,3 +1,14 @@
+## v0.4.0 (2025-01-22)
+
+### Feat
+
+- now store repo size metadata in dynamodb table
+- improved repo-info command and added data structure to store output
+
+### Refactor
+
+- moved borg repo info models and cmd execution into backups.py
+
 ## v0.3.0 (2025-01-18)
 
 ### Feat
