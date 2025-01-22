@@ -19,4 +19,9 @@ borgboi daily-backup <path-to-repo>
 - [x] Wrap common borg operations for creating archive, pruning, and compacting
 - [x] Display borg logs to user through terminal as borg is running
 - [x] Sync local borg repo/its archives with a S3 bucket
-- [ ] Add command to print out information on the borg repo
+- [x] Add command to print out information on the borg repo
+- [ ] Document additional commands
+- [ ] Add command to delete borg repo
+- [ ] Add command to download remote borg repo from S3
+- [ ] Add command to restore from borg repo
+- [ ] Additional tests
