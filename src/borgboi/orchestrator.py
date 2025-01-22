@@ -44,6 +44,7 @@ def get_repo_info(repo_path: str | None, repo_name: str | None) -> None:
     if validator.repo_is_local(repo) is False:
         raise ValueError("Repository must be local to view info")
     repo.info()
+    repo.collect_json_info()
 
 
 def list_repos() -> None:
