@@ -6,7 +6,7 @@ from rich.table import Table
 
 from borgboi import dynamodb, validator
 from borgboi.backups import BorgRepo
-from borgboi.rich_utils import console
+from borgboi.rich_utils import console, output_repo_info
 
 
 def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
@@ -43,12 +43,26 @@ def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
         raise ValueError("Either repo_name or repo_path must be provided")
 
 
-def get_repo_info(repo_path: str | None, repo_name: str | None) -> None:
+def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bool) -> None:
     repo = lookup_repo(repo_path, repo_name)
     if validator.repo_is_local(repo) is False:
         raise ValueError("Repository must be local to view info")
-    repo.info()
+    if pretty_print is False:
+        repo.info()
     repo.collect_json_info()
+    if pretty_print is True:
+        if repo.metadata is None:
+            raise ValueError("Repo metadata is None")
+        output_repo_info(
+            name=repo.name,
+            total_size_gb=repo.metadata.cache.total_size_gb,
+            total_csize_gb=repo.metadata.cache.total_csize_gb,
+            unique_csize_gb=repo.metadata.cache.unique_csize_gb,
+            encryption_mode=repo.metadata.encryption.mode,
+            repo_id=repo.metadata.repository.id,
+            repo_location=repo.metadata.repository.location,
+            last_modified=repo.metadata.repository.last_modified,
+        )
     dynamodb.update_repo(repo)
 
 
