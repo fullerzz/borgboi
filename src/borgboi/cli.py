@@ -64,6 +64,17 @@ def repo_info(repo_path: str | None, repo_name: str | None) -> None:
     orchestrator.get_repo_info(repo_path, repo_name)
 
 
+@cli.command()
+@click.option("--repo-path", "-r", required=True, type=click.Path(exists=True))
+@click.option("--archive-name", "-a", required=True, prompt=True)
+def extract_archive(repo_path: str, archive_name: str) -> None:
+    """Extract a Borg archive into the current working directory."""
+    click.confirm(
+        "Confirm you want to extract the contents of this archive into the current working directory", abort=True
+    )
+    orchestrator.restore_archive(repo_path, archive_name)
+
+
 def main() -> None:
     cli()
 
