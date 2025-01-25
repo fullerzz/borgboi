@@ -1,3 +1,9 @@
+## v0.5.0 (2025-01-25)
+
+### Feat
+
+- implement command to extract borg archive
+
 ## v0.4.0 (2025-01-22)
 
 ### Feat
