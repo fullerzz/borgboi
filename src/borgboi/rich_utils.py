@@ -1,6 +1,7 @@
 import subprocess as sp
 
 from rich.console import Console
+from rich.table import Table
 from rich.text import Text
 
 console = Console(record=True)
@@ -78,3 +79,32 @@ def save_console_output() -> None:
     Save the console output to an HTML file.
     """
     console.save_html("borgboi_output.html")
+
+
+def output_repo_info(
+    *,
+    name: str,
+    total_size_gb: float,
+    total_csize_gb: float,
+    unique_csize_gb: float,
+    encryption_mode: str,
+    repo_id: str,
+    repo_location: str,
+    last_modified: str,
+) -> None:
+    """
+    Pretty print Borg repository information.
+    """
+    table = Table(title=f"Borg Repo Info - {repo_id}", show_header=False, show_lines=True, row_styles=["dim", ""])
+    table.add_column()
+    table.add_column()
+    table.add_row("[bold blue]Name[/]", f"[cyan]{name}[/]")
+    table.add_section()
+    table.add_row("[bold blue]Total Size (GB)", f"[cyan]{total_size_gb:.2f}")
+    table.add_row("[bold blue]Total Compressed Size (GB)", f"[cyan]{total_csize_gb:.2f}")
+    table.add_row("[bold blue]Unique Compressed Size (GB)", f"[cyan]{unique_csize_gb:.2f}")
+    table.add_section()
+    table.add_row("[bold blue]Encryption", f"[cyan]{encryption_mode}")
+    table.add_row("[bold blue]Last Modified", f"[cyan]{last_modified}")
+    table.add_row("[bold blue]Repo Location", f"[cyan]{repo_location}")
+    console.print(table, new_line_start=True)

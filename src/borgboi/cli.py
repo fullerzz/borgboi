@@ -59,9 +59,10 @@ def export_repo_key(repo_path: str) -> None:
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
 @click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
-def repo_info(repo_path: str | None, repo_name: str | None) -> None:
+@click.option("--pp", is_flag=True, show_default=True, default=False, help="Pretty print the repo info")
+def repo_info(repo_path: str | None, repo_name: str | None, pp: bool) -> None:
     """List a local Borg repository's info."""
-    orchestrator.get_repo_info(repo_path, repo_name)
+    orchestrator.get_repo_info(repo_path, repo_name, pp)
 
 
 @cli.command()
