@@ -1,3 +1,9 @@
+## v0.6.0 (2025-01-25)
+
+### Feat
+
+- **repo-info**: add pretty print flag to repo info command
+
 ## v0.5.0 (2025-01-25)
 
 ### Feat
