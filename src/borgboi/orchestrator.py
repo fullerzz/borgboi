@@ -25,7 +25,11 @@ def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, 
         name=name,
         hostname=socket.gethostname(),
     )
-    new_repo.init_repository()
+    if "/private/var/" in repo_path.parts or "tmp" in repo_path.parts:
+        new_repo.init_repository(config_additional_free_space=False)
+    else:
+        new_repo.init_repository()
+
     dynamodb.add_repo_to_table(new_repo)
     return new_repo
 
@@ -83,3 +87,8 @@ def perform_daily_backup(repo_path: str) -> None:
     repo.sync_with_s3()
     repo.collect_json_info()
     dynamodb.update_repo(repo)
+
+
+def restore_archive(repo_path: str, archive_name: str) -> None:
+    repo = lookup_repo(repo_path, None)
+    repo.extract(archive_name)

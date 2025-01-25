@@ -1,5 +1,7 @@
+import json
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
@@ -45,3 +47,33 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
         assert resp == repo_name
     else:
         raise AssertionError("Either get_repo_by_path or get_repo_by_name should have been called")
+
+
+@pytest.mark.usefixtures("create_dynamodb_table")
+def test_restore_archive(repo_storage_dir: Path, backup_target_dir: Path) -> None:
+    from borgboi.orchestrator import create_borg_repo
+
+    # Create and initialize Borg repo in a tmp directory
+    repo = create_borg_repo(
+        repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "BORG_NEW_PASSPHRASE", "test-repo-restore-archive"
+    )
+    # Insert a placeholder text file into the source directory
+    rand_val = uuid4().hex
+    file_data = {"random": rand_val}
+    json_file = backup_target_dir / f"data_{rand_val}.json"
+    json_file_path = json_file.as_posix()
+    with json_file.open("w") as f:
+        json.dump(file_data, f, indent=2)
+    # Create an archive of the source directory
+    archive_name = repo.create_archive()
+    # delete data.json
+    json_file.unlink()
+    assert json_file.exists() is False
+    # extract the archive into the test dir
+    repo.extract(archive_name)
+    # Assert that the placeholder text file is present in the restore directory
+    restored_file = Path(f"{Path.cwd().as_posix()}/{json_file_path}")
+    assert restored_file.exists()
+    with restored_file.open("r") as f:
+        restored_data = json.load(f)
+    assert restored_data == file_data

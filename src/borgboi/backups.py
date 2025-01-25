@@ -81,7 +81,7 @@ class BorgRepo(BaseModel):
     def passphrase(self) -> SecretStr:
         return SecretStr(getenv(self.passphrase_env_var_name, ""))
 
-    def init_repository(self) -> None:
+    def init_repository(self, config_additional_free_space: bool = True) -> None:
         """
         Initialize a new Borg repository at the specified path.
 
@@ -105,17 +105,18 @@ class BorgRepo(BaseModel):
             use_stderr=True,
         )
 
-        config_cmd_parts = ["borg", "config", self.path.as_posix(), "additional_free_space", "2G"]
-        rich_utils.run_and_log_sp_popen(
-            cmd_parts=config_cmd_parts,
-            status_message="[bold blue]Configuring additional_free_space[/]",
-            success_message="Configuration applied successfully",
-            error_message="Error configuration additional_free_space",
-            spinner="arc",
-            use_stderr=True,
-        )
+        if config_additional_free_space:
+            config_cmd_parts = ["borg", "config", self.path.as_posix(), "additional_free_space", "2G"]
+            rich_utils.run_and_log_sp_popen(
+                cmd_parts=config_cmd_parts,
+                status_message="[bold blue]Configuring additional_free_space[/]",
+                success_message="Configuration applied successfully",
+                error_message="Error configuration additional_free_space",
+                spinner="arc",
+                use_stderr=True,
+            )
 
-    def create_archive(self) -> None:
+    def create_archive(self) -> str:
         """
         Create a new Borg archive of the backup target directory.
 
@@ -163,6 +164,7 @@ class BorgRepo(BaseModel):
             use_stderr=True,
         )
         self.last_backup = datetime.now(UTC)
+        return title
 
     def prune(self, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2) -> None:
         """
@@ -267,6 +269,29 @@ class BorgRepo(BaseModel):
             success_message=f"Repo key exported successfully to {key_export_path.as_posix()}",
             error_message="Error exporting repo key",
             spinner="aesthetic",
+            use_stderr=True,
+        )
+
+    def extract(self, archive_name: str) -> None:
+        """
+        Extract the contents of a Borg archive into the current working directory.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/extract.html
+        """
+        cmd_parts = [
+            "borg",
+            "extract",
+            "-v",
+            "--progress",
+            "--list",
+            f"{self.path.as_posix()}::{archive_name}",
+        ]
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Extracting archive[/]",
+            success_message=f"Extracted archive successfully to {Path.cwd().as_posix()}",
+            error_message="Error extracting archive",
+            spinner="point",
             use_stderr=True,
         )
 

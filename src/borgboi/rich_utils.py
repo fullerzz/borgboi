@@ -47,6 +47,10 @@ def run_and_log_sp_popen(
             line = out_stream.readline()  # type: ignore
             print(line.decode("utf-8"), end="")  # noqa: T201
             if not line:
+                if proc.stdout:
+                    proc.stdout.close()
+                if proc.stderr:
+                    proc.stderr.close()
                 break
 
     # stdout no longer readable so wait for return code

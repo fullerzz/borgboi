@@ -1,26 +1,40 @@
-test:
-    uv run pytest
+test_restore_dir := 'private/'
 
+# list recipes
+default:
+    @just --list
+
+# run pytest test suite
+test:
+    uv run pytest -v --capture=tee-sys
+    rm -rf {{ test_restore_dir }}
+
+# run all linters
 lint: mypy tflint tofu-validate
     uv run ruff check --fix .
 
+# run ruff and tofu formatters
 fmt:
     uv run ruff format .
     cd terraform && tofu fmt -recursive
 
+# run ruff linter and formatter
 ruff:
     uv run ruff check --fix .
     uv run ruff format .
 
-start-dmypy:
+_start-dmypy:
     -uv run dmypy start
 
-mypy: start-dmypy
+# run mypy type checker
+mypy: _start-dmypy
     uv run dmypy check src/borgboi
 
+# run tofu validate
 tofu-validate:
     cd terraform && tofu validate
 
+# run tfline
 tflint:
     cd terraform && tflint --init
     tflint --recursive --color
