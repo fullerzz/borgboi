@@ -1,6 +1,8 @@
 import subprocess as sp
 
 from rich.console import Console
+from rich.columns import Columns
+from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
@@ -81,6 +83,26 @@ def save_console_output() -> None:
     console.save_html("borgboi_output.html")
 
 
+def _build_size_panel(total_size_gb: float, total_csize_gb: float, unique_csize_gb: float) -> Panel:
+    table = Table.grid(padding=(0, 1))
+    table.add_column()
+    table.add_column(justify="right")
+    table.add_row("[bold blue]Total Size", f"[cyan]{total_size_gb:.2f} GB")
+    table.add_row("[bold blue]Compressed Size", f"[cyan]{total_csize_gb:.2f} GB")
+    table.add_row("[bold blue]Deduplicated Size", f"[cyan]{unique_csize_gb:.2f} GB")
+    return Panel(table, title="Disk Usage 💾", border_style="blue", expand=False)
+
+
+def _build_metadata_panel(encryption_mode: str, repo_id: str, repo_location: str, last_modified: str) -> Panel:
+    table = Table.grid(padding=(0, 1))
+    table.add_column()
+    table.add_column()
+    table.add_row("[bold green]Encryption", f"[orange3]{encryption_mode}")
+    table.add_row("[bold green]Location", f"[orange3]{repo_location}")
+    table.add_row("[bold green]Last Modified", f"[orange3]{last_modified}")
+    return Panel(table, title="Metadata 📝", border_style="green", expand=False)
+
+
 def output_repo_info(
     *,
     name: str,
@@ -95,16 +117,10 @@ def output_repo_info(
     """
     Pretty print Borg repository information.
     """
-    table = Table(title=f"Borg Repo Info - {repo_id}", show_header=False, show_lines=True, row_styles=["dim", ""])
-    table.add_column()
-    table.add_column()
-    table.add_row("[bold blue]Name[/]", f"[cyan]{name}[/]")
-    table.add_section()
-    table.add_row("[bold blue]Total Size (GB)", f"[cyan]{total_size_gb:.2f}")
-    table.add_row("[bold blue]Total Compressed Size (GB)", f"[cyan]{total_csize_gb:.2f}")
-    table.add_row("[bold blue]Unique Compressed Size (GB)", f"[cyan]{unique_csize_gb:.2f}")
-    table.add_section()
-    table.add_row("[bold blue]Encryption", f"[cyan]{encryption_mode}")
-    table.add_row("[bold blue]Last Modified", f"[cyan]{last_modified}")
-    table.add_row("[bold blue]Repo Location", f"[cyan]{repo_location}")
-    console.print(table, new_line_start=True)
+    console.rule("[bold]Borg Repo Info", style="blue")
+    console.print(f"[bold magenta]Repo Name:[/] {name}")
+    size_panel = _build_size_panel(total_size_gb, total_csize_gb, unique_csize_gb)
+    metadata_panel = _build_metadata_panel(encryption_mode, repo_id, repo_location, last_modified)
+    columns = Columns([size_panel, metadata_panel])
+    console.print(columns)
+    console.rule(f"[bold magenta]Repo ID:[/] [magenta]{repo_id}[/]", style="blue")
