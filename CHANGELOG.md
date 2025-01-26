@@ -1,3 +1,9 @@
+## v0.6.1 (2025-01-26)
+
+### Refactor
+
+- **repo-info**: improved pretty print output for the borgboi repo-info command
+
 ## v0.6.0 (2025-01-25)
 
 ### Feat
