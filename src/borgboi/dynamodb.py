@@ -3,10 +3,13 @@ from os import environ
 from pathlib import Path
 
 import boto3
+from botocore.config import Config
 from pydantic import BaseModel
 
 from borgboi.backups import BorgRepo
 from borgboi.rich_utils import console
+
+boto_config = Config(retries={"mode": "standard"})
 
 
 class BorgRepoTableItem(BaseModel):
@@ -95,7 +98,7 @@ def add_repo_to_table(repo: BorgRepo) -> None:
     Args:
         repo (BorgRepo): Borg repository to add to the table
     """
-    table = boto3.resource("dynamodb").Table(environ["BORG_DYNAMODB_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
     table.put_item(Item=_convert_repo_to_table_item(repo).model_dump())
     console.print(f"Added repo to DynamoDB table: [bold cyan]{repo.path.as_posix()}[/]")
 
@@ -107,7 +110,7 @@ def get_all_repos() -> list[BorgRepo]:
     Returns:
         list[BorgRepo]: List of Borg repositories
     """
-    table = boto3.resource("dynamodb").Table(environ["BORG_DYNAMODB_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
     response = table.scan()
     return [_convert_table_item_to_repo(BorgRepoTableItem(**repo)) for repo in response["Items"]]  # type: ignore
 
@@ -122,7 +125,7 @@ def get_repo_by_path(repo_path: str) -> BorgRepo:
     Returns:
         BorgRepo: Borg repository
     """
-    table = boto3.resource("dynamodb").Table(environ["BORG_DYNAMODB_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
     response = table.get_item(Key={"repo_path": repo_path})
     return _convert_table_item_to_repo(BorgRepoTableItem(**response["Item"]))  # type: ignore
 
@@ -137,7 +140,7 @@ def get_repo_by_name(repo_name: str) -> BorgRepo:
     Returns:
         BorgRepo: Borg repository
     """
-    table = boto3.resource("dynamodb").Table(environ["BORG_DYNAMODB_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
     response = table.query(
         IndexName="name_gsi",
         KeyConditionExpression="common_name = :name",
@@ -154,6 +157,6 @@ def update_repo(repo: BorgRepo) -> None:
     Args:
         repo (BorgRepo): Borg repository to update
     """
-    table = boto3.resource("dynamodb").Table(environ["BORG_DYNAMODB_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
     table.put_item(Item=_convert_repo_to_table_item(repo).model_dump())
     console.print(f"Updated repo in DynamoDB table: [bold cyan]{repo.path.as_posix()}[/]")
