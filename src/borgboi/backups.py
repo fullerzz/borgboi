@@ -75,6 +75,9 @@ class BorgRepo(BaseModel):
     last_backup: datetime | None = None
     last_s3_sync: datetime | None = None
     metadata: RepoInfo | None = None
+    total_size_gb: float = 0.0
+    total_csize_gb: float = 0.0
+    unique_csize_gb: float = 0.0
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property

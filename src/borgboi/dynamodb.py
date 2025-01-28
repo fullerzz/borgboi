@@ -82,6 +82,9 @@ def _convert_table_item_to_repo(repo: BorgRepoTableItem) -> BorgRepo:
         hostname=repo.hostname,
         last_backup=last_backup,
         last_s3_sync=last_s3_sync,
+        total_size_gb=float(repo.total_size_gb),
+        total_csize_gb=float(repo.total_csize_gb),
+        unique_csize_gb=float(repo.unique_csize_gb),
     )
 
 

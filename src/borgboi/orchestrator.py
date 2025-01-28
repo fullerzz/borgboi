@@ -72,8 +72,8 @@ def list_repos() -> None:
     table.add_column("Name")
     table.add_column("Local Path 📁")
     table.add_column("Hostname 🖥")
-    table.add_column("Last Archive Date 📆")
-    table.add_column("Last S3 Sync Date 🪣")
+    table.add_column("Last Archive 📆")
+    table.add_column("Size 💾", justify="right")
     table.add_column("Backup Target 🎯")
 
     for repo in repos:
@@ -85,11 +85,12 @@ def list_repos() -> None:
             archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
         else:
             archive_date = "[italic red]Never[/]"
-        if repo.last_s3_sync:
-            sync_date = f"[bold yellow]{repo.last_s3_sync.strftime('%a %b %d, %Y')}[/]"
-        else:
-            sync_date = "[italic red]Never[/]"
-        table.add_row(name, local_path, env_var_name, archive_date, sync_date, backup_target)
+        size = (
+            f"[dark_orange]{repo.unique_csize_gb:.2f} GB[/]"
+            if repo.unique_csize_gb != 0.0
+            else "🤷[italic red]Unknown[/]"
+        )
+        table.add_row(name, local_path, env_var_name, archive_date, size, backup_target)
     console.print(table)
 
 
