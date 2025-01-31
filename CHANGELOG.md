@@ -1,3 +1,13 @@
+## v0.7.0 (2025-01-31)
+
+### Feat
+
+- **list-repos**: add deduplicated repo size to output
+
+### Refactor
+
+- **dynamodb**: add botocore config to set retry behavior mode to 'standard'
+
 ## v0.6.1 (2025-01-26)
 
 ### Refactor
