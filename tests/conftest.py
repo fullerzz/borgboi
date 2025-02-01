@@ -18,6 +18,7 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BORG_NEW_PASSPHRASE", "test")
     monkeypatch.setenv("BORG_S3_BUCKET", "test")
     monkeypatch.setenv("BORG_DYNAMODB_TABLE", DYNAMO_TABLE_NAME)
+    monkeypatch.setenv("BORGBOI_DIR_NAME", ".borgboi")
 
 
 @pytest.fixture
