@@ -1,3 +1,17 @@
+## v0.8.0 (2025-02-01)
+
+### BREAKING CHANGE
+
+- An exclusion file must exist before a daily backup or archive can be created. There is a new borgboi command to create this exclusions list. After it's created, it will be persisted. Closes #21
+
+### Feat
+
+- add ability to create exclusion list for each borg repo
+
+### Fix
+
+- **orchestrator**: the borgboi dir will be created if it doesn't exist before attempting to create exlusions file
+
 ## v0.7.0 (2025-01-31)
 
 ### Feat
