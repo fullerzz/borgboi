@@ -26,6 +26,15 @@ def create_repo(repo_path: str, backup_target: str) -> None:
 
 
 @cli.command()
+@click.option("--repo-path", "-r", required=True, type=click.Path(exists=False), prompt=True)
+@click.option("--exclusions-source", "-x", required=True, type=click.Path(exists=True, dir_okay=False))
+def create_exclusions(repo_path: str, exclusions_source: str) -> None:
+    """Create a new exclusions list for a Borg repository."""
+    repo = orchestrator.lookup_repo(repo_path, None)
+    orchestrator.create_excludes_list(repo.name, exclusions_source)
+
+
+@cli.command()
 def list_repos() -> None:
     """Create a new Borg repository."""
     orchestrator.list_repos()
