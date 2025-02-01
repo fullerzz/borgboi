@@ -9,6 +9,8 @@ from pydantic.types import DirectoryPath, NewPath
 
 from borgboi import rich_utils
 
+BORGBOI_DIR_NAME = ".borgboi"
+EXCLUDE_FILENAME = "exclude.txt"
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
 
 
@@ -138,22 +140,8 @@ class BorgRepo(BaseModel):
             "--compression=zstd,1",
             "--exclude-caches",
             "--exclude-nodump",
-            "--exclude",
-            "'home/*/.cache/*'",
-            "--exclude",
-            "'Users/zachfuller/*/.cache/*'",  # NOTE: hardcoded path
-            "--exclude",
-            "'Users/zachfuller/Library/Caches/*'",  # NOTE: hardcoded path
-            "--exclude",
-            "'Users/zachfuller/*/__pycache__/*'",  # NOTE: hardcoded path
-            "--exclude",
-            "'Users/zachfuller/*/.venv/*'",  # NOTE: hardcoded path
-            "--exclude",
-            "'Users/zachfuller/.vscode/*'",  # NOTE: hardcoded path
-            "--exclude",
-            "'Users/zachfuller/*/.rustup/toolchains/*'",  # NOTE: hardcoded path
-            "--exclude",
-            "'Users/zachfuller/.npm/_cacache/*'",  # NOTE: hardcoded path
+            "--exclude-from",
+            f"{(Path.home() / BORGBOI_DIR_NAME / f'{self.name}_{EXCLUDE_FILENAME}').as_posix()}",
             f"{self.path.as_posix()}::{title}",
             self.backup_target.as_posix(),
         ]
@@ -261,7 +249,7 @@ class BorgRepo(BaseModel):
 
         https://borgbackup.readthedocs.io/en/stable/usage/key.html#borg-key-export
         """
-        borgboi_repo_keys_dir = Path.home() / ".borgboi"
+        borgboi_repo_keys_dir = Path.home() / BORGBOI_DIR_NAME
         borgboi_repo_keys_dir.mkdir(exist_ok=True)
         key_export_path = borgboi_repo_keys_dir / f"{self.name}-encrypted-key-backup.txt"
         cmd_parts = ["borg", "key", "export", "--paper", self.path.as_posix(), key_export_path.as_posix()]

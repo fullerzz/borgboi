@@ -16,4 +16,4 @@ terraform/.terraform
 **/*.tfstate.backup
 .dmypy.json
 .envrc
-
+exclude.txt

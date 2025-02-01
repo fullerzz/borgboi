@@ -1,12 +1,29 @@
 import os
+import shutil
 import socket
 from pathlib import Path
 
 from rich.table import Table
 
 from borgboi import dynamodb, validator
-from borgboi.backups import BorgRepo
+from borgboi.backups import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgRepo
 from borgboi.rich_utils import console, output_repo_info
+
+
+def create_excludes_list(repo_name: str, excludes_source_file: str) -> None:
+    """
+    Create the Borg exclude list.
+    """
+    if validator.exclude_list_created(repo_name) is True:
+        raise ValueError("Exclude list already created")
+    console.print("Creating Borg exclude list...")
+    src_file = Path(excludes_source_file)
+    dest_file = Path.home() / BORGBOI_DIR_NAME / f"{repo_name}_{EXCLUDE_FILENAME}"
+    shutil.copy(src_file, dest_file.as_posix())
+    if dest_file.exists():
+        console.print(f"Exclude list created at [bold cyan]{dest_file.as_posix()}[/]")
+    else:
+        raise FileNotFoundError("Excludes list not created")
 
 
 def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
@@ -96,6 +113,8 @@ def list_repos() -> None:
 
 def perform_daily_backup(repo_path: str) -> None:
     repo = lookup_repo(repo_path, None)
+    if validator.exclude_list_created(repo.name) is False:
+        raise ValueError("Exclude list must be created before performing a backup")
     repo.create_archive()
     repo.prune()
     repo.compact()
