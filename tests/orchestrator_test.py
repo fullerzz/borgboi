@@ -51,7 +51,7 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
 def test_restore_archive(repo_storage_dir: Path, backup_target_dir: Path) -> None:
-    from borgboi.orchestrator import create_borg_repo
+    from borgboi.orchestrator import create_borg_repo, create_excludes_list
 
     # Create and initialize Borg repo in a tmp directory
     repo = create_borg_repo(
@@ -64,6 +64,8 @@ def test_restore_archive(repo_storage_dir: Path, backup_target_dir: Path) -> Non
     json_file_path = json_file.as_posix()
     with json_file.open("w") as f:
         json.dump(file_data, f, indent=2)
+    # Create an exclusion list for the repo
+    create_excludes_list(repo.name, "tests/data/excludes.txt")
     # Create an archive of the source directory
     archive_name = repo.create_archive()
     # delete data.json
