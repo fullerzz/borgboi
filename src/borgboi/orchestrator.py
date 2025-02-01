@@ -16,10 +16,15 @@ def create_excludes_list(repo_name: str, excludes_source_file: str) -> Path:
     """
     if validator.exclude_list_created(repo_name) is True:
         raise ValueError("Exclude list already created")
+    borgboi_dir = Path.home() / BORGBOI_DIR_NAME
+    if borgboi_dir.exists() is False:
+        borgboi_dir.mkdir()
     console.print("Creating Borg exclude list...")
+
     src_file = Path(excludes_source_file)
-    dest_file = Path.home() / BORGBOI_DIR_NAME / f"{repo_name}_{EXCLUDE_FILENAME}"
+    dest_file = borgboi_dir / f"{repo_name}_{EXCLUDE_FILENAME}"
     shutil.copy(src_file, dest_file.as_posix())
+
     if dest_file.exists():
         console.print(f"Exclude list created at [bold cyan]{dest_file.as_posix()}[/]")
     else:
