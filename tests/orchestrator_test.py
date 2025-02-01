@@ -5,6 +5,18 @@ from uuid import uuid4
 
 import pytest
 
+from borgboi.backups import BorgRepo
+
+EXCLUDES_SRC = "tests/data/excludes.txt"
+
+
+@pytest.fixture
+def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None) -> BorgRepo:
+    from borgboi.orchestrator import create_borg_repo
+
+    repo_name = uuid4().hex[0:5]
+    return create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "BORG_NEW_PASSPHRASE", repo_name)
+
 
 @pytest.mark.usefixtures("create_dynamodb_table")
 def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -50,32 +62,47 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
-def test_restore_archive(repo_storage_dir: Path, backup_target_dir: Path) -> None:
-    from borgboi.orchestrator import create_borg_repo, create_excludes_list
+def test_restore_archive(borg_repo: BorgRepo) -> None:
+    from borgboi.orchestrator import create_excludes_list
 
-    # Create and initialize Borg repo in a tmp directory
-    repo = create_borg_repo(
-        repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "BORG_NEW_PASSPHRASE", "test-repo-restore-archive"
-    )
     # Insert a placeholder text file into the source directory
     rand_val = uuid4().hex
     file_data = {"random": rand_val}
-    json_file = backup_target_dir / f"data_{rand_val}.json"
+    json_file = borg_repo.backup_target / f"data_{rand_val}.json"
     json_file_path = json_file.as_posix()
     with json_file.open("w") as f:
         json.dump(file_data, f, indent=2)
     # Create an exclusion list for the repo
-    create_excludes_list(repo.name, "tests/data/excludes.txt")
+    new_excludes_file = create_excludes_list(borg_repo.name, EXCLUDES_SRC)
     # Create an archive of the source directory
-    archive_name = repo.create_archive()
+    archive_name = borg_repo.create_archive()
     # delete data.json
     json_file.unlink()
     assert json_file.exists() is False
     # extract the archive into the test dir
-    repo.extract(archive_name)
+    borg_repo.extract(archive_name)
     # Assert that the placeholder text file is present in the restore directory
     restored_file = Path(f"{Path.cwd().as_posix()}/{json_file_path}")
     assert restored_file.exists()
     with restored_file.open("r") as f:
         restored_data = json.load(f)
     assert restored_data == file_data
+    new_excludes_file.unlink()
+
+
+def test_create_excludes_list(borg_repo: BorgRepo) -> None:
+    from borgboi.backups import BORGBOI_DIR_NAME, EXCLUDE_FILENAME
+    from borgboi.orchestrator import create_excludes_list
+
+    # Create an exclusion list for the repo
+    create_excludes_list(borg_repo.name, EXCLUDES_SRC)
+    # Assert that the exclusion list was created
+    new_exclusions_list = Path.home() / BORGBOI_DIR_NAME / f"{borg_repo.name}_{EXCLUDE_FILENAME}"
+    assert new_exclusions_list.exists() is True
+
+    with Path(EXCLUDES_SRC).open("r") as f:
+        expected_excludes = f.read()
+    with (Path.home() / BORGBOI_DIR_NAME / f"{borg_repo.name}_{EXCLUDE_FILENAME}").open("r") as f:
+        actual_excludes = f.read()
+    assert actual_excludes == expected_excludes
+    new_exclusions_list.unlink()

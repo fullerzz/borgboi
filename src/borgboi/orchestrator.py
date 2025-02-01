@@ -10,7 +10,7 @@ from borgboi.backups import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgRepo
 from borgboi.rich_utils import console, output_repo_info
 
 
-def create_excludes_list(repo_name: str, excludes_source_file: str) -> None:
+def create_excludes_list(repo_name: str, excludes_source_file: str) -> Path:
     """
     Create the Borg exclude list.
     """
@@ -24,6 +24,7 @@ def create_excludes_list(repo_name: str, excludes_source_file: str) -> None:
         console.print(f"Exclude list created at [bold cyan]{dest_file.as_posix()}[/]")
     else:
         raise FileNotFoundError("Excludes list not created")
+    return dest_file
 
 
 def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:

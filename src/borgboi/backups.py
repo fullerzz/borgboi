@@ -9,8 +9,8 @@ from pydantic.types import DirectoryPath, NewPath
 
 from borgboi import rich_utils
 
-BORGBOI_DIR_NAME = ".borgboi"
-EXCLUDE_FILENAME = "exclude.txt"
+BORGBOI_DIR_NAME = getenv("BORGBOI_DIR_NAME", ".borgboi")
+EXCLUDE_FILENAME = "excludes.txt"
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
 
 
