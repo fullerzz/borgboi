@@ -2,6 +2,7 @@ import os
 import shutil
 import socket
 from pathlib import Path
+from platform import system
 
 from rich.table import Table
 
@@ -47,6 +48,7 @@ def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, 
         passphrase_env_var_name=passphrase_env_var_name,
         name=name,
         hostname=socket.gethostname(),
+        os_platform=system(),
     )
     if "/private/var/" in repo_path.parts or "tmp" in repo_path.parts:
         new_repo.init_repository(config_additional_free_space=False)
