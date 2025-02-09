@@ -1,3 +1,18 @@
+## v0.9.0 (2025-02-09)
+
+### BREAKING CHANGE
+
+- Updated type of both path and backup_target fields in BorgRepo from Path to str
+- The new field os_platform needs to be manually inserted into each item that already exists in the DynamoDB table.
+
+### Feat
+
+- add new field 'os_platform' to BorgRepo
+
+### Fix
+
+- refactor validation of repo and backup target paths to resolve issue with remote repos
+
 ## v0.8.0 (2025-02-01)
 
 ### BREAKING CHANGE
