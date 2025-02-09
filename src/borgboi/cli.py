@@ -22,7 +22,7 @@ def create_repo(repo_path: str, backup_target: str) -> None:
     repo = orchestrator.create_borg_repo(
         path=repo_path, backup_path=backup_target, passphrase_env_var_name=env_var_name, name=name
     )
-    console.print(f"Created new Borg repo at [bold cyan]{repo.path.as_posix()}[/]")
+    console.print(f"Created new Borg repo at [bold cyan]{repo.repo_posix_path}[/]")
 
 
 @cli.command()
@@ -46,7 +46,7 @@ def list_repos() -> None:
 def get_repo(repo_path: str | None, repo_name: str | None) -> None:
     """Get a Borg repository by name or path."""
     repo = orchestrator.lookup_repo(repo_path, repo_name)
-    console.print(f"Repository found: [bold cyan]{repo.path.as_posix()}[/]")
+    console.print(f"Repository found: [bold cyan]{repo.repo_posix_path}[/]")
     console.print(repo)
 
 
