@@ -29,8 +29,10 @@ def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, monke
     new_repo = create_borg_repo(
         repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "BORG_NEW_PASSPHRASE", "test-repo"
     )
-    assert new_repo.path == repo_storage_dir
-    assert new_repo.backup_target == backup_target_dir
+    assert new_repo.path == repo_storage_dir.as_posix()
+    assert new_repo.repo_posix_path == repo_storage_dir.as_posix()
+    assert new_repo.backup_target == backup_target_dir.as_posix()
+    assert new_repo.backup_target_posix_path == backup_target_dir.as_posix()
     assert new_repo.name == "test-repo"
 
 
@@ -68,7 +70,7 @@ def test_restore_archive(borg_repo: BorgRepo) -> None:
     # Insert a placeholder text file into the source directory
     rand_val = uuid4().hex
     file_data = {"random": rand_val}
-    json_file = borg_repo.backup_target / f"data_{rand_val}.json"
+    json_file = Path(borg_repo.backup_target) / f"data_{rand_val}.json"
     json_file_path = json_file.as_posix()
     with json_file.open("w") as f:
         json.dump(file_data, f, indent=2)

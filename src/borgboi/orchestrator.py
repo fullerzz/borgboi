@@ -43,8 +43,8 @@ def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, 
         repo_path.mkdir()
 
     new_repo = BorgRepo(
-        path=repo_path,
-        backup_target=Path(backup_path),
+        path=repo_path.as_posix(),
+        backup_target=backup_path,
         passphrase_env_var_name=passphrase_env_var_name,
         name=name,
         hostname=socket.gethostname(),
@@ -103,9 +103,9 @@ def list_repos() -> None:
 
     for repo in repos:
         name = f"[bold cyan]{repo.name}[/]"
-        local_path = f"[bold blue]{repo.path.as_posix()}[/]"
+        local_path = f"[bold blue]{repo.repo_posix_path}[/]"
         env_var_name = f"[bold green]{repo.hostname}[/]"
-        backup_target = f"[bold magenta]{repo.backup_target.as_posix()}[/]"
+        backup_target = f"[bold magenta]{repo.backup_target_posix_path}[/]"
         if repo.last_backup:
             archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
         else:

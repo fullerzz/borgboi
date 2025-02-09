@@ -12,8 +12,8 @@ from .conftest import DYNAMO_TABLE_NAME
 @pytest.fixture
 def borgboi_repo(repo_storage_dir: Path, backup_target_dir: Path) -> BorgRepo:
     return BorgRepo(
-        path=repo_storage_dir,
-        backup_target=backup_target_dir,
+        path=repo_storage_dir.as_posix(),
+        backup_target=backup_target_dir.as_posix(),
         name="test-repo",
         hostname="test-host",
         os_platform=system(),
@@ -26,9 +26,9 @@ def test_add_repo_to_table(dynamodb: DynamoDBClient, borgboi_repo: BorgRepo) -> 
 
     add_repo_to_table(borgboi_repo)
 
-    response = dynamodb.get_item(TableName=DYNAMO_TABLE_NAME, Key={"repo_path": {"S": borgboi_repo.path.as_posix()}})
+    response = dynamodb.get_item(TableName=DYNAMO_TABLE_NAME, Key={"repo_path": {"S": borgboi_repo.repo_posix_path}})
     assert "Item" in response
-    assert response["Item"]["repo_path"]["S"] == borgboi_repo.path.as_posix()  # pyright: ignore[reportTypedDictNotRequiredAccess]
+    assert response["Item"]["repo_path"]["S"] == borgboi_repo.path  # pyright: ignore[reportTypedDictNotRequiredAccess]
     assert response["Item"]["passphrase_env_var_name"]["S"] == borgboi_repo.passphrase_env_var_name  # pyright: ignore[reportTypedDictNotRequiredAccess]
 
 
@@ -41,9 +41,9 @@ def test_update_repo(dynamodb: DynamoDBClient, borgboi_repo: BorgRepo) -> None:
 
     # Populate test table with initial repo
     add_repo_to_table(borgboi_repo)
-    response = dynamodb.get_item(TableName=DYNAMO_TABLE_NAME, Key={"repo_path": {"S": borgboi_repo.path.as_posix()}})
+    response = dynamodb.get_item(TableName=DYNAMO_TABLE_NAME, Key={"repo_path": {"S": borgboi_repo.path}})
     assert "Item" in response
-    assert response["Item"]["repo_path"]["S"] == borgboi_repo.path.as_posix()  # pyright: ignore[reportTypedDictNotRequiredAccess]
+    assert response["Item"]["repo_path"]["S"] == borgboi_repo.repo_posix_path  # pyright: ignore[reportTypedDictNotRequiredAccess]
     assert response["Item"]["passphrase_env_var_name"]["S"] == borgboi_repo.passphrase_env_var_name  # pyright: ignore[reportTypedDictNotRequiredAccess]
 
     # Update repo fields and call update_repo(...)
@@ -52,7 +52,7 @@ def test_update_repo(dynamodb: DynamoDBClient, borgboi_repo: BorgRepo) -> None:
     update_repo(borgboi_repo)
 
     # Verify that the repo was updated in the table
-    repo_from_table = get_repo_by_path(borgboi_repo.path.as_posix())
+    repo_from_table = get_repo_by_path(borgboi_repo.repo_posix_path)
     assert repo_from_table.name == new_name
     assert repo_from_table.hostname == new_hostname
     assert repo_from_table.model_dump() == borgboi_repo.model_dump()

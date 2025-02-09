@@ -1,6 +1,5 @@
 from datetime import datetime
 from os import environ
-from pathlib import Path
 
 import boto3
 from botocore.config import Config
@@ -50,8 +49,8 @@ def _convert_repo_to_table_item(repo: BorgRepo) -> BorgRepoTableItem:
         }
 
     return BorgRepoTableItem(
-        repo_path=repo.path.as_posix(),
-        backup_target_path=repo.backup_target.as_posix(),
+        repo_path=repo.path,
+        backup_target_path=repo.backup_target,
         passphrase_env_var_name=repo.passphrase_env_var_name,
         common_name=repo.name,
         hostname=repo.hostname,
@@ -80,8 +79,8 @@ def _convert_table_item_to_repo(repo: BorgRepoTableItem) -> BorgRepo:
         last_s3_sync = datetime.fromisoformat(repo.last_s3_sync)
 
     return BorgRepo(
-        path=Path(repo.repo_path),
-        backup_target=Path(repo.backup_target_path),
+        path=repo.repo_path,
+        backup_target=repo.backup_target_path,
         passphrase_env_var_name=repo.passphrase_env_var_name,
         name=repo.common_name,
         hostname=repo.hostname,
@@ -103,7 +102,7 @@ def add_repo_to_table(repo: BorgRepo) -> None:
     """
     table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
     table.put_item(Item=_convert_repo_to_table_item(repo).model_dump())
-    console.print(f"Added repo to DynamoDB table: [bold cyan]{repo.path.as_posix()}[/]")
+    console.print(f"Added repo to DynamoDB table: [bold cyan]{repo.repo_posix_path}[/]")
 
 
 def get_all_repos() -> list[BorgRepo]:
@@ -162,4 +161,4 @@ def update_repo(repo: BorgRepo) -> None:
     """
     table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
     table.put_item(Item=_convert_repo_to_table_item(repo).model_dump())
-    console.print(f"Updated repo in DynamoDB table: [bold cyan]{repo.path.as_posix()}[/]")
+    console.print(f"Updated repo in DynamoDB table: [bold cyan]{repo.repo_posix_path}[/]")

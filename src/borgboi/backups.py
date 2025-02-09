@@ -1,11 +1,12 @@
+import socket
 import subprocess as sp
 from datetime import UTC, datetime
 from functools import cached_property
 from os import environ, getenv
 from pathlib import Path
+from typing import Self
 
-from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
-from pydantic.types import DirectoryPath, NewPath
+from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator, model_validator
 
 from borgboi import rich_utils
 
@@ -69,8 +70,8 @@ class RepoInfo(BaseModel):
 
 
 class BorgRepo(BaseModel):
-    path: DirectoryPath | NewPath
-    backup_target: DirectoryPath | NewPath
+    path: str
+    backup_target: str
     passphrase_env_var_name: str = "BORG_PASSPHRASE"  # noqa: S105
     name: str
     hostname: str
@@ -89,10 +90,44 @@ class BorgRepo(BaseModel):
             raise ValueError("os_platform must be either 'Darwin' or 'Linux'")
         return v
 
+    @model_validator(mode="after")
+    def _validate_dirs_exist(self) -> Self:
+        """
+        Validates the repo and backup target dirs exist if repo is local.
+        """
+        if self.hostname == socket.gethostname():
+            repo_path = Path(self.path)
+            if repo_path.exists() is False:
+                raise ValueError("Repository path does not exist")
+            elif repo_path.is_dir() is False:
+                raise ValueError("Repository path is not a directory")
+            backup_path = Path(self.backup_target)
+            if backup_path.exists() is False:
+                raise ValueError("Backup target path does not exist")
+            elif backup_path.is_dir() is False:
+                raise ValueError("Backup target path is not a directory")
+        return self
+
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def passphrase(self) -> SecretStr:
         return SecretStr(getenv(self.passphrase_env_var_name, ""))
+
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
+    def repo_posix_path(self) -> str:
+        """
+        Borg repo path in POSIX format.
+        """
+        return Path(self.path).as_posix()
+
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
+    def backup_target_posix_path(self) -> str:
+        """
+        Borg backup target path in POSIX format.
+        """
+        return Path(self.backup_target).as_posix()
 
     def init_repository(self, config_additional_free_space: bool = True) -> None:
         """
@@ -106,7 +141,7 @@ class BorgRepo(BaseModel):
             "--progress",
             "--encryption=repokey",
             "--storage-quota=100G",
-            self.path.as_posix(),
+            self.repo_posix_path,
         ]
 
         rich_utils.run_and_log_sp_popen(
@@ -119,7 +154,7 @@ class BorgRepo(BaseModel):
         )
 
         if config_additional_free_space:
-            config_cmd_parts = ["borg", "config", self.path.as_posix(), "additional_free_space", "2G"]
+            config_cmd_parts = ["borg", "config", self.repo_posix_path, "additional_free_space", "2G"]
             rich_utils.run_and_log_sp_popen(
                 cmd_parts=config_cmd_parts,
                 status_message="[bold blue]Configuring additional_free_space[/]",
@@ -150,8 +185,8 @@ class BorgRepo(BaseModel):
             "--exclude-nodump",
             "--exclude-from",
             f"{(Path.home() / BORGBOI_DIR_NAME / f'{self.name}_{EXCLUDE_FILENAME}').as_posix()}",
-            f"{self.path.as_posix()}::{title}",
-            self.backup_target.as_posix(),
+            f"{self.repo_posix_path}::{title}",
+            self.backup_target_posix_path,
         ]
 
         rich_utils.run_and_log_sp_popen(
@@ -183,7 +218,7 @@ class BorgRepo(BaseModel):
             f"--keep-daily={keep_daily}",
             f"--keep-weekly={keep_weekly}",
             f"--keep-monthly={keep_monthly}",
-            self.path.as_posix(),
+            self.repo_posix_path,
         ]
 
         rich_utils.run_and_log_sp_popen(
@@ -205,7 +240,7 @@ class BorgRepo(BaseModel):
             "borg",
             "compact",
             "--progress",
-            self.path.as_posix(),
+            self.repo_posix_path,
         ]
 
         rich_utils.run_and_log_sp_popen(
@@ -223,7 +258,7 @@ class BorgRepo(BaseModel):
 
         https://borgbackup.readthedocs.io/en/stable/usage/info.html
         """
-        cmd_parts = ["borg", "info", self.path.as_posix()]
+        cmd_parts = ["borg", "info", self.repo_posix_path]
 
         rich_utils.run_and_log_sp_popen(
             cmd_parts=cmd_parts,
@@ -243,7 +278,7 @@ class BorgRepo(BaseModel):
 
         https://borgbackup.readthedocs.io/en/stable/usage/info.html
         """
-        cmd_parts = ["borg", "info", "--json", self.path.as_posix()]
+        cmd_parts = ["borg", "info", "--json", self.repo_posix_path]
         rich_utils.print_cmd_parts(cmd_parts)
 
         result = sp.run(cmd_parts, capture_output=True, text=True)  # noqa: PLW1510, S603
@@ -260,7 +295,7 @@ class BorgRepo(BaseModel):
         borgboi_repo_keys_dir = Path.home() / BORGBOI_DIR_NAME
         borgboi_repo_keys_dir.mkdir(exist_ok=True)
         key_export_path = borgboi_repo_keys_dir / f"{self.name}-encrypted-key-backup.txt"
-        cmd_parts = ["borg", "key", "export", "--paper", self.path.as_posix(), key_export_path.as_posix()]
+        cmd_parts = ["borg", "key", "export", "--paper", self.repo_posix_path, key_export_path.as_posix()]
 
         rich_utils.run_and_log_sp_popen(
             cmd_parts=cmd_parts,
@@ -283,7 +318,7 @@ class BorgRepo(BaseModel):
             "-v",
             "--progress",
             "--list",
-            f"{self.path.as_posix()}::{archive_name}",
+            f"{self.repo_posix_path}::{archive_name}",
         ]
         rich_utils.run_and_log_sp_popen(
             cmd_parts=cmd_parts,
@@ -295,7 +330,7 @@ class BorgRepo(BaseModel):
         )
 
     def sync_with_s3(self) -> None:
-        sync_source = self.path.as_posix()
+        sync_source = self.repo_posix_path
         s3_destination_uri = f"s3://{environ['BORG_S3_BUCKET']}/{self.name}"
         cmd_parts = [
             "aws",
