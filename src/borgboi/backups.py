@@ -302,6 +302,6 @@ class BorgRepo(BaseModel):
             status_message="[bold green]Syncing with S3 Bucket[/]",
             success_message="Successfully synced with S3 bucket",
             error_message="Error syncing with S3 bucket",
-            spinner="arrow",
+            spinner="pipe",
         )
         self.last_s3_sync = datetime.now(UTC)
