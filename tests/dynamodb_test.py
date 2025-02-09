@@ -1,4 +1,5 @@
 from pathlib import Path
+from platform import system
 
 import pytest
 from mypy_boto3_dynamodb import DynamoDBClient
@@ -10,7 +11,13 @@ from .conftest import DYNAMO_TABLE_NAME
 
 @pytest.fixture
 def borgboi_repo(repo_storage_dir: Path, backup_target_dir: Path) -> BorgRepo:
-    return BorgRepo(path=repo_storage_dir, backup_target=backup_target_dir, name="test-repo", hostname="test-host")
+    return BorgRepo(
+        path=repo_storage_dir,
+        backup_target=backup_target_dir,
+        name="test-repo",
+        hostname="test-host",
+        os_platform=system(),
+    )
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")

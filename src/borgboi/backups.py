@@ -4,7 +4,7 @@ from functools import cached_property
 from os import environ, getenv
 from pathlib import Path
 
-from pydantic import BaseModel, Field, SecretStr, computed_field
+from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator
 from pydantic.types import DirectoryPath, NewPath
 
 from borgboi import rich_utils
@@ -77,9 +77,17 @@ class BorgRepo(BaseModel):
     last_backup: datetime | None = None
     last_s3_sync: datetime | None = None
     metadata: RepoInfo | None = None
+    os_platform: str = Field(min_length=3)
     total_size_gb: float = 0.0
     total_csize_gb: float = 0.0
     unique_csize_gb: float = 0.0
+
+    @field_validator("os_platform", mode="after")
+    @classmethod
+    def _validate_os_platform(cls, v: str) -> str:
+        if v not in {"Darwin", "Linux"}:
+            raise ValueError("os_platform must be either 'Darwin' or 'Linux'")
+        return v
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property

@@ -18,6 +18,7 @@ class BorgRepoTableItem(BaseModel):
     passphrase_env_var_name: str
     common_name: str
     hostname: str
+    os_platform: str
     last_backup: str | None = None
     last_s3_sync: str | None = None
     total_size_gb: str = "0.0"
@@ -54,6 +55,7 @@ def _convert_repo_to_table_item(repo: BorgRepo) -> BorgRepoTableItem:
         passphrase_env_var_name=repo.passphrase_env_var_name,
         common_name=repo.name,
         hostname=repo.hostname,
+        os_platform=repo.os_platform,
         last_backup=repo.last_backup.isoformat() if repo.last_backup else None,
         last_s3_sync=repo.last_s3_sync.isoformat() if repo.last_s3_sync else None,
         **size_metadata,
@@ -83,6 +85,7 @@ def _convert_table_item_to_repo(repo: BorgRepoTableItem) -> BorgRepo:
         passphrase_env_var_name=repo.passphrase_env_var_name,
         name=repo.common_name,
         hostname=repo.hostname,
+        os_platform=repo.os_platform,
         last_backup=last_backup,
         last_s3_sync=last_s3_sync,
         total_size_gb=float(repo.total_size_gb),
