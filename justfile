@@ -9,6 +9,12 @@ test:
     uv run pytest -v --capture=tee-sys
     rm -rf {{ test_restore_dir }}
 
+# run pytest test suite with coverage
+test-cov:
+    uv run pytest --cov=src/borgboi --cov-report=html
+    rm -rf {{ test_restore_dir }}
+    -open htmlcov/index.html
+
 # run all linters
 lint: mypy tflint tofu-validate
     uv run ruff check --fix .
