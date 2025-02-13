@@ -33,6 +33,7 @@ dev = [
     "mypy[faster-cache]>=1.14.1",
     "pytest>=8.3.4",
     "pytest-clarity>=1.0.1",
+    "pytest-cov>=6.0.0",
     "pytest-socket>=0.7.0",
     "pytest-sugar>=1.0.0",
     "ruff>=0.8.6",
@@ -42,7 +43,8 @@ dev = [
 addopts = [
     "--import-mode=importlib",
     "--disable-socket",
-    "--allow-unix-socket"
+    "--allow-unix-socket",
+    "--cov-report=term"
 ]
 filterwarnings = [
     "error",
