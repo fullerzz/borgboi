@@ -8,6 +8,8 @@ wheels/
 
 .coverage
 htmlcov/
+private/
+tmp/
 
 # Virtual environments
 .venv
