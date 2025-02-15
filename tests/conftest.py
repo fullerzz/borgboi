@@ -2,12 +2,15 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import boto3
 import pytest
 from moto import mock_aws
 from mypy_boto3_dynamodb import DynamoDBClient
 from mypy_boto3_s3 import S3Client
+
+from borgboi.backups import BorgRepo
 
 DYNAMO_TABLE_NAME = "borg-repos-test"
 
@@ -98,3 +101,11 @@ def repo_storage_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture
 def backup_target_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("borgboi-test-backup-target")
+
+
+@pytest.fixture
+def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None) -> BorgRepo:
+    from borgboi.orchestrator import create_borg_repo
+
+    repo_name = uuid4().hex[0:5]
+    return create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "BORG_NEW_PASSPHRASE", repo_name)

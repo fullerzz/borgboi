@@ -10,14 +10,6 @@ from borgboi.backups import BorgRepo
 EXCLUDES_SRC = "tests/data/excludes.txt"
 
 
-@pytest.fixture
-def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None) -> BorgRepo:
-    from borgboi.orchestrator import create_borg_repo
-
-    repo_name = uuid4().hex[0:5]
-    return create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "BORG_NEW_PASSPHRASE", repo_name)
-
-
 @pytest.mark.usefixtures("create_dynamodb_table")
 def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from borgboi.orchestrator import create_borg_repo
