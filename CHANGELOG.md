@@ -1,3 +1,13 @@
+## v0.10.0 (2025-02-15)
+
+### Feat
+
+- add command to delete borg repo and preview deletion with dry-run
+
+### Refactor
+
+- raise ValueError instead of exit(0)
+
 ## v0.9.0 (2025-02-09)
 
 ### BREAKING CHANGE
