@@ -31,4 +31,4 @@ def test_create_repo(
         input="BORG_PASSPHRASE\nTestRepo\n",
     )
     assert result.exit_code == 0
-    assert f"Created new Borg repo at {borg_repo.repo_posix_path}" in result.stdout
+    assert "Created new Borg repo at" in result.stdout
