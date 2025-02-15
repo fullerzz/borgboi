@@ -131,4 +131,4 @@ def confirm_deletion(repo_name: str) -> None:
     if resp.lower() == repo_name.lower():
         return None
     console.print("Deletion aborted.")
-    exit(0)
+    raise ValueError("Deletion aborted.")
