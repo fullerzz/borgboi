@@ -37,6 +37,7 @@ dev = [
     "pytest-socket>=0.7.0",
     "pytest-sugar>=1.0.0",
     "ruff>=0.8.6",
+    "rust-just>=1.39.0",
 ]
 
 [tool.pytest.ini_options]
