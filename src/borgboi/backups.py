@@ -329,7 +329,53 @@ class BorgRepo(BaseModel):
             use_stderr=True,
         )
 
+    def delete(self, dry_run: bool) -> None:
+        """
+        Delete the Borg repository.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/delete.html
+        """
+        if dry_run:
+            cmd_parts = [
+                "borg",
+                "delete",
+                "-v",
+                "--dry-run",  # include dry-run flag
+                "--list",
+                "--force",
+                "--checkpoint-interval",
+                "10",
+                self.repo_posix_path,
+            ]
+        else:
+            rich_utils.confirm_deletion(self.name)
+            cmd_parts = [
+                "borg",
+                "delete",
+                "-v",
+                "--list",
+                "--force",
+                "--checkpoint-interval",
+                "10",
+                self.repo_posix_path,
+            ]
+
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Deleting repository[/]",
+            success_message="Repository deleted successfully",
+            error_message="Error deleting repository",
+            spinner="dots",
+            use_stderr=True,
+        )
+
     def sync_with_s3(self) -> None:
+        """
+        Sync the local Borg repository with an S3 bucket.
+
+        This method will synchronize the contents of the Borg repository
+        to the specified S3 bucket defined in the environment variable.
+        """
         sync_source = self.repo_posix_path
         s3_destination_uri = f"s3://{environ['BORG_S3_BUCKET']}/{self.name}"
         cmd_parts = [

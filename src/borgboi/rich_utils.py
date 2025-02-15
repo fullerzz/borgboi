@@ -124,3 +124,11 @@ def output_repo_info(
     columns = Columns([size_panel, metadata_panel])
     console.print(columns)
     console.rule(f"[bold magenta]Repo ID:[/] [magenta]{repo_id}[/]", style="blue")
+
+
+def confirm_deletion(repo_name: str) -> None:
+    resp = console.input(f"[red]Type [bold]{repo_name}[/] to confirm deletion: ")
+    if resp.lower() == repo_name.lower():
+        return None
+    console.print("Deletion aborted.")
+    exit(0)
