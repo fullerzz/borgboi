@@ -388,7 +388,7 @@ class BorgRepo(BaseModel):
                 f"{self.repo_posix_path}::{archive_name}",
             ]
         else:
-            rich_utils.confirm_deletion(archive_name)
+            rich_utils.confirm_deletion(self.name, archive_name)
             cmd_parts = [
                 "borg",
                 "delete",
