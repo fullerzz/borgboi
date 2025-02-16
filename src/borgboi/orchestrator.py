@@ -66,8 +66,6 @@ def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool
     repo.delete(dry_run)
     if not dry_run:
         dynamodb.delete_repo(repo)
-        # NOTE: Space is NOT reclaimed on disk until the 'compact' command is ran
-        repo.compact()
 
 
 def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
