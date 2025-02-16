@@ -40,4 +40,5 @@ def test_delete_repo(
     runner = CliRunner()
     result = runner.invoke(cli, ["delete-repo", "--repo-path", str(repo_storage_dir)], input=borg_repo.name)
     assert result.exit_code == 0
-    assert "Repository deleted successfully\nDeleted repo from DynamoDB table" in result.stdout
+    assert "Repository deleted successfully" in result.stdout
+    assert "Deleted repo from DynamoDB table" in result.stdout
