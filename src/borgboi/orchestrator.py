@@ -64,7 +64,10 @@ def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool
     if validator.repo_is_local(repo) is False:
         raise ValueError("Repository must be local to delete")
     repo.delete(dry_run)
-    dynamodb.delete_repo(repo)
+    if not dry_run:
+        dynamodb.delete_repo(repo)
+        # NOTE: Space is NOT reclaimed on disk until the 'compact' command is ran
+        repo.compact()
 
 
 def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
@@ -147,3 +150,6 @@ def restore_archive(repo_path: str, archive_name: str) -> None:
 def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
     repo = lookup_repo(repo_path, None)
     repo.delete_archive(archive_name, dry_run)
+    if not dry_run:
+        # NOTE: Space is NOT reclaimed on disk until the 'compact' command is ran
+        repo.compact()
