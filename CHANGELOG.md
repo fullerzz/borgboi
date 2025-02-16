@@ -1,3 +1,9 @@
+## v0.12.0 (2025-02-16)
+
+### Feat
+
+- **list-archives**: add command to list archive names present in borg repo
+
 ## v0.11.0 (2025-02-16)
 
 ### Feat
