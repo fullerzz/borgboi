@@ -142,3 +142,8 @@ def perform_daily_backup(repo_path: str) -> None:
 def restore_archive(repo_path: str, archive_name: str) -> None:
     repo = lookup_repo(repo_path, None)
     repo.extract(archive_name)
+
+
+def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
+    repo = lookup_repo(repo_path, None)
+    repo.delete_archive(archive_name, dry_run)

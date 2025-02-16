@@ -86,6 +86,15 @@ def extract_archive(repo_path: str, archive_name: str) -> None:
 
 
 @cli.command()
+@click.option("--repo-path", "-r", required=True, type=click.Path(exists=True))
+@click.option("--archive-name", "-a", required=True, prompt=True)
+@click.option("--dry-run", is_flag=True, show_default=True, default=False, help="Perform a dry run of the deletion")
+def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
+    """Delete a Borg archive from the repository."""
+    orchestrator.delete_archive(repo_path, archive_name, dry_run)
+
+
+@cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
 @click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
 @click.option("--dry-run", is_flag=True, show_default=True, default=False, help="Perform a dry run of the deletion")
