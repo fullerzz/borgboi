@@ -59,6 +59,14 @@ def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, 
     return new_repo
 
 
+def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> None:
+    repo = lookup_repo(repo_path, repo_name)
+    if validator.repo_is_local(repo) is False:
+        raise ValueError("Repository must be local to delete")
+    repo.delete(dry_run)
+    dynamodb.delete_repo(repo)
+
+
 def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
     if repo_path is not None:
         return dynamodb.get_repo_by_path(repo_path)

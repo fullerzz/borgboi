@@ -91,16 +91,7 @@ def extract_archive(repo_path: str, archive_name: str) -> None:
 @click.option("--dry-run", is_flag=True, show_default=True, default=False, help="Perform a dry run of the deletion")
 def delete_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> None:
     """Delete a Borg repository."""
-    repo = orchestrator.lookup_repo(repo_path, repo_name)
-    repo.collect_json_info()
-    repo.info()
-    console.print(
-        repo.model_dump(
-            exclude={"passphrase", "passphrase_env_var_name", "repo_posix_path", "backup_target_posix_path"}
-        )
-    )
-    click.confirm("Are you sure you want to delete this repository?", abort=True)
-    repo.delete(dry_run)
+    orchestrator.delete_borg_repo(repo_path, repo_name, dry_run)
 
 
 def main() -> None:

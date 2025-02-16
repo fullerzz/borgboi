@@ -32,3 +32,12 @@ def test_create_repo(
     )
     assert result.exit_code == 0
     assert "Created new Borg repo at" in result.stdout
+
+
+def test_delete_repo(
+    monkeypatch: pytest.MonkeyPatch, repo_storage_dir: Path, backup_target_dir: Path, borg_repo: BorgRepo
+) -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli, ["delete-repo", "--repo-path", str(repo_storage_dir)], input=borg_repo.name)
+    assert result.exit_code == 0
+    assert "Repository deleted successfully\nDeleted repo from DynamoDB table" in result.stdout

@@ -152,6 +152,18 @@ def get_repo_by_name(repo_name: str) -> BorgRepo:
     return _convert_table_item_to_repo(BorgRepoTableItem(**response["Items"][0]))  # type: ignore
 
 
+def delete_repo(repo: BorgRepo) -> None:
+    """
+    Delete a Borg repository from the DynamoDB table.
+
+    Args:
+        repo (BorgRepo): Borg repository to delete
+    """
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
+    table.delete_item(Key={"repo_path": repo.path})
+    console.print(f"Deleted repo from DynamoDB table: [bold cyan]{repo.repo_posix_path}[/]")
+
+
 def update_repo(repo: BorgRepo) -> None:
     """
     Update a Borg repository in the DynamoDB table.
