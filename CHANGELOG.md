@@ -1,3 +1,17 @@
+## v0.11.0 (2025-02-16)
+
+### Feat
+
+- **delete-archive**: add CLI command to delete individual archives from within borg repo
+- **delete-archive**: add support for deleting individual archives from borg repositories
+
+### Fix
+
+- **delete-repo**: don't call 'compact' command if entire repo is deleted
+- **delete-op**: run compact command on repo after deletion command
+- **delete-op**: deletion confirmation prompt now accepts repo name and archive name as params
+- **delete-repo**: Repo is now delete from DynamoDB table after successful local removal
+
 ## v0.10.0 (2025-02-15)
 
 ### Feat
