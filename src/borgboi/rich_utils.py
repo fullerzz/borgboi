@@ -126,9 +126,25 @@ def output_repo_info(
     console.rule(f"[bold magenta]Repo ID:[/] [magenta]{repo_id}[/]", style="blue")
 
 
-def confirm_deletion(repo_name: str) -> None:
-    resp = console.input(f"[red]Type [bold]{repo_name}[/] to confirm deletion: ")
-    if resp.lower() == repo_name.lower():
+def confirm_deletion(repo_name: str, archive_name: str = "") -> None:
+    """
+    Prompts the user to confirm deletion of a Borg repository or archive.
+
+    Args:
+        repo_name (str): name of the repository to be deleted
+        archive_name (str, optional): name of the archive to be deleted. Defaults to "".
+
+    Raises:
+        ValueError: If the user does not confirm deletion.
+
+    Returns:
+        None: Indicates the confirmation process is complete.
+    """
+    confirmation_key = repo_name
+    if archive_name:
+        confirmation_key = f"{repo_name}::{archive_name}"
+    resp = console.input(f"[red]Type [bold]{confirmation_key}[/] to confirm deletion: ")
+    if resp.lower() == confirmation_key.lower():
         return None
     console.print("Deletion aborted.")
     raise ValueError("Deletion aborted.")
