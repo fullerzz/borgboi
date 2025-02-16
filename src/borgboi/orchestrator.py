@@ -128,6 +128,18 @@ def list_repos() -> None:
     console.print(table)
 
 
+def list_archives(repo_path: str | None, repo_name: str | None) -> None:
+    """
+    Retrieves Borg repo and lists all archives present within it.
+    """
+    repo = lookup_repo(repo_path, repo_name)
+    repo.get_archives()
+    console.rule(f"[bold]Archives for {repo.name}[/]")
+    for archive in repo.archives:
+        console.print(f"↳ [bold cyan]{archive.name}[/]")
+    console.rule()
+
+
 def perform_daily_backup(repo_path: str) -> None:
     repo = lookup_repo(repo_path, None)
     if validator.exclude_list_created(repo.name) is False:

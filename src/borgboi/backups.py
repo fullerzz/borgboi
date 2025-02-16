@@ -20,6 +20,18 @@ def _create_archive_title() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d_%H:%M:%S")
 
 
+class RepoArchive(BaseModel):
+    archive: str
+    id: str
+    name: str
+    start: str
+    time: str
+
+
+class ListArchivesOutput(BaseModel):
+    archives: list[RepoArchive]
+
+
 class Stats(BaseModel):
     total_chunks: int
     total_csize: int = Field(description="Compressed size")
@@ -79,6 +91,7 @@ class BorgRepo(BaseModel):
     last_s3_sync: datetime | None = None
     metadata: RepoInfo | None = None
     os_platform: str = Field(min_length=3)
+    archives: list[RepoArchive] = []
     total_size_gb: float = 0.0
     total_csize_gb: float = 0.0
     unique_csize_gb: float = 0.0
@@ -408,6 +421,19 @@ class BorgRepo(BaseModel):
             spinner="toggle",
             use_stderr=True,
         )
+
+    def get_archives(self) -> None:
+        """
+        Retrieve list of archives present in the Borg repository.
+        """
+        cmd_parts = ["borg", "list", "--json", self.repo_posix_path]
+
+        rich_utils.print_cmd_parts(cmd_parts)
+
+        result = sp.run(cmd_parts, capture_output=True, text=True)  # noqa: PLW1510, S603
+        if result.returncode != 0 and result.returncode != 1:
+            raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd_parts)
+        self.archives = ListArchivesOutput.model_validate_json(result.stdout).archives
 
     def sync_with_s3(self) -> None:
         """
