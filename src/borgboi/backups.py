@@ -369,6 +369,46 @@ class BorgRepo(BaseModel):
             use_stderr=True,
         )
 
+    def delete_archive(self, archive_name: str, dry_run: bool) -> None:
+        """
+        Delete an archive from the Borg repository.
+
+        https://borgbackup.readthedocs.io/en/stable/usage/delete.html
+        """
+        if dry_run:
+            cmd_parts = [
+                "borg",
+                "delete",
+                "-v",
+                "--dry-run",  # include dry-run flag
+                "--list",
+                "--force",
+                "--checkpoint-interval",
+                "10",
+                f"{self.repo_posix_path}::{archive_name}",
+            ]
+        else:
+            rich_utils.confirm_deletion(archive_name)
+            cmd_parts = [
+                "borg",
+                "delete",
+                "-v",
+                "--list",
+                "--force",
+                "--checkpoint-interval",
+                "10",
+                f"{self.repo_posix_path}::{archive_name}",
+            ]
+
+        rich_utils.run_and_log_sp_popen(
+            cmd_parts=cmd_parts,
+            status_message="[bold blue]Deleting archive[/]",
+            success_message="Archive deleted successfully",
+            error_message="Error deleting archive",
+            spinner="toggle",
+            use_stderr=True,
+        )
+
     def sync_with_s3(self) -> None:
         """
         Sync the local Borg repository with an S3 bucket.
