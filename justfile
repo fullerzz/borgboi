@@ -8,6 +8,7 @@ default:
 test:
     uv run pytest -v --capture=tee-sys
     rm -rf {{ test_restore_dir }}
+    @echo {{ BOLD + GREEN }}'✔️ All tests passed!'{{ NORMAL }}
 
 # run pytest test suite with coverage
 test-cov:
