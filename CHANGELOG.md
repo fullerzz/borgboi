@@ -1,3 +1,13 @@
+## v0.12.1 (2025-02-20)
+
+### Fix
+
+- **orchestrator**: repo's exclusions file is now removed if the repo is deleted
+
+### Refactor
+
+- **orchestrator**: add function to get path of a repo's excludes file
+
 ## v0.12.0 (2025-02-16)
 
 ### Feat
