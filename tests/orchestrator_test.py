@@ -57,8 +57,6 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
 def test_restore_archive(borg_repo: BorgRepo) -> None:
-    from borgboi.orchestrator import create_excludes_list
-
     # Insert a placeholder text file into the source directory
     rand_val = uuid4().hex
     file_data = {"random": rand_val}
@@ -66,8 +64,6 @@ def test_restore_archive(borg_repo: BorgRepo) -> None:
     json_file_path = json_file.as_posix()
     with json_file.open("w") as f:
         json.dump(file_data, f, indent=2)
-    # Create an exclusion list for the repo
-    new_excludes_file = create_excludes_list(borg_repo.name, EXCLUDES_SRC)
     # Create an archive of the source directory
     archive_name = borg_repo.create_archive()
     # delete data.json
@@ -81,13 +77,13 @@ def test_restore_archive(borg_repo: BorgRepo) -> None:
     with restored_file.open("r") as f:
         restored_data = json.load(f)
     assert restored_data == file_data
-    new_excludes_file.unlink()
 
 
-def test_create_excludes_list(borg_repo: BorgRepo) -> None:
+def test_create_excludes_list(borg_repo_without_excludes: BorgRepo) -> None:
     from borgboi.backups import BORGBOI_DIR_NAME, EXCLUDE_FILENAME
     from borgboi.orchestrator import create_excludes_list
 
+    borg_repo = borg_repo_without_excludes
     # Create an exclusion list for the repo
     create_excludes_list(borg_repo.name, EXCLUDES_SRC)
     # Assert that the exclusion list was created

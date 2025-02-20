@@ -11,6 +11,7 @@ from mypy_boto3_dynamodb import DynamoDBClient
 from mypy_boto3_s3 import S3Client
 
 from borgboi.backups import BorgRepo
+from tests.orchestrator_test import EXCLUDES_SRC
 
 DYNAMO_TABLE_NAME = "borg-repos-test"
 
@@ -104,7 +105,26 @@ def backup_target_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture
-def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None) -> BorgRepo:
+def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None) -> Generator[BorgRepo]:
+    """
+    Provides a BorgRepo with an excludes list already created.
+    """
+    from borgboi.orchestrator import create_borg_repo, create_excludes_list
+
+    repo_name = uuid4().hex[0:5]
+    repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "BORG_NEW_PASSPHRASE", repo_name)
+    exclusion_list = create_excludes_list(repo_name, EXCLUDES_SRC)
+    yield repo
+    exclusion_list.unlink(missing_ok=True)
+
+
+@pytest.fixture
+def borg_repo_without_excludes(
+    repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None
+) -> BorgRepo:
+    """
+    Provides a BorgRepo without an excludes list already created.
+    """
     from borgboi.orchestrator import create_borg_repo
 
     repo_name = uuid4().hex[0:5]

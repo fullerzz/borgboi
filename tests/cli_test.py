@@ -7,7 +7,6 @@ from click.testing import CliRunner
 from borgboi import orchestrator
 from borgboi.backups import BorgRepo
 from borgboi.cli import cli
-from tests.orchestrator_test import EXCLUDES_SRC
 
 
 def test_help() -> None:
@@ -44,13 +43,8 @@ def test_delete_repo(repo_storage_dir: Path, borg_repo: BorgRepo) -> None:
 
 
 def test_delete_archive(repo_storage_dir: Path, borg_repo: BorgRepo) -> None:
-    from borgboi.orchestrator import create_excludes_list
-
-    # Create an exclusion list for the repo
-    new_excludes_file = create_excludes_list(borg_repo.name, EXCLUDES_SRC)
     # Create an archive to be deleted in this test
     archive_name = borg_repo.create_archive()
-    new_excludes_file.unlink()
 
     runner = CliRunner()
     deletion_confirm_input = f"{borg_repo.name}::{archive_name}"
