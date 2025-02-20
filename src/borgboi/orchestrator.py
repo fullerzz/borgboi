@@ -64,12 +64,31 @@ def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, 
 
 
 def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> None:
+    """
+    Delete a Borg repository.
+
+    Raises:
+        ValueError: Repository must be local to delete
+    """
     repo = lookup_repo(repo_path, repo_name)
-    if validator.repo_is_local(repo) is False:
+    if not validator.repo_is_local(repo):
         raise ValueError("Repository must be local to delete")
     repo.delete(dry_run)
     if not dry_run:
         dynamodb.delete_repo(repo)
+        delete_excludes_list(repo.name)
+
+
+def delete_excludes_list(repo_name: str) -> None:
+    """
+    Delete the Borg repo's exclude list.
+    """
+    excludes_path = _get_excludes_path(repo_name)
+    if excludes_path.exists():
+        excludes_path.unlink()
+        console.print(f"Deleted exclude list for [bold cyan]{repo_name}[/]")
+    else:
+        raise FileNotFoundError("Exclude list not found")
 
 
 def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
