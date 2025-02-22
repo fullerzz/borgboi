@@ -44,6 +44,7 @@ def _create_archive_title() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d_%H:%M:%S")
 
 
+# TODO: Should this function yield the model or the raw output?
 def create_archive(repo_path: str, repo_name: str, backup_target_path: str) -> Generator[str]:
     """
     Create a new Borg archive of the backup target directory while yielding the output line by line.

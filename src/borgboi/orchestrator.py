@@ -4,7 +4,6 @@ import socket
 from pathlib import Path
 from platform import system
 
-from pydantic import ValidationError
 from rich.table import Table
 
 from borgboi import dynamodb, validator
@@ -205,15 +204,6 @@ def demo_v1(repo: BorgRepo) -> None:
     if repo.name != "GO_HOME":
         raise ValueError("Demo only works with the 'GO_HOME' repo")
     for output_line in borg.create_archive(repo.path, repo.name, repo.backup_target):
-        model: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
-        try:
-            model = ArchiveProgress.model_validate_json(output_line)
-        except ValidationError:
-            try:
-                model = ProgressPercent.model_validate_json(output_line)
-            except ValidationError:
-                try:
-                    model = ProgressMessage.model_validate_json(output_line)
-                except ValidationError:
-                    model = LogMessage.model_validate_json(output_line)
-        console.print(model)
+        log_msg: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
+        log_msg = validator.parse_log(output_line)
+        console.print(log_msg)
