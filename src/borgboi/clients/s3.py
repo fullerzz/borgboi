@@ -32,13 +32,13 @@ def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
 
     while out_stream.readable():  # type: ignore
         line = out_stream.readline()  # type: ignore
-        yield line.decode("utf-8")
         if not line:
             if proc.stdout:
                 proc.stdout.close()
             if proc.stderr:
                 proc.stderr.close()
             break
+        yield line.decode("utf-8")
 
     # stdout no longer readable so wait for return code
     returncode = proc.wait()

@@ -4,6 +4,7 @@ import socket
 from pathlib import Path
 from platform import system
 
+from pydantic import ValidationError
 from rich.table import Table
 
 from borgboi import dynamodb, validator
@@ -186,3 +187,33 @@ def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
     if not dry_run:
         # NOTE: Space is NOT reclaimed on disk until the 'compact' command is ran
         repo.compact()
+
+
+def demo_v1(repo: BorgRepo) -> None:
+    """
+    Perform a demo of the v1 backup process.
+    """
+    from borgboi.clients import borg
+    from borgboi.clients.utils.borg_logs import (
+        ArchiveProgress,
+        FileStatus,
+        LogMessage,
+        ProgressMessage,
+        ProgressPercent,
+    )
+
+    if repo.name != "GO_HOME":
+        raise ValueError("Demo only works with the 'GO_HOME' repo")
+    for output_line in borg.create_archive(repo.path, repo.name, repo.backup_target):
+        model: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
+        try:
+            model = ArchiveProgress.model_validate_json(output_line)
+        except ValidationError:
+            try:
+                model = ProgressPercent.model_validate_json(output_line)
+            except ValidationError:
+                try:
+                    model = ProgressMessage.model_validate_json(output_line)
+                except ValidationError:
+                    model = LogMessage.model_validate_json(output_line)
+        console.print(model)
