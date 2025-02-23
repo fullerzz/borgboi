@@ -60,7 +60,8 @@ def test_restore_archive(borg_repo: BorgBoiRepo) -> None:
         json.dump(file_data, f, indent=2)
     # Create an archive of the source directory
     archive_name = borg._create_archive_title()
-    borg.create_archive(borg_repo.path, borg_repo.name, borg_repo.backup_target, archive_name)
+    for log_msg in borg.create_archive(borg_repo.path, borg_repo.name, borg_repo.backup_target, archive_name):
+        print(log_msg)
     # delete data.json
     json_file.unlink()
     assert json_file.exists() is False
