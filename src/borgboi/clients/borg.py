@@ -218,6 +218,22 @@ def compact(repo_path: str) -> Generator[str]:
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
+def export_repo_key(repo_path: str, repo_name: str) -> Path:
+    """
+    Exports the Borg repository key to a file in the user's home directory.
+
+    https://borgbackup.readthedocs.io/en/stable/usage/key.html#borg-key-export
+    """
+    borgboi_repo_keys_dir = Path.home() / BORGBOI_DIR_NAME
+    borgboi_repo_keys_dir.mkdir(exist_ok=True)
+    key_export_path = borgboi_repo_keys_dir / f"{repo_name}-encrypted-key-backup.txt"
+    cmd = ["borg", "key", "export", "--paper", repo_path, key_export_path.as_posix()]
+    result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
+    if result.returncode != 0:
+        raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd)
+    return key_export_path
+
+
 class RepoArchive(BaseModel):
     archive: str
     id: str
