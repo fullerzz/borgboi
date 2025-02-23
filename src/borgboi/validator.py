@@ -28,6 +28,15 @@ def exclude_list_created(repo_name: str) -> bool:
 
 
 def parse_log(log: str) -> ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus:
+    """
+    Parse the log message from the borg client
+
+    Args:
+        log (str): single line output from the borg client
+
+    Returns:
+        ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus: validated log message
+    """
     log_msg: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
     try:
         log_msg = ArchiveProgress.model_validate_json(log)
@@ -45,6 +54,15 @@ def parse_log(log: str) -> ArchiveProgress | ProgressMessage | ProgressPercent |
 def parse_logs(
     log_stream: Iterable[str],
 ) -> Generator[ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus]:
+    """
+    Parse the logs from the borg client
+
+    Args:
+        log_stream (Iterable[str]): logs from the borg client
+
+    Yields:
+        Generator[ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus]: validated log message
+    """
     log_msg: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
     for log in log_stream:
         try:
