@@ -7,6 +7,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, computed_field
 
+from borgboi import rich_utils
+
 BORGBOI_DIR_NAME = getenv("BORGBOI_DIR_NAME", ".borgboi")
 EXCLUDE_FILENAME = "excludes.txt"
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
@@ -241,6 +243,108 @@ def extract(repo_path: str, archive_name: str) -> Generator[str]:
     https://borgbackup.readthedocs.io/en/stable/usage/extract.html
     """
     cmd = ["borg", "extract", "--log-json", "--progress", "--list", f"{repo_path}::{archive_name}"]
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    out_stream = proc.stderr
+
+    while out_stream.readable():  # type: ignore
+        line = out_stream.readline()  # type: ignore
+        if not line:
+            if proc.stdout:
+                proc.stdout.close()
+            if proc.stderr:
+                proc.stderr.close()
+            break
+        yield line.decode("utf-8")
+
+    # stdout no longer readable so wait for return code
+    returncode = proc.wait()
+    if returncode != 0 and returncode != 1:
+        raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+
+
+def delete(repo_path: str, repo_name: str, dry_run: bool) -> Generator[str]:
+    """
+    Delete the Borg repository.
+
+    https://borgbackup.readthedocs.io/en/stable/usage/delete.html
+    """
+    if dry_run:
+        cmd = [
+            "borg",
+            "delete",
+            "--log-json",
+            "--progress",
+            "--dry-run",  # include dry-run flag
+            "--list",
+            "--force",
+            "--checkpoint-interval",
+            "10",
+            repo_path,
+        ]
+    else:
+        rich_utils.confirm_deletion(repo_name)
+        cmd = [
+            "borg",
+            "delete",
+            "--log-json",
+            "--progress",
+            "--list",
+            "--force",
+            "--checkpoint-interval",
+            "10",
+            repo_path,
+        ]
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    out_stream = proc.stderr
+
+    while out_stream.readable():  # type: ignore
+        line = out_stream.readline()  # type: ignore
+        if not line:
+            if proc.stdout:
+                proc.stdout.close()
+            if proc.stderr:
+                proc.stderr.close()
+            break
+        yield line.decode("utf-8")
+
+    # stdout no longer readable so wait for return code
+    returncode = proc.wait()
+    if returncode != 0 and returncode != 1:
+        raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+
+
+def delete_archive(repo_path: str, repo_name: str, archive_name: str, dry_run: bool) -> Generator[str]:
+    """
+    Delete an archive from the Borg repository.
+
+    https://borgbackup.readthedocs.io/en/stable/usage/delete.html
+    """
+    if dry_run:
+        cmd = [
+            "borg",
+            "delete",
+            "--log-json",
+            "--progress",
+            "--dry-run",  # include dry-run flag
+            "--list",
+            "--force",
+            "--checkpoint-interval",
+            "10",
+            f"{repo_path}::{archive_name}",
+        ]
+    else:
+        rich_utils.confirm_deletion(repo_name, archive_name)
+        cmd = [
+            "borg",
+            "delete",
+            "--log-json",
+            "--progress",
+            "--list",
+            "--force",
+            "--checkpoint-interval",
+            "10",
+            f"{repo_path}::{archive_name}",
+        ]
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stderr
 
