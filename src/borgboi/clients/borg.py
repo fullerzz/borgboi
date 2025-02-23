@@ -186,6 +186,38 @@ def prune(repo_path: str, keep_daily: int = 7, keep_weekly: int = 3, keep_monthl
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
+def compact(repo_path: str) -> Generator[str]:
+    """
+    Run a Borg compact command to free repository space.
+
+    https://borgbackup.readthedocs.io/en/stable/usage/compact.html
+    """
+    cmd = [
+        "borg",
+        "compact",
+        "--log-json",
+        "--progress",
+        repo_path,
+    ]
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    out_stream = proc.stderr
+
+    while out_stream.readable():  # type: ignore
+        line = out_stream.readline()  # type: ignore
+        if not line:
+            if proc.stdout:
+                proc.stdout.close()
+            if proc.stderr:
+                proc.stderr.close()
+            break
+        yield line.decode("utf-8")
+
+    # stdout no longer readable so wait for return code
+    returncode = proc.wait()
+    if returncode != 0 and returncode != 1:
+        raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+
+
 class RepoArchive(BaseModel):
     archive: str
     id: str
