@@ -8,13 +8,6 @@ from rich.table import Table
 
 from borgboi import validator
 from borgboi.clients import borg, dynamodb, s3
-from borgboi.clients.utils.borg_logs import (
-    ArchiveProgress,
-    FileStatus,
-    LogMessage,
-    ProgressMessage,
-    ProgressPercent,
-)
 from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
 from borgboi.rich_utils import console, output_repo_info
 
@@ -177,17 +170,13 @@ def perform_daily_backup(repo_path: str) -> None:
     repo = lookup_repo(repo_path, None)
     if validator.exclude_list_created(repo.name) is False:
         raise ValueError("Exclude list must be created before performing a backup")
-    for log_msg in borg.create_archive(repo.path, repo.name, repo.backup_target):
-        msg = validator.parse_log(log_msg)
-        console.print(msg)
-    for log_msg in borg.prune(repo.path):
-        msg = validator.parse_log(log_msg)
-        console.print(msg)
-    for log_msg in borg.compact(repo.path):
-        msg = validator.parse_log(log_msg)
-        console.print(msg)
-    for log_msg in s3.sync_with_s3(repo.path, repo.name):
-        msg = validator.parse_log(log_msg)
+    for log_msg in validator.parse_logs(borg.create_archive(repo.path, repo.name, repo.backup_target)):
+        console.print(log_msg)
+    for log_msg in validator.parse_logs(borg.prune(repo.path)):
+        console.print(log_msg)
+    for log_msg in validator.parse_logs(borg.compact(repo.path)):
+        console.print(log_msg)
+    for msg in s3.sync_with_s3(repo.path, repo.name):
         console.print(msg)
     # Refresh metadata after backup and pruning complete
     repo.metadata = borg.info(repo.path)
@@ -226,15 +215,12 @@ def demo_v1(repo: BorgBoiRepo) -> None:
 
     if repo.name != "GO_HOME":
         raise ValueError("Demo only works with the 'GO_HOME' repo")
-    for output_line in borg.create_archive(repo.path, repo.name, repo.backup_target):
-        log_msg: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
-        log_msg = validator.parse_log(output_line)
+
+    for log_msg in validator.parse_logs(borg.create_archive(repo.path, repo.name, repo.backup_target)):
         console.print(log_msg)
 
-    for output_line in borg.prune(repo.path):
-        log_msg = validator.parse_log(output_line)
+    for log_msg in validator.parse_logs(borg.prune(repo.path)):
         console.print(log_msg)
 
-    for output_line in borg.compact(repo.path):
-        log_msg = validator.parse_log(output_line)
+    for log_msg in validator.parse_logs(borg.compact(repo.path)):
         console.print(log_msg)

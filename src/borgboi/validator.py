@@ -1,4 +1,5 @@
 import socket
+from collections.abc import Generator, Iterable
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -39,3 +40,21 @@ def parse_log(log: str) -> ArchiveProgress | ProgressMessage | ProgressPercent |
             except ValidationError:
                 log_msg = LogMessage.model_validate_json(log)
     return log_msg
+
+
+def parse_logs(
+    log_stream: Iterable[str],
+) -> Generator[ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus]:
+    log_msg: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
+    for log in log_stream:
+        try:
+            log_msg = ArchiveProgress.model_validate_json(log)
+        except ValidationError:
+            try:
+                log_msg = ProgressPercent.model_validate_json(log)
+            except ValidationError:
+                try:
+                    log_msg = ProgressMessage.model_validate_json(log)
+                except ValidationError:
+                    log_msg = LogMessage.model_validate_json(log)
+        yield log_msg
