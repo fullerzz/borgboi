@@ -48,5 +48,6 @@ jobs:
         mkdir ~/.aws && touch ~/.aws/credentials && echo -e "[default]\naws_access_key_id = test\naws_secret_access_key = test" > ~/.aws/credentials
         source .venv/bin/activate
         just test
+        ls -al
     - name: Minimize uv cache
       run: uv cache prune --ci

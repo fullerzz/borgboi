@@ -66,6 +66,9 @@ def test_restore_archive(borg_repo: BorgBoiRepo) -> None:
     assert json_file.exists() is False
     # extract the archive into the test dir
     borg.extract(borg_repo.path, archive_name)
+    # assert that a new folder was created in the restore directory
+    restored_dir = Path(f"{Path.cwd().as_posix()}/{archive_name}")
+    assert restored_dir.exists()
     # Assert that the placeholder text file is present in the restore directory
     restored_file = Path(f"{Path.cwd().as_posix()}/{json_file_path}")
     assert restored_file.exists()
