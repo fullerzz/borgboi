@@ -8,6 +8,15 @@ from rich.table import Table
 
 from borgboi import dynamodb, validator
 from borgboi.backups import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgRepo
+from borgboi.clients import borg
+from borgboi.clients.utils.borg_logs import (
+    ArchiveProgress,
+    FileStatus,
+    LogMessage,
+    ProgressMessage,
+    ProgressPercent,
+)
+from borgboi.models import BorgBoiRepo
 from borgboi.rich_utils import console, output_repo_info
 
 
@@ -37,7 +46,7 @@ def create_excludes_list(repo_name: str, excludes_source_file: str) -> Path:
     return dest_file
 
 
-def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, name: str) -> BorgRepo:
+def create_borg_repo(path: str, backup_path: str, name: str) -> BorgBoiRepo:
     if os.getenv("BORG_NEW_PASSPHRASE") is None:
         raise ValueError("Environment variable BORG_NEW_PASSPHRASE must be set")
     repo_path = Path(path)
@@ -46,21 +55,22 @@ def create_borg_repo(path: str, backup_path: str, passphrase_env_var_name: str, 
     if not repo_path.exists():
         repo_path.mkdir()
 
-    new_repo = BorgRepo(
+    if "/private/var/" in repo_path.parts or "tmp" in repo_path.parts:
+        borg.init_repository(repo_path.as_posix(), config_additional_free_space=False)
+    else:
+        borg.init_repository(repo_path.as_posix())
+
+    repo_info = borg.info(repo_path.as_posix())
+    borgboi_repo = BorgBoiRepo(
         path=repo_path.as_posix(),
         backup_target=backup_path,
-        passphrase_env_var_name=passphrase_env_var_name,
         name=name,
         hostname=socket.gethostname(),
         os_platform=system(),
+        metadata=repo_info,
     )
-    if "/private/var/" in repo_path.parts or "tmp" in repo_path.parts:
-        new_repo.init_repository(config_additional_free_space=False)
-    else:
-        new_repo.init_repository()
-
-    dynamodb.add_repo_to_table(new_repo)
-    return new_repo
+    dynamodb.add_repo_to_table(borgboi_repo)
+    return borgboi_repo
 
 
 def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> None:
@@ -192,14 +202,6 @@ def demo_v1(repo: BorgRepo) -> None:
     """
     Perform a demo of the v1 backup process.
     """
-    from borgboi.clients import borg
-    from borgboi.clients.utils.borg_logs import (
-        ArchiveProgress,
-        FileStatus,
-        LogMessage,
-        ProgressMessage,
-        ProgressPercent,
-    )
 
     if repo.name != "GO_HOME":
         raise ValueError("Demo only works with the 'GO_HOME' repo")

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from functools import cached_property
 from os import getenv
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -136,6 +137,7 @@ class RepoInfo(BaseModel):
     encryption: Encryption
     repository: Repository
     security_dir: str
+    archives: list[dict[str, Any]] = []
 
 
 def info(repo_path: str) -> RepoInfo:
