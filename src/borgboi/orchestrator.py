@@ -211,3 +211,7 @@ def demo_v1(repo: BorgRepo) -> None:
     for output_line in borg.prune(repo.path):
         log_msg = validator.parse_log(output_line)
         console.print(log_msg)
+
+    for output_line in borg.compact(repo.path):
+        log_msg = validator.parse_log(output_line)
+        console.print(log_msg)
