@@ -108,21 +108,21 @@ class RepoCache(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
-    def total_size_gb(self) -> float:
+    def total_size_gb(self) -> str:
         """Original size in gigabytes."""
-        return self.stats.total_size / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE
+        return f"{(self.stats.total_size / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE):.2f}"
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
-    def total_csize_gb(self) -> float:
+    def total_csize_gb(self) -> str:
         """Compressed size in gigabytes."""
-        return self.stats.total_csize / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE
+        return f"{(self.stats.total_csize / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE):.2f}"
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property
-    def unique_csize_gb(self) -> float:
+    def unique_csize_gb(self) -> str:
         """Deduplicated size in gigabytes."""
-        return self.stats.unique_csize / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE
+        return f"{(self.stats.unique_csize / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE):.2f}"
 
 
 class Encryption(BaseModel):
