@@ -83,13 +83,13 @@ def save_console_output() -> None:
     console.save_html("borgboi_output.html")
 
 
-def _build_size_panel(total_size_gb: float, total_csize_gb: float, unique_csize_gb: float) -> Panel:
+def _build_size_panel(total_size_gb: str, total_csize_gb: str, unique_csize_gb: str) -> Panel:
     table = Table.grid(padding=(0, 1))
     table.add_column()
     table.add_column(justify="right")
-    table.add_row("[bold blue]Total Size", f"[cyan]{total_size_gb:.2f} GB")
-    table.add_row("[bold blue]Compressed Size", f"[cyan]{total_csize_gb:.2f} GB")
-    table.add_row("[bold blue]Deduplicated Size", f"[cyan]{unique_csize_gb:.2f} GB")
+    table.add_row("[bold blue]Total Size", f"[cyan]{total_size_gb} GB")
+    table.add_row("[bold blue]Compressed Size", f"[cyan]{total_csize_gb} GB")
+    table.add_row("[bold blue]Deduplicated Size", f"[cyan]{unique_csize_gb} GB")
     return Panel(table, title="Disk Usage 💾", border_style="blue", expand=False)
 
 
@@ -106,9 +106,9 @@ def _build_metadata_panel(encryption_mode: str, repo_id: str, repo_location: str
 def output_repo_info(
     *,
     name: str,
-    total_size_gb: float,
-    total_csize_gb: float,
-    unique_csize_gb: float,
+    total_size_gb: str,
+    total_csize_gb: str,
+    unique_csize_gb: str,
     encryption_mode: str,
     repo_id: str,
     repo_location: str,
