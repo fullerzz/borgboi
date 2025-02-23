@@ -17,12 +17,9 @@ def cli() -> None:
 @click.option("--backup-target", "-b", required=True, type=click.Path(exists=True), prompt=True)
 def create_repo(repo_path: str, backup_target: str) -> None:
     """Create a new Borg repository."""
-    env_var_name = click.prompt("Enter the name of the environment variable that contains the passphrase for this repo")
     name = click.prompt("Enter a name for this repository")
-    repo = orchestrator.create_borg_repo(
-        path=repo_path, backup_path=backup_target, passphrase_env_var_name=env_var_name, name=name
-    )
-    console.print(f"Created new Borg repo at [bold cyan]{repo.repo_posix_path}[/]")
+    repo = orchestrator.create_borg_repo(path=repo_path, backup_path=backup_target, name=name)
+    console.print(f"Created new Borg repo at [bold cyan]{repo.path}[/]")
 
 
 @cli.command()
@@ -54,7 +51,7 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
 def get_repo(repo_path: str | None, repo_name: str | None) -> None:
     """Get a Borg repository by name or path."""
     repo = orchestrator.lookup_repo(repo_path, repo_name)
-    console.print(f"Repository found: [bold cyan]{repo.repo_posix_path}[/]")
+    console.print(f"Repository found: [bold cyan]{repo.path}[/]")
     console.print(repo)
 
 
@@ -76,9 +73,9 @@ def demo(repo_path: str) -> None:
 @cli.command()
 @click.option("--repo-path", "-r", required=True, type=click.Path(exists=True))
 def export_repo_key(repo_path: str) -> None:
-    """Create a new archive of the home directory with borg and perform pruning and compaction."""
-    repo = orchestrator.lookup_repo(repo_path, None)
-    repo.export_repo_key()
+    """Extract the Borg repository's repo key."""
+    key_path = orchestrator.extract_repo_key(repo_path)
+    console.print(f"Exported repo key to: [bold cyan]{key_path}[/]")
 
 
 @cli.command()

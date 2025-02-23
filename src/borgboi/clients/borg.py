@@ -48,13 +48,16 @@ def _create_archive_title() -> str:
 
 
 # TODO: Should this function yield the model or the raw output?
-def create_archive(repo_path: str, repo_name: str, backup_target_path: str) -> Generator[str]:
+def create_archive(
+    repo_path: str, repo_name: str, backup_target_path: str, archive_name: str | None = None
+) -> Generator[str]:
     """
     Create a new Borg archive of the backup target directory while yielding the output line by line.
 
     https://borgbackup.readthedocs.io/en/stable/usage/create.html
     """
-    title = _create_archive_title()
+    if not archive_name:
+        archive_name = _create_archive_title()
     cmd = [
         "borg",
         "create",
@@ -67,7 +70,7 @@ def create_archive(repo_path: str, repo_name: str, backup_target_path: str) -> G
         "--exclude-nodump",
         "--exclude-from",
         f"{(Path.home() / BORGBOI_DIR_NAME / f'{repo_name}_{EXCLUDE_FILENAME}').as_posix()}",
-        f"{repo_path}::{title}",
+        f"{repo_path}::{archive_name}",
         backup_target_path,
     ]
 

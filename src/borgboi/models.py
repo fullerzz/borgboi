@@ -1,11 +1,7 @@
-import socket
-from datetime import UTC, datetime
-from functools import cached_property
-from os import environ, getenv
-from pathlib import Path
-from typing import Any, Self
+from datetime import datetime
+from os import getenv
 
-from pydantic import BaseModel, Field, SecretStr, computed_field, field_validator, model_validator
+from pydantic import BaseModel, Field
 
 from borgboi.clients.borg import RepoInfo
 
