@@ -177,7 +177,6 @@ def perform_daily_backup(repo_path: str) -> None:
     repo = lookup_repo(repo_path, None)
     if validator.exclude_list_created(repo.name) is False:
         raise ValueError("Exclude list must be created before performing a backup")
-    # TODO: Stream output
     for log_msg in borg.create_archive(repo.path, repo.name, repo.backup_target):
         msg = validator.parse_log(log_msg)
         console.print(msg)
