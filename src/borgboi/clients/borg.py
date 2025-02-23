@@ -148,7 +148,7 @@ def info(repo_path: str) -> RepoInfo:
     cmd = ["borg", "info", "--json", repo_path]
     result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
-        raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd)
+        raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
     return RepoInfo.model_validate_json(result.stdout)
 
 
