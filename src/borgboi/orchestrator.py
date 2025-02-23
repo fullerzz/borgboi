@@ -82,8 +82,9 @@ def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool
     repo = lookup_repo(repo_path, repo_name)
     if not validator.repo_is_local(repo):
         raise ValueError("Repository must be local to delete")
-    # TODO: Stream output to console
-    borg.delete(repo.path, repo.name, dry_run)
+    for log_msg in borg.delete(repo.path, repo.name, dry_run):
+        msg = validator.parse_log(log_msg)
+        console.print(msg)
     if not dry_run:
         dynamodb.delete_repo(repo)
         delete_excludes_list(repo.name)
@@ -177,10 +178,18 @@ def perform_daily_backup(repo_path: str) -> None:
     if validator.exclude_list_created(repo.name) is False:
         raise ValueError("Exclude list must be created before performing a backup")
     # TODO: Stream output
-    borg.create_archive(repo.path, repo.name, repo.backup_target)
-    borg.prune(repo.path)
-    borg.compact(repo.path)
-    s3.sync_with_s3(repo.path, repo.name)
+    for log_msg in borg.create_archive(repo.path, repo.name, repo.backup_target):
+        msg = validator.parse_log(log_msg)
+        console.print(msg)
+    for log_msg in borg.prune(repo.path):
+        msg = validator.parse_log(log_msg)
+        console.print(msg)
+    for log_msg in borg.compact(repo.path):
+        msg = validator.parse_log(log_msg)
+        console.print(msg)
+    for log_msg in s3.sync_with_s3(repo.path, repo.name):
+        msg = validator.parse_log(log_msg)
+        console.print(msg)
     # Refresh metadata after backup and pruning complete
     repo.metadata = borg.info(repo.path)
     dynamodb.update_repo(repo)
@@ -188,16 +197,21 @@ def perform_daily_backup(repo_path: str) -> None:
 
 def restore_archive(repo_path: str, archive_name: str) -> None:
     repo = lookup_repo(repo_path, None)
-    # TODO: Stream output
-    borg.extract(repo.path, archive_name)
+    for log_msg in borg.extract(repo.path, archive_name):
+        msg = validator.parse_log(log=log_msg)
+        console.print(msg)
 
 
 def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
     repo = lookup_repo(repo_path, None)
-    borg.delete_archive(repo.path, repo.name, archive_name, dry_run)
+    for log_msg in borg.delete_archive(repo.path, repo.name, archive_name, dry_run):
+        msg = validator.parse_log(log_msg)
+        console.print(msg)
     if not dry_run:
         # NOTE: Space is NOT reclaimed on disk until the 'compact' command is ran
-        borg.compact(repo.path)
+        for log_msg in borg.compact(repo.path):
+            msg = validator.parse_log(log_msg)
+            console.print(msg)
 
 
 def extract_repo_key(repo_path: str) -> Path:

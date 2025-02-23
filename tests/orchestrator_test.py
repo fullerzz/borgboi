@@ -60,14 +60,14 @@ def test_restore_archive(borg_repo: BorgBoiRepo) -> None:
         json.dump(file_data, f, indent=2)
     # Create an archive of the source directory
     archive_name = borg._create_archive_title()
-    for log_msg in borg.create_archive(borg_repo.path, borg_repo.name, borg_repo.backup_target, archive_name):
-        print(log_msg)
+    for _ in borg.create_archive(borg_repo.path, borg_repo.name, borg_repo.backup_target, archive_name):
+        pass
     # delete data.json
     json_file.unlink()
     assert json_file.exists() is False
     # extract the archive into the test dir
-    for log_msg in borg.extract(borg_repo.path, archive_name):
-        print(log_msg, end="")
+    for _ in borg.extract(borg_repo.path, archive_name):
+        pass
     # Assert that the placeholder text file is present in the restore directory
     restored_file = Path(f"{Path.cwd().as_posix()}/{json_file_path}")
     assert restored_file.exists()
