@@ -6,7 +6,7 @@ default:
 
 # run pytest test suite
 test:
-    uv run pytest -v --capture=tee-sys
+    uv run pytest -vvv --capture=tee-sys
     rm -rf {{ test_restore_dir }}
     @echo {{ BOLD + GREEN }}'✔️ All tests passed!'{{ NORMAL }}
 
