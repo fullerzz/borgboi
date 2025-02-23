@@ -6,9 +6,8 @@ from platform import system
 
 from rich.table import Table
 
-from borgboi import dynamodb, validator
-from borgboi.backups import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgRepo
-from borgboi.clients import borg
+from borgboi import validator
+from borgboi.clients import borg, dynamodb, s3
 from borgboi.clients.utils.borg_logs import (
     ArchiveProgress,
     FileStatus,
@@ -16,7 +15,7 @@ from borgboi.clients.utils.borg_logs import (
     ProgressMessage,
     ProgressPercent,
 )
-from borgboi.models import BorgBoiRepo
+from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
 from borgboi.rich_utils import console, output_repo_info
 
 
@@ -83,7 +82,8 @@ def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool
     repo = lookup_repo(repo_path, repo_name)
     if not validator.repo_is_local(repo):
         raise ValueError("Repository must be local to delete")
-    repo.delete(dry_run)
+    # TODO: Stream output to console
+    borg.delete(repo.path, repo.name, dry_run)
     if not dry_run:
         dynamodb.delete_repo(repo)
         delete_excludes_list(repo.name)
@@ -101,7 +101,7 @@ def delete_excludes_list(repo_name: str) -> None:
         raise FileNotFoundError("Exclude list not found")
 
 
-def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgRepo:
+def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgBoiRepo:
     if repo_path is not None:
         return dynamodb.get_repo_by_path(repo_path)
     elif repo_name is not None:
@@ -115,8 +115,7 @@ def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bo
     if validator.repo_is_local(repo) is False:
         raise ValueError("Repository must be local to view info")
     if pretty_print is False:
-        repo.info()
-    repo.collect_json_info()
+        borg.info(repo.path)
     if pretty_print is True:
         if repo.metadata is None:
             raise ValueError("Repo metadata is None")
@@ -145,16 +144,16 @@ def list_repos() -> None:
 
     for repo in repos:
         name = f"[bold cyan]{repo.name}[/]"
-        local_path = f"[bold blue]{repo.repo_posix_path}[/]"
+        local_path = f"[bold blue]{repo.path}[/]"
         env_var_name = f"[bold green]{repo.hostname}[/]"
-        backup_target = f"[bold magenta]{repo.backup_target_posix_path}[/]"
+        backup_target = f"[bold magenta]{repo.backup_target}[/]"
         if repo.last_backup:
             archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
         else:
             archive_date = "[italic red]Never[/]"
         size = (
-            f"[dark_orange]{repo.unique_csize_gb:.2f} GB[/]"
-            if repo.unique_csize_gb != 0.0
+            f"[dark_orange]{repo.metadata.cache.unique_csize_gb:.2f} GB[/]"
+            if repo.metadata.cache.unique_csize_gb != 0.0
             else "🤷[italic red]Unknown[/]"
         )
         table.add_row(name, local_path, env_var_name, archive_date, size, backup_target)
@@ -166,9 +165,9 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
     Retrieves Borg repo and lists all archives present within it.
     """
     repo = lookup_repo(repo_path, repo_name)
-    repo.get_archives()
+    archives = borg.list_archives(repo.path)
     console.rule(f"[bold]Archives for {repo.name}[/]")
-    for archive in repo.archives:
+    for archive in archives:
         console.print(f"↳ [bold cyan]{archive.name}[/]")
     console.rule()
 
@@ -177,28 +176,37 @@ def perform_daily_backup(repo_path: str) -> None:
     repo = lookup_repo(repo_path, None)
     if validator.exclude_list_created(repo.name) is False:
         raise ValueError("Exclude list must be created before performing a backup")
-    repo.create_archive()
-    repo.prune()
-    repo.compact()
-    repo.sync_with_s3()
-    repo.collect_json_info()
+    # TODO: Stream output
+    borg.create_archive(repo.path, repo.name, repo.backup_target)
+    borg.prune(repo.path)
+    borg.compact(repo.path)
+    s3.sync_with_s3(repo.path, repo.name)
+    # Refresh metadata after backup and pruning complete
+    repo.metadata = borg.info(repo.path)
     dynamodb.update_repo(repo)
 
 
 def restore_archive(repo_path: str, archive_name: str) -> None:
     repo = lookup_repo(repo_path, None)
-    repo.extract(archive_name)
+    # TODO: Stream output
+    borg.extract(repo.path, archive_name)
 
 
 def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
     repo = lookup_repo(repo_path, None)
-    repo.delete_archive(archive_name, dry_run)
+    borg.delete_archive(repo.path, repo.name, archive_name, dry_run)
     if not dry_run:
         # NOTE: Space is NOT reclaimed on disk until the 'compact' command is ran
-        repo.compact()
+        borg.compact(repo.path)
 
 
-def demo_v1(repo: BorgRepo) -> None:
+def extract_repo_key(repo_path: str) -> Path:
+    repo = lookup_repo(repo_path, None)
+    key_path = borg.export_repo_key(repo.path, repo.name)
+    return key_path
+
+
+def demo_v1(repo: BorgBoiRepo) -> None:
     """
     Perform a demo of the v1 backup process.
     """

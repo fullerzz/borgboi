@@ -5,8 +5,8 @@ import pytest
 from click.testing import CliRunner
 
 from borgboi import orchestrator
-from borgboi.backups import BorgRepo
 from borgboi.cli import cli
+from borgboi.models import BorgBoiRepo
 
 
 def test_help() -> None:
@@ -17,9 +17,9 @@ def test_help() -> None:
 
 
 def test_create_repo(
-    monkeypatch: pytest.MonkeyPatch, repo_storage_dir: Path, backup_target_dir: Path, borg_repo: BorgRepo
+    monkeypatch: pytest.MonkeyPatch, repo_storage_dir: Path, backup_target_dir: Path, borg_repo: BorgBoiRepo
 ) -> None:
-    def mock_create_borg_repo(*args: Any, **kwargs: Any) -> BorgRepo:
+    def mock_create_borg_repo(*args: Any, **kwargs: Any) -> BorgBoiRepo:
         return borg_repo
 
     monkeypatch.setattr(orchestrator, "create_borg_repo", mock_create_borg_repo)
@@ -34,7 +34,7 @@ def test_create_repo(
     assert "Created new Borg repo at" in result.stdout
 
 
-def test_delete_repo(repo_storage_dir: Path, borg_repo: BorgRepo) -> None:
+def test_delete_repo(repo_storage_dir: Path, borg_repo: BorgBoiRepo) -> None:
     runner = CliRunner()
     result = runner.invoke(cli, ["delete-repo", "--repo-path", str(repo_storage_dir)], input=borg_repo.name)
     assert result.exit_code == 0
@@ -42,9 +42,12 @@ def test_delete_repo(repo_storage_dir: Path, borg_repo: BorgRepo) -> None:
     assert "Deleted repo from DynamoDB table" in result.stdout
 
 
-def test_delete_archive(repo_storage_dir: Path, borg_repo: BorgRepo) -> None:
+def test_delete_archive(repo_storage_dir: Path, borg_repo: BorgBoiRepo) -> None:
+    from borgboi.clients import borg
+
     # Create an archive to be deleted in this test
-    archive_name = borg_repo.create_archive()
+    archive_name = borg._create_archive_title()
+    borg.create_archive(borg_repo.path, borg_repo.name, borg_repo.backup_target, archive_name)
 
     runner = CliRunner()
     deletion_confirm_input = f"{borg_repo.name}::{archive_name}"

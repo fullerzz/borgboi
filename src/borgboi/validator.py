@@ -3,7 +3,6 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from borgboi.backups import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgRepo
 from borgboi.clients.utils.borg_logs import (
     ArchiveProgress,
     FileStatus,
@@ -11,14 +10,14 @@ from borgboi.clients.utils.borg_logs import (
     ProgressMessage,
     ProgressPercent,
 )
-from borgboi.models import BorgBoiRepo
+from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
 
 
 def metadata_is_present(repo: BorgBoiRepo) -> bool:
     return repo.metadata is not None
 
 
-def repo_is_local(repo: BorgRepo) -> bool:
+def repo_is_local(repo: BorgBoiRepo) -> bool:
     return repo.hostname == socket.gethostname()
 
 
