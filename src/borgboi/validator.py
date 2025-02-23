@@ -11,6 +11,11 @@ from borgboi.clients.utils.borg_logs import (
     ProgressMessage,
     ProgressPercent,
 )
+from borgboi.models import BorgBoiRepo
+
+
+def metadata_is_present(repo: BorgBoiRepo) -> bool:
+    return repo.metadata is not None
 
 
 def repo_is_local(repo: BorgRepo) -> bool:
