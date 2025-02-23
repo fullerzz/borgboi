@@ -11,13 +11,9 @@ EXCLUDES_SRC = "tests/data/excludes.txt"
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
-def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path) -> None:
     from borgboi.orchestrator import create_borg_repo
 
-    def mock_init_repository(*args: Any, **kwargs: Any) -> None:
-        pass
-
-    monkeypatch.setattr("borgboi.clients.borg", "init_repository", mock_init_repository)
     new_repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "test-repo")
     assert new_repo.path == repo_storage_dir.as_posix()
     assert new_repo.backup_target == backup_target_dir.as_posix()
