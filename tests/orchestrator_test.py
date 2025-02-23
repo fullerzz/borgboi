@@ -65,7 +65,8 @@ def test_restore_archive(borg_repo: BorgBoiRepo) -> None:
     json_file.unlink()
     assert json_file.exists() is False
     # extract the archive into the test dir
-    borg.extract(borg_repo.path, archive_name)
+    for log_msg in borg.extract(borg_repo.path, archive_name):
+        print(log_msg, end="")
     # assert that a new folder was created in the restore directory
     restored_dir = Path(f"{Path.cwd().as_posix()}/{archive_name}")
     assert restored_dir.exists()
