@@ -234,6 +234,32 @@ def export_repo_key(repo_path: str, repo_name: str) -> Path:
     return key_export_path
 
 
+def extract(repo_path: str, archive_name: str) -> Generator[str]:
+    """
+    Extract an archive from a Borg repository.
+
+    https://borgbackup.readthedocs.io/en/stable/usage/extract.html
+    """
+    cmd = ["borg", "extract", "--log-json", "--progress", "--list", f"{repo_path}::{archive_name}"]
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    out_stream = proc.stderr
+
+    while out_stream.readable():  # type: ignore
+        line = out_stream.readline()  # type: ignore
+        if not line:
+            if proc.stdout:
+                proc.stdout.close()
+            if proc.stderr:
+                proc.stderr.close()
+            break
+        yield line.decode("utf-8")
+
+    # stdout no longer readable so wait for return code
+    returncode = proc.wait()
+    if returncode != 0 and returncode != 1:
+        raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+
+
 class RepoArchive(BaseModel):
     archive: str
     id: str
