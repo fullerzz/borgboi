@@ -207,3 +207,7 @@ def demo_v1(repo: BorgRepo) -> None:
         log_msg: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
         log_msg = validator.parse_log(output_line)
         console.print(log_msg)
+
+    for output_line in borg.prune(repo.path):
+        log_msg = validator.parse_log(output_line)
+        console.print(log_msg)

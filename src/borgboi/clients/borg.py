@@ -145,6 +145,47 @@ def info(repo_path: str) -> RepoInfo:
     return RepoInfo.model_validate_json(result.stdout)
 
 
+def prune(repo_path: str, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2) -> Generator[str]:
+    """
+    Run a Borg prune command to remove old backups from the repository.
+
+    https://borgbackup.readthedocs.io/en/stable/usage/prune.html
+
+    Args:
+        keep_daily (int, optional): Number of daily backups to retain. Defaults to 7.
+        keep_weekly (int, optional): Number of weekly backups to retain. Defaults to 3.
+        keep_monthly (int, optional): Number of monthly backups to retain. Defaults to 2.
+    """
+    cmd = [
+        "borg",
+        "prune",
+        "--log-json",
+        "--progress",
+        "--list",
+        f"--keep-daily={keep_daily}",
+        f"--keep-weekly={keep_weekly}",
+        f"--keep-monthly={keep_monthly}",
+        repo_path,
+    ]
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    out_stream = proc.stderr
+
+    while out_stream.readable():  # type: ignore
+        line = out_stream.readline()  # type: ignore
+        if not line:
+            if proc.stdout:
+                proc.stdout.close()
+            if proc.stderr:
+                proc.stderr.close()
+            break
+        yield line.decode("utf-8")
+
+    # stdout no longer readable so wait for return code
+    returncode = proc.wait()
+    if returncode != 0 and returncode != 1:
+        raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+
+
 class RepoArchive(BaseModel):
     archive: str
     id: str
