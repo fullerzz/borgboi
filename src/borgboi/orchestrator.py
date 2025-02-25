@@ -9,7 +9,7 @@ from rich.table import Table
 from borgboi import validator
 from borgboi.clients import borg, dynamodb, s3
 from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
-from borgboi.rich_utils import console, output_repo_info
+from borgboi.rich_utils import console, output_repo_info, render_cmd_output
 
 
 def _get_excludes_path(repo_name: str) -> Path:
@@ -216,11 +216,11 @@ def demo_v1(repo: BorgBoiRepo) -> None:
     if repo.name != "GO_HOME":
         raise ValueError("Demo only works with the 'GO_HOME' repo")
 
-    for log_msg in validator.parse_logs(borg.create_archive(repo.path, repo.name, repo.backup_target)):
-        console.print(log_msg)
+    console.rule("Creating archive")
+    render_cmd_output("borg create", borg.create_archive(repo.path, repo.name, repo.backup_target))
 
-    for log_msg in validator.parse_logs(borg.prune(repo.path)):
-        console.print(log_msg)
+    console.rule("Pruning archive")
+    render_cmd_output("borg prune", borg.prune(repo.path))
 
-    for log_msg in validator.parse_logs(borg.compact(repo.path)):
-        console.print(log_msg)
+    console.rule("Compacting archive")
+    render_cmd_output("borg compact", borg.compact(repo.path))
