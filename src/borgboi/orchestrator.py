@@ -5,8 +5,8 @@ from pathlib import Path
 from platform import system
 
 import rich
-from rich.table import Table
 import rich.text
+from rich.table import Table
 
 from borgboi import validator
 from borgboi.clients import borg, dynamodb, s3
@@ -172,14 +172,44 @@ def perform_daily_backup(repo_path: str) -> None:
     repo = lookup_repo(repo_path, None)
     if validator.exclude_list_created(repo.name) is False:
         raise ValueError("Exclude list must be created before performing a backup")
-    for log_msg in validator.parse_logs(borg.create_archive(repo.path, repo.name, repo.backup_target)):
-        console.print(log_msg)
-    for log_msg in validator.parse_logs(borg.prune(repo.path)):
-        console.print(log_msg)
-    for log_msg in validator.parse_logs(borg.compact(repo.path)):
-        console.print(log_msg)
-    for msg in s3.sync_with_s3(repo.path, repo.name):
-        console.print(msg)
+    # create archive
+    console.rule("[bold #74c7ec]Creating archive[/]", style="#c6a0f6")
+    render_cmd_output_lines(
+        "[bold blue]Creating new archive[/]",
+        "Archive created successfully",
+        borg.create_archive(repo.path, repo.name, repo.backup_target, log_json=False),
+    )
+    console.rule(":heavy_check_mark: [bold #a6e3a1]Archive created successfully[/]", style="#c6a0f6")
+
+    # prune
+    console.print("")
+    console.rule("[bold #74c7ec]Pruning archive[/]", style="#f5a97f")
+    render_cmd_output_lines(
+        "[bold blue]Pruning old backups[/]", "Pruning completed successfully", borg.prune(repo.path, log_json=False)
+    )
+    console.rule(":heavy_check_mark: [bold #a6e3a1]Pruning completed successfully[/]", style="#f5a97f")
+
+    # compact
+    console.print("")
+    console.rule("[bold #74c7ec]Compacting archive[/]", style="#7dc4e4")
+    render_cmd_output_lines(
+        "[bold blue]Compacting borg repo[/]",
+        "Compacting completed successfully",
+        borg.compact(repo.path, log_json=False),
+    )
+    console.rule(":heavy_check_mark: [bold #a6e3a1]Compacting completed successfully[/]", style="#7dc4e4")
+
+    # sync with s3 and update dynamodb
+    console.print("")
+    console.rule("[bold #74c7ec]Syncing with S3[/]", style="#7dc4e4")  # TODO: pick new color
+    render_cmd_output_lines(
+        "[bold blue]Syncing repo with S3 bucket[/]",
+        "S3 sync completed successfully",
+        s3.sync_with_s3(repo.path, repo.name),
+        spinner="arrow",
+    )
+    console.rule(":heavy_check_mark: [bold #a6e3a1]S3 sync completed successfully[/]", style="#7dc4e4")
+
     # Refresh metadata after backup and pruning complete
     repo.metadata = borg.info(repo.path)
     dynamodb.update_repo(repo)
