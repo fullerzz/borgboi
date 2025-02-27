@@ -133,4 +133,4 @@ def render_cmd_output_lines(status: str, success_msg: str, log_stream: Iterable[
         for log in log_stream:
             print(log, end="")  # noqa: T201
 
-    console.print(f":heavy_check_mark: [bold green]{success_msg}[/]")
+    # console.print(f":heavy_check_mark: [bold green]{success_msg}[/]")
