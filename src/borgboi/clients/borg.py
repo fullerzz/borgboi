@@ -16,7 +16,7 @@ GIBIBYTES_IN_GIGABYTE = 0.93132257461548
 STORAGE_QUOTA = "100G"
 
 
-def init_repository(repo_path: str, config_additional_free_space: bool = True) -> None:
+def init_repository(repo_path: str, config_additional_free_space: bool = True, json_log: bool = True) -> None:
     """
     Initialize a new Borg repository at the specified path.
 
@@ -31,6 +31,8 @@ def init_repository(repo_path: str, config_additional_free_space: bool = True) -
         f"--storage-quota={STORAGE_QUOTA}",
         repo_path,
     ]
+    if json_log is False:
+        cmd.remove("--log-json")
     result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd)
@@ -49,7 +51,7 @@ def _create_archive_title() -> str:
 
 # TODO: Should this function yield the model or the raw output?
 def create_archive(
-    repo_path: str, repo_name: str, backup_target_path: str, archive_name: str | None = None
+    repo_path: str, repo_name: str, backup_target_path: str, archive_name: str | None = None, log_json: bool = True
 ) -> Generator[str]:
     """
     Create a new Borg archive of the backup target directory while yielding the output line by line.
@@ -65,6 +67,9 @@ def create_archive(
         "--progress",
         "--filter",
         "AME",
+        "--show-rc",
+        "--list",
+        "--stats",
         "--compression=zstd,1",
         "--exclude-caches",
         "--exclude-nodump",
@@ -73,6 +78,8 @@ def create_archive(
         f"{repo_path}::{archive_name}",
         backup_target_path,
     ]
+    if log_json is False:
+        cmd.remove("--log-json")
 
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stderr
@@ -152,7 +159,9 @@ def info(repo_path: str) -> RepoInfo:
     return RepoInfo.model_validate_json(result.stdout)
 
 
-def prune(repo_path: str, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2) -> Generator[str]:
+def prune(
+    repo_path: str, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2, log_json: bool = True
+) -> Generator[str]:
     """
     Run a Borg prune command to remove old backups from the repository.
 
@@ -174,6 +183,8 @@ def prune(repo_path: str, keep_daily: int = 7, keep_weekly: int = 3, keep_monthl
         f"--keep-monthly={keep_monthly}",
         repo_path,
     ]
+    if log_json is False:
+        cmd.remove("--log-json")
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stderr
 
@@ -193,7 +204,7 @@ def prune(repo_path: str, keep_daily: int = 7, keep_weekly: int = 3, keep_monthl
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
-def compact(repo_path: str) -> Generator[str]:
+def compact(repo_path: str, log_json: bool = True) -> Generator[str]:
     """
     Run a Borg compact command to free repository space.
 
@@ -206,6 +217,8 @@ def compact(repo_path: str) -> Generator[str]:
         "--progress",
         repo_path,
     ]
+    if log_json is False:
+        cmd.remove("--log-json")
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stderr
 
@@ -241,13 +254,15 @@ def export_repo_key(repo_path: str, repo_name: str) -> Path:
     return key_export_path
 
 
-def extract(repo_path: str, archive_name: str) -> Generator[str]:
+def extract(repo_path: str, archive_name: str, log_json: bool = True) -> Generator[str]:
     """
     Extract an archive from a Borg repository.
 
     https://borgbackup.readthedocs.io/en/stable/usage/extract.html
     """
     cmd = ["borg", "extract", "--log-json", "--progress", "--list", f"{repo_path}::{archive_name}"]
+    if log_json is False:
+        cmd.remove("--log-json")
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stderr
 
@@ -267,7 +282,7 @@ def extract(repo_path: str, archive_name: str) -> Generator[str]:
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
-def delete(repo_path: str, repo_name: str, dry_run: bool) -> Generator[str]:
+def delete(repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True) -> Generator[str]:
     """
     Delete the Borg repository.
 
@@ -299,6 +314,8 @@ def delete(repo_path: str, repo_name: str, dry_run: bool) -> Generator[str]:
             "10",
             repo_path,
         ]
+    if log_json is False:
+        cmd.remove("--log-json")
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stderr
 
@@ -318,7 +335,9 @@ def delete(repo_path: str, repo_name: str, dry_run: bool) -> Generator[str]:
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
-def delete_archive(repo_path: str, repo_name: str, archive_name: str, dry_run: bool) -> Generator[str]:
+def delete_archive(
+    repo_path: str, repo_name: str, archive_name: str, dry_run: bool, log_json: bool = True
+) -> Generator[str]:
     """
     Delete an archive from the Borg repository.
 
@@ -350,6 +369,8 @@ def delete_archive(repo_path: str, repo_name: str, archive_name: str, dry_run: b
             "10",
             f"{repo_path}::{archive_name}",
         ]
+    if log_json is False:
+        cmd.remove("--log-json")
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stderr
 
