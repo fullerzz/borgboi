@@ -1,4 +1,3 @@
-import subprocess as sp
 from collections.abc import Generator, Iterable
 
 from pydantic import ValidationError
@@ -6,7 +5,6 @@ from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 
 from borgboi.clients.utils.borg_logs import (
     ArchiveProgress,
@@ -120,57 +118,19 @@ def parse_logs(
         yield log_msg
 
 
-def _build_archive_progress_string(
-    msg: ArchiveProgress,
-    original_size: int | None,
-    compressed_size: int | None,
-    deduplicated_size: int | None,
-    nfiles: int | None,
-) -> str:
-    val = ""
-    if msg.original_size:
-        val += f"Original Size: {msg.original_size} bytes"
-    elif original_size:
-        val += f"Original Size: {original_size} bytes"
-    if msg.compressed_size:
-        val += f" Compressed Size: {msg.compressed_size} bytes"
-    elif compressed_size:
-        val += f" Compressed Size: {compressed_size} bytes"
-    if msg.deduplicated_size:
-        val += f" Deduplicated Size: {msg.deduplicated_size} bytes"
-    elif deduplicated_size:
-        val += f" Deduplicated Size: {deduplicated_size} bytes"
-    if msg.nfiles:
-        val += f" Number of files: {msg.nfiles}"
-    elif nfiles:
-        val += f" Number of files: {nfiles}"
-    if msg.path:
-        val += f" Path: {msg.path}"
-    val += f" Finished: {msg.finished}"
-    return val
+def render_cmd_output_lines(status: str, success_msg: str, log_stream: Iterable[str], spinner: str = "point") -> None:
+    """
+    Render the output of a command to the console.
 
+    Args:
+        cmd (str): The command that was executed.
+        log_stream (Iterable[str]): The output of the command.
 
-def render_cmd_output(cmd: str, log_stream: Iterable[str]) -> None:
-    nfiles: int | None = None
-    original_size: int | None = None
-    compressed_size: int | None = None
-    deduplicated_size: int | None = None
-    status = cmd
-    with console.status(status, spinner="arrow"):
-        for log in parse_logs(log_stream):
-            if isinstance(log, ArchiveProgress):
-                nfiles = log.nfiles if log.nfiles else nfiles
-                original_size = log.original_size if log.original_size else original_size
-                compressed_size = log.compressed_size if log.compressed_size else compressed_size
-                deduplicated_size = log.deduplicated_size if log.deduplicated_size else deduplicated_size
-                msg = _build_archive_progress_string(log, original_size, compressed_size, deduplicated_size, nfiles)
-                console.print(f"[bold blue]{msg}")
-                console.print_json(log.model_dump_json(exclude_none=True))
-            elif isinstance(log, ProgressMessage):
-                console.print_json(log.model_dump_json(exclude_none=True))
-            elif isinstance(log, ProgressPercent):
-                console.print_json(log.model_dump_json(exclude_none=True))
-            elif isinstance(log, LogMessage):
-                console.print_json(log.model_dump_json(exclude_none=True))
-            elif isinstance(log, FileStatus):
-                console.print_json(log.model_dump_json(exclude_none=True))
+    Returns:
+        None
+    """
+    with console.status(status, spinner=spinner):
+        for log in log_stream:
+            print(log, end="")  # noqa: T201
+
+    console.print(f":heavy_check_mark: [bold green]{success_msg}[/]")
