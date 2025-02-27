@@ -4,7 +4,9 @@ import socket
 from pathlib import Path
 from platform import system
 
+import rich
 from rich.table import Table
+import rich.text
 
 from borgboi import validator
 from borgboi.clients import borg, dynamodb, s3
@@ -216,21 +218,29 @@ def demo_v1(repo: BorgBoiRepo) -> None:
     if repo.name != "GO_HOME":
         raise ValueError("Demo only works with the 'GO_HOME' repo")
 
-    console.rule("Creating archive")
+    title = rich.text.Text("Creating archive", style="bold #74c7ec")
+    console.rule(title, style="#c6a0f6")
     render_cmd_output_lines(
         "[bold blue]Creating new archive[/]",
         "Archive created successfully",
         borg.create_archive(repo.path, repo.name, repo.backup_target, log_json=False),
     )
+    console.rule(":heavy_check_mark: [bold #a6e3a1]Archive created successfully[/]", style="#c6a0f6")
 
-    console.rule("Pruning archive")
+    console.print("")
+    title = rich.text.Text("Pruning archive", style="bold #74c7ec")
+    console.rule(title, style="#f5a97f")
     render_cmd_output_lines(
         "[bold blue]Pruning old backups[/]", "Pruning completed successfully", borg.prune(repo.path, log_json=False)
     )
+    console.rule(":heavy_check_mark: [bold #a6e3a1]Pruning completed successfully[/]", style="#f5a97f")
 
-    console.rule("Compacting archive")
+    console.print("")
+    title = rich.text.Text("Compacting archive", style="bold #74c7ec")
+    console.rule(title, style="#7dc4e4")
     render_cmd_output_lines(
         "[bold blue]Compacting borg repo[/]",
         "Compacting completed successfully",
         borg.compact(repo.path, log_json=False),
     )
+    console.rule(":heavy_check_mark: [bold #a6e3a1]Compacting completed successfully[/]", style="#7dc4e4")
