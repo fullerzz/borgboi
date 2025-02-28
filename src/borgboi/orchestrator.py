@@ -4,8 +4,6 @@ import socket
 from pathlib import Path
 from platform import system
 
-import rich
-import rich.text
 from rich.table import Table
 
 from borgboi import validator
@@ -176,42 +174,38 @@ def perform_daily_backup(repo_path: str) -> None:
     if validator.exclude_list_created(repo.name) is False:
         raise ValueError("Exclude list must be created before performing a backup")
     # create archive
-    console.rule("[bold #74c7ec]Creating archive[/]", style="#c6a0f6")
     render_cmd_output_lines(
-        "[bold blue]Creating new archive[/]",
+        "Creating new archive",
         "Archive created successfully",
         borg.create_archive(repo.path, repo.name, repo.backup_target, log_json=False),
+        ruler_color="#c6a0f6",
     )
-    console.rule(":heavy_check_mark: [bold #a6e3a1]Archive created successfully[/]", style="#c6a0f6")
 
     # prune
-    console.print("")
-    console.rule("[bold #74c7ec]Pruning archive[/]", style="#f5a97f")
     render_cmd_output_lines(
-        "[bold blue]Pruning old backups[/]", "Pruning completed successfully", borg.prune(repo.path, log_json=False)
+        "Pruning old backups",
+        "Pruning completed successfully",
+        borg.prune(repo.path, log_json=False),
+        ruler_color="#f5a97f",
     )
-    console.rule(":heavy_check_mark: [bold #a6e3a1]Pruning completed successfully[/]", style="#f5a97f")
 
     # compact
-    console.print("")
-    console.rule("[bold #74c7ec]Compacting archive[/]", style="#7dc4e4")
     render_cmd_output_lines(
-        "[bold blue]Compacting borg repo[/]",
+        "Compacting borg repo",
         "Compacting completed successfully",
         borg.compact(repo.path, log_json=False),
+        spinner="dots",
+        ruler_color="#7dc4e4",
     )
-    console.rule(":heavy_check_mark: [bold #a6e3a1]Compacting completed successfully[/]", style="#7dc4e4")
 
     # sync with s3 and update dynamodb
-    console.print("")
-    console.rule("[bold #74c7ec]Syncing with S3[/]", style="#7dc4e4")  # TODO: pick new color
     render_cmd_output_lines(
-        "[bold blue]Syncing repo with S3 bucket[/]",
+        "Syncing repo with S3 bucket",
         "S3 sync completed successfully",
         s3.sync_with_s3(repo.path, repo.name),
         spinner="arrow",
+        ruler_color="#dd7878",
     )
-    console.rule(":heavy_check_mark: [bold #a6e3a1]S3 sync completed successfully[/]", style="#7dc4e4")
 
     # Refresh metadata after backup and pruning complete
     repo.metadata = borg.info(repo.path)
@@ -251,29 +245,23 @@ def demo_v1(repo: BorgBoiRepo) -> None:
     if repo.name != "GO_HOME":
         raise ValueError("Demo only works with the 'GO_HOME' repo")
 
-    title = rich.text.Text("Creating archive", style="bold #74c7ec")
-    console.rule(title, style="#c6a0f6")
     render_cmd_output_lines(
-        "[bold blue]Creating new archive[/]",
+        "Creating new archive",
         "Archive created successfully",
         borg.create_archive(repo.path, repo.name, repo.backup_target, log_json=False),
+        ruler_color="#c6a0f6",
     )
-    console.rule(":heavy_check_mark: [bold #a6e3a1]Archive created successfully[/]", style="#c6a0f6")
 
-    console.print("")
-    title = rich.text.Text("Pruning archive", style="bold #74c7ec")
-    console.rule(title, style="#f5a97f")
     render_cmd_output_lines(
-        "[bold blue]Pruning old backups[/]", "Pruning completed successfully", borg.prune(repo.path, log_json=False)
+        "Pruning old backups",
+        "Pruning completed successfully",
+        borg.prune(repo.path, log_json=False),
+        ruler_color="#f5a97f",
     )
-    console.rule(":heavy_check_mark: [bold #a6e3a1]Pruning completed successfully[/]", style="#f5a97f")
 
-    console.print("")
-    title = rich.text.Text("Compacting archive", style="bold #74c7ec")
-    console.rule(title, style="#7dc4e4")
     render_cmd_output_lines(
-        "[bold blue]Compacting borg repo[/]",
+        "Compacting borg repo",
         "Compacting completed successfully",
         borg.compact(repo.path, log_json=False),
+        ruler_color="#7dc4e4",
     )
-    console.rule(":heavy_check_mark: [bold #a6e3a1]Compacting completed successfully[/]", style="#7dc4e4")

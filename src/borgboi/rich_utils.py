@@ -14,6 +14,7 @@ from borgboi.clients.utils.borg_logs import (
     ProgressPercent,
 )
 
+TEXT_COLOR = "#74c7ec"
 console = Console(record=True)
 
 
@@ -118,7 +119,9 @@ def parse_logs(
         yield log_msg
 
 
-def render_cmd_output_lines(status: str, success_msg: str, log_stream: Iterable[str], spinner: str = "point") -> None:
+def render_cmd_output_lines(
+    status: str, success_msg: str, log_stream: Iterable[str], spinner: str = "point", ruler_color: str = "#74c7ec"
+) -> None:
     """
     Render the output of a command to the console.
 
@@ -129,8 +132,11 @@ def render_cmd_output_lines(status: str, success_msg: str, log_stream: Iterable[
     Returns:
         None
     """
-    with console.status(status, spinner=spinner):
+    console.rule(f"[bold {TEXT_COLOR}]{status}[/]", style=ruler_color)
+
+    with console.status(status=f"[bold blue]{status}[/]", spinner=spinner):
         for log in log_stream:
             print(log, end="")  # noqa: T201
 
-    # console.print(f":heavy_check_mark: [bold green]{success_msg}[/]")
+    console.rule(f":heavy_check_mark: [bold {TEXT_COLOR}]{success_msg}[/]", style=ruler_color)
+    console.print("")
