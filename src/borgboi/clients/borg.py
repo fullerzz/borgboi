@@ -49,7 +49,6 @@ def _create_archive_title() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%d_%H:%M:%S")
 
 
-# TODO: Should this function yield the model or the raw output?
 def create_archive(
     repo_path: str, repo_name: str, backup_target_path: str, archive_name: str | None = None, log_json: bool = True
 ) -> Generator[str]:
@@ -407,6 +406,6 @@ def list_archives(repo_path: str) -> list[RepoArchive]:
     cmd = ["borg", "list", "--json", repo_path]
     result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
-        raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd)
+        raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
     list_archives_output = ListArchivesOutput.model_validate_json(result.stdout)
     return list_archives_output.archives
