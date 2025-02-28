@@ -4,12 +4,10 @@ import socket
 from pathlib import Path
 from platform import system
 
-from rich.table import Table
-
-from borgboi import validator
+from borgboi import rich_utils, validator
 from borgboi.clients import borg, dynamodb, s3
 from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
-from borgboi.rich_utils import console, output_repo_info, render_cmd_output_lines
+from borgboi.rich_utils import console
 
 
 def _get_excludes_path(repo_name: str) -> Path:
@@ -113,7 +111,7 @@ def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bo
     if pretty_print is True:
         if repo.metadata is None:
             raise ValueError("Repo metadata is None")
-        output_repo_info(
+        rich_utils.output_repo_info(
             name=repo.name,
             total_size_gb=repo.metadata.cache.total_size_gb,
             total_csize_gb=repo.metadata.cache.total_csize_gb,
@@ -128,33 +126,7 @@ def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bo
 
 def list_repos() -> None:
     repos = dynamodb.get_all_repos()
-    table = Table(title="BorgBoi Repositories", show_lines=True)
-    table.add_column("Name")
-    table.add_column("Local Path 📁")
-    table.add_column("Hostname 🖥")
-    table.add_column("Last Archive 📆")
-    table.add_column("Size 💾", justify="right")
-    table.add_column("Backup Target 🎯")
-
-    for repo in repos:
-        name = f"[bold cyan]{repo.name}[/]"
-        local_path = f"[bold blue]{repo.path}[/]"
-        env_var_name = f"[bold green]{repo.hostname}[/]"
-        backup_target = f"[bold magenta]{repo.backup_target}[/]"
-        if repo.last_backup:
-            archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
-        else:
-            archive_date = "[italic red]Never[/]"
-
-        if repo.metadata is None:
-            size = "🤷[italic red]Unknown[/]"
-        elif repo.metadata.cache.unique_csize_gb != 0.0:
-            size = f"[dark_orange]{repo.metadata.cache.unique_csize_gb} GB[/]"
-        else:
-            size = "🤷[italic red]Unknown[/]ß"
-
-        table.add_row(name, local_path, env_var_name, archive_date, size, backup_target)
-    console.print(table)
+    rich_utils.output_repos_table(repos)
 
 
 def list_archives(repo_path: str | None, repo_name: str | None) -> None:
@@ -174,7 +146,7 @@ def perform_daily_backup(repo_path: str) -> None:
     if validator.exclude_list_created(repo.name) is False:
         raise ValueError("Exclude list must be created before performing a backup")
     # create archive
-    render_cmd_output_lines(
+    rich_utils.render_cmd_output_lines(
         "Creating new archive",
         "Archive created successfully",
         borg.create_archive(repo.path, repo.name, repo.backup_target, log_json=False),
@@ -182,7 +154,7 @@ def perform_daily_backup(repo_path: str) -> None:
     )
 
     # prune
-    render_cmd_output_lines(
+    rich_utils.render_cmd_output_lines(
         "Pruning old backups",
         "Pruning completed successfully",
         borg.prune(repo.path, log_json=False),
@@ -190,7 +162,7 @@ def perform_daily_backup(repo_path: str) -> None:
     )
 
     # compact
-    render_cmd_output_lines(
+    rich_utils.render_cmd_output_lines(
         "Compacting borg repo",
         "Compacting completed successfully",
         borg.compact(repo.path, log_json=False),
@@ -199,7 +171,7 @@ def perform_daily_backup(repo_path: str) -> None:
     )
 
     # sync with s3 and update dynamodb
-    render_cmd_output_lines(
+    rich_utils.render_cmd_output_lines(
         "Syncing repo with S3 bucket",
         "S3 sync completed successfully",
         s3.sync_with_s3(repo.path, repo.name),
@@ -245,21 +217,21 @@ def demo_v1(repo: BorgBoiRepo) -> None:
     if repo.name != "GO_HOME":
         raise ValueError("Demo only works with the 'GO_HOME' repo")
 
-    render_cmd_output_lines(
+    rich_utils.render_cmd_output_lines(
         "Creating new archive",
         "Archive created successfully",
         borg.create_archive(repo.path, repo.name, repo.backup_target, log_json=False),
         ruler_color="#c6a0f6",
     )
 
-    render_cmd_output_lines(
+    rich_utils.render_cmd_output_lines(
         "Pruning old backups",
         "Pruning completed successfully",
         borg.prune(repo.path, log_json=False),
         ruler_color="#f5a97f",
     )
 
-    render_cmd_output_lines(
+    rich_utils.render_cmd_output_lines(
         "Compacting borg repo",
         "Compacting completed successfully",
         borg.compact(repo.path, log_json=False),
