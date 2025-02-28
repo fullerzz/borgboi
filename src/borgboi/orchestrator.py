@@ -207,33 +207,3 @@ def extract_repo_key(repo_path: str) -> Path:
     repo = lookup_repo(repo_path, None)
     key_path = borg.export_repo_key(repo.path, repo.name)
     return key_path
-
-
-def demo_v1(repo: BorgBoiRepo) -> None:
-    """
-    Perform a demo of the v1 backup process.
-    """
-
-    if repo.name != "GO_HOME":
-        raise ValueError("Demo only works with the 'GO_HOME' repo")
-
-    rich_utils.render_cmd_output_lines(
-        "Creating new archive",
-        "Archive created successfully",
-        borg.create_archive(repo.path, repo.name, repo.backup_target, log_json=False),
-        ruler_color="#c6a0f6",
-    )
-
-    rich_utils.render_cmd_output_lines(
-        "Pruning old backups",
-        "Pruning completed successfully",
-        borg.prune(repo.path, log_json=False),
-        ruler_color="#f5a97f",
-    )
-
-    rich_utils.render_cmd_output_lines(
-        "Compacting borg repo",
-        "Compacting completed successfully",
-        borg.compact(repo.path, log_json=False),
-        ruler_color="#7dc4e4",
-    )
