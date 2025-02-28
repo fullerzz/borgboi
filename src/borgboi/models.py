@@ -19,4 +19,4 @@ class BorgBoiRepo(BaseModel):
     hostname: str
     os_platform: str = Field(min_length=3)
     last_backup: datetime | None = None
-    metadata: RepoInfo
+    metadata: RepoInfo | None

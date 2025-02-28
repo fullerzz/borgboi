@@ -4,6 +4,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from borgboi.clients.dynamodb import BorgRepoTableItem
 from borgboi.clients.utils.borg_logs import (
     ArchiveProgress,
     FileStatus,
@@ -18,7 +19,7 @@ def metadata_is_present(repo: BorgBoiRepo) -> bool:
     return repo.metadata is not None
 
 
-def repo_is_local(repo: BorgBoiRepo) -> bool:
+def repo_is_local(repo: BorgBoiRepo | BorgRepoTableItem) -> bool:
     return repo.hostname == socket.gethostname()
 
 

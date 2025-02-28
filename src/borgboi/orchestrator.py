@@ -147,11 +147,14 @@ def list_repos() -> None:
             archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
         else:
             archive_date = "[italic red]Never[/]"
-        size = (
-            f"[dark_orange]{repo.metadata.cache.unique_csize_gb:.2f} GB[/]"
-            if repo.metadata.cache.unique_csize_gb != 0.0
-            else "🤷[italic red]Unknown[/]"
-        )
+
+        if repo.metadata is None:
+            size = "🤷[italic red]Unknown[/]"
+        elif repo.metadata.cache.unique_csize_gb != 0.0:
+            size = f"[dark_orange]{repo.metadata.cache.unique_csize_gb} GB[/]"
+        else:
+            size = "🤷[italic red]Unknown[/]ß"
+
         table.add_row(name, local_path, env_var_name, archive_date, size, backup_target)
     console.print(table)
 

@@ -62,7 +62,12 @@ def _convert_table_item_to_repo(repo: BorgRepoTableItem) -> BorgBoiRepo:
     if repo.last_backup:
         last_backup = datetime.fromisoformat(repo.last_backup)
 
-    metadata = repo.metadata if repo.metadata else borg.info(repo.repo_path)
+    if repo.metadata:
+        metadata = repo.metadata
+    elif validator.repo_is_local(repo):
+        metadata = borg.info(repo.repo_path)
+    else:
+        metadata = None
 
     return BorgBoiRepo(
         path=repo.repo_path,
