@@ -93,7 +93,7 @@ def output_repos_table(repos: list[BorgBoiRepo]) -> None:
         elif repo.metadata.cache.unique_csize_gb != 0.0:
             size = f"[dark_orange]{repo.metadata.cache.unique_csize_gb} GB[/]"
         else:
-            size = "🤷[italic red]Unknown[/]ß"
+            size = "🤷[italic red]Unknown[/]"
 
         table.add_row(name, local_path, env_var_name, archive_date, size, backup_target)
     console.print(table)
