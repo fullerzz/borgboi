@@ -1,3 +1,37 @@
+## v1.0.0 (2025-03-01)
+
+### BREAKING CHANGE
+
+- --pp Pretty print flag now defaults to True
+
+### Feat
+
+- **repo-info**: default pretty print --pp flag to true
+- updated daily backup to use new borg client and print normal output
+- add ability to disable --log-json from being passed as option to borg
+- **delete**: added delete repo and delete archive commands to new module
+- **extract**: add extract cmd in new module
+- **repo-key**: add export-repo-key cmd in new module
+- **compact**: implemented compact cmd in new module
+- **prune**: implemented prune command in new module
+
+### Fix
+
+- **delete-archive**: render cmd output with log_json=False
+- remove rich_utils.confirm_deletion call from borg client
+- handle repo metadata being None/missing
+- iterate over iterable
+- converted computed fields with size information to return strings instead of floats
+
+### Refactor
+
+- **list-repos**: move table output logic for repos into rich_utils
+- refactor command output rendering and moved most logic into rich_utils
+- **log-parsing**: added new function to take in iterable and yield log model line by line
+- removed original backups.py file
+- refactor dynamodb
+- **log**: moved log parsing into validator
+
 ## v0.12.1 (2025-02-20)
 
 ### Fix
