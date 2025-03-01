@@ -1,17 +1,31 @@
-# Welcome to MkDocs
+# BorgBoi Docs
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
 
-## Commands
+??? info "BorgBackup - The engine behind BorgBoi"
+    This project wouldn't be possible without the underlying technology that is **BorgBackup** or Borg for short.
+    >BorgBackup (short: Borg) is a deduplicating backup program. Optionally, it supports compression and authenticated encryption.
+    >The main goal of Borg is to provide an efficient and secure way to backup data. The data deduplication technique used makes Borg suitable for daily backups since only changes are stored. The authenticated encryption technique makes it suitable for backups to not fully trusted targets.
+    
+    Their full documentation is available here: [https://borgbackup.readthedocs.io](https://borgbackup.readthedocs.io/en/stable/index.html).
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
+## What is BorgBoi?
 
-## Project layout
+BorgBoi is a thin wrapper around the BorgBackup tool that I will refer to as Borg from here on out.
 
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+It contains the following features:
+
+* Daily backup command that **creates** a new archive, **prunes** stale archives, and **compacts** the Borg repository to free up space
+* Metadata about your Borg repositories is stored in DynamoDB
+* Borg repostories are synced with S3 to enable cloud backups and archive restoration from other systems
+
+## Installation
+
+BorgBoi isn't published to PyPI yet, so it is recommended to install it with [`uv`](https://docs.astral.sh/uv/).
+
+```sh
+uv tool install git+https://github.com/fullerzz/borgboi
+```
+
+Additionally, **BorgBackup** needs to be installed on your system for BorgBoi to work.
+
+Read installation methods here: [https://borgbackup.readthedocs.io/en/stable/installation.html](https://borgbackup.readthedocs.io/en/stable/installation.html).
