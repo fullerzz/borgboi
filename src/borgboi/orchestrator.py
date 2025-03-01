@@ -193,14 +193,27 @@ def restore_archive(repo_path: str, archive_name: str) -> None:
 
 def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
     repo = lookup_repo(repo_path, None)
-    for log_msg in borg.delete_archive(repo.path, repo.name, archive_name, dry_run):
-        msg = validator.parse_log(log_msg)
-        console.print(msg)
+    if not validator.repo_is_local(repo):
+        raise ValueError("Repository must be local to delete")
+    if dry_run is False:
+        rich_utils.confirm_deletion(repo.name, archive_name)
+
+    rich_utils.render_cmd_output_lines(
+        "Deleting archive",
+        "Successfully deleted archive",
+        borg.delete_archive(repo.path, repo.name, archive_name, dry_run, log_json=False),
+        spinner="pipe",
+        ruler_color="#7dc4e4",
+    )
     if not dry_run:
         # NOTE: Space is NOT reclaimed on disk until the 'compact' command is ran
-        for log_msg in borg.compact(repo.path):
-            msg = validator.parse_log(log_msg)
-            console.print(msg)
+        rich_utils.render_cmd_output_lines(
+            "Compacting borg repo",
+            "Compacting completed successfully",
+            borg.compact(repo.path, log_json=False),
+            spinner="dots",
+            ruler_color="#c6a0f6",
+        )
 
 
 def extract_repo_key(repo_path: str) -> Path:
