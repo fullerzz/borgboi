@@ -21,7 +21,7 @@ borgboi daily-backup <path-to-repo>
 - [x] Sync local borg repo/its archives with a S3 bucket
 - [x] Add command to print out information on the borg repo
 - [ ] Document additional commands
-- [ ] Add command to delete borg repo
-- [ ] Add command to download remote borg repo from S3
-- [ ] Add command to restore from borg repo
-- [ ] Additional tests
+- [x] Add command to delete borg repo
+- [x] Add command to download remote borg repo from S3
+- [x] Add command to restore from borg repo
+- [x] Additional tests
