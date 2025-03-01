@@ -8,8 +8,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
 
-from borgboi import rich_utils
-
 BORGBOI_DIR_NAME = getenv("BORGBOI_DIR_NAME", ".borgboi")
 EXCLUDE_FILENAME = "excludes.txt"
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
@@ -301,7 +299,6 @@ def delete(repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True)
             repo_path,
         ]
     else:
-        rich_utils.confirm_deletion(repo_name)
         cmd = [
             "borg",
             "delete",
@@ -356,7 +353,6 @@ def delete_archive(
             f"{repo_path}::{archive_name}",
         ]
     else:
-        rich_utils.confirm_deletion(repo_name, archive_name)
         cmd = [
             "borg",
             "delete",
