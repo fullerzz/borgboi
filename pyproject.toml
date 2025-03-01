@@ -97,7 +97,7 @@ line-ending = "auto"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-tag_format = "v$version"
+tag_format = "v$major.$minor.$patch$prerelease"
 version_scheme = "pep440"
 version_provider = "pep621"
 update_changelog_on_bump = true
