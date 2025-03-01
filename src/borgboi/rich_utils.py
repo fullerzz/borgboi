@@ -13,8 +13,6 @@ from borgboi.clients.utils.borg_logs import (
     ProgressMessage,
     ProgressPercent,
 )
-
-# FIXME: Remove BorgBoiRepop import and create DTO instead
 from borgboi.models import BorgBoiRepo
 
 TEXT_COLOR = "#74c7ec"
