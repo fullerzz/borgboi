@@ -40,6 +40,12 @@ dev = [
     "rust-just>=1.39.0",
     "vulture>=2.14",
 ]
+docs = [
+    "mkdocs-material>=9.6.6",
+]
+
+[tool.uv]
+default-groups = ["dev", "docs"]
 
 [tool.pytest.ini_options]
 addopts = [
