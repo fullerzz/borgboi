@@ -46,3 +46,7 @@ tofu-validate:
 tflint:
     cd terraform && tflint --init
     tflint --recursive --color
+
+# run mkdocs local server
+serve-docs:
+    uv run mkdocs serve
