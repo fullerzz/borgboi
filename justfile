@@ -19,6 +19,7 @@ test-cov:
 # run all linters
 lint: mypy tflint tofu-validate
     uv run ruff check --fix .
+    uv run vulture src/borgboi --min-confidence 100
 
 # run ruff and tofu formatters
 fmt:
