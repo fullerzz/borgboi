@@ -1,3 +1,10 @@
+## v1.0.1 (2025-03-05)
+
+### Fix
+
+- **daily-backup**: fix incorrect docstring description regarding target of archive backup
+- **list-repos**: removed incorrect docstring and added accurate description in new docstring
+
 ## v1.0.0 (2025-03-01)
 
 ### BREAKING CHANGE
