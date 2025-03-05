@@ -54,6 +54,7 @@ plugins:
 markdown_extensions:
   - pymdownx.superfences
   - pymdownx.details
+  - pymdownx.blocks.caption
   - admonition
   - attr_list
   - md_in_html
