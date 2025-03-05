@@ -33,7 +33,7 @@ def create_exclusions(repo_path: str, exclusions_source: str) -> None:
 
 @cli.command()
 def list_repos() -> None:
-    """Create a new Borg repository."""
+    """List all BorgBoi repositories."""
     orchestrator.list_repos()
 
 
