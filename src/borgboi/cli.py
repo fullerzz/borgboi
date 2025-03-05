@@ -58,7 +58,7 @@ def get_repo(repo_path: str | None, repo_name: str | None) -> None:
 @cli.command()
 @click.option("--repo-path", "-r", required=True, type=click.Path(exists=True))
 def daily_backup(repo_path: str) -> None:
-    """Create a new archive of the home directory with borg and perform pruning and compaction."""
+    """Create a new archive of the repo's target directory with borg and perform pruning and compaction."""
     orchestrator.perform_daily_backup(repo_path)
 
 
