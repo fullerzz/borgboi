@@ -16,8 +16,7 @@ It contains the following features:
 
 * Daily backup command that **creates** a new archive, **prunes** stale archives, and **compacts** the Borg repository to free up space
 * Metadata about your Borg repositories is stored in DynamoDB
-* Borg repostories are synced with S3 to enable cloud backups and archive restoration from other systems
-
+* Borg repositories are synced with S3 to enable cloud backups and archive restoration from other systems
 ## Installation
 
 BorgBoi isn't published to PyPI yet, so it is recommended to install it with [`uv`](https://docs.astral.sh/uv/).
