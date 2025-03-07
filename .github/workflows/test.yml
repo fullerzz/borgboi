@@ -21,7 +21,7 @@ jobs:
     env:
       # Configure a constant location for the uv cache
         UV_CACHE_DIR: /tmp/.uv-cache
-        UV_VERSION: 0.6.0
+        UV_VERSION: 0.6.5
         FORCE_COLOR: 1
 
     steps:
