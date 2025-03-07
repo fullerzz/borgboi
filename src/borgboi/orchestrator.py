@@ -89,8 +89,6 @@ def delete_excludes_list(repo_name: str) -> None:
     if excludes_path.exists():
         excludes_path.unlink()
         console.print(f"Deleted exclude list for [bold cyan]{repo_name}[/]")
-    else:
-        raise FileNotFoundError("Exclude list not found")
 
 
 def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgBoiRepo:
