@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-      - 47-add-docs
+      - docs-updates
 permissions:
   contents: write
 
