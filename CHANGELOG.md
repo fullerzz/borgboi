@@ -1,3 +1,9 @@
+## v1.0.3 (2025-03-07)
+
+### Fix
+
+- **delete-repo**: no longer raise FileNotFoundError if exludes list not found on repo deletion
+
 ## v1.0.2 (2025-03-07)
 
 ### Fix
