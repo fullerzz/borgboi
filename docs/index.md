@@ -1,6 +1,5 @@
 # BorgBoi Docs
 
-
 ??? info "BorgBackup - The engine behind BorgBoi"
     This project wouldn't be possible without the underlying technology that is **BorgBackup** or Borg for short.
     >BorgBackup (short: Borg) is a deduplicating backup program. Optionally, it supports compression and authenticated encryption.
@@ -28,3 +27,9 @@ uv tool install git+https://github.com/fullerzz/borgboi
 Additionally, **BorgBackup** needs to be installed on your system for BorgBoi to work.
 
 Read installation methods here: [https://borgbackup.readthedocs.io/en/stable/installation.html](https://borgbackup.readthedocs.io/en/stable/installation.html).
+
+## GitHub Repo
+
+[https://github.com/fullerzz/borgboi](https://github.com/fullerzz/borgboi)
+
+![BorgBoi Logo](images/borgboi_logo.svg){ loading=lazy }
