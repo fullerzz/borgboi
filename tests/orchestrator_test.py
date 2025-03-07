@@ -93,3 +93,11 @@ def test_create_excludes_list(borg_repo_without_excludes: BorgBoiRepo) -> None:
         actual_excludes = f.read()
     assert actual_excludes == expected_excludes
     new_exclusions_list.unlink()
+
+
+def test_delete_repo_no_exclusions_list(borg_repo_without_excludes: BorgBoiRepo) -> None:
+    from borgboi.orchestrator import delete_borg_repo
+
+    repo = borg_repo_without_excludes
+    delete_borg_repo(repo.path, repo.name, False)
+    # This test passes if no exception is raised
