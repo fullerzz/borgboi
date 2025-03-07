@@ -10,6 +10,7 @@ wheels/
 htmlcov/
 private/
 tmp/
+*.DS_Store
 
 # Virtual environments
 .venv
