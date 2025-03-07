@@ -1,3 +1,9 @@
+## v1.0.2 (2025-03-07)
+
+### Fix
+
+- **wiki**: run docs.yml actions job with lfs checkout enabled
+
 ## v1.0.1 (2025-03-05)
 
 ### Fix
