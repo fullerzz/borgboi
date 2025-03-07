@@ -4,6 +4,8 @@ Wrapper around [Borg](https://borgbackup.readthedocs.io/en/stable/index.html) to
 
 The Borg repository is synced with an S3 bucket as part of the daily backup operation.
 
+<img src="docs/images/borgboi_logo.svg" alt="drawing" width="400"/>
+
 ## Usage
 
 The program can be invoked with: `borgboi <cmd>` or `bb <cmd>`
