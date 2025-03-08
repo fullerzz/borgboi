@@ -42,6 +42,8 @@ jobs:
       run: |
         sudo apt install borgbackup -y
         pip install uv==$UV_VERSION
+        rm .python-version
+        echo ${{ matrix.python-version }} > .python-version
         uv venv --python ${{ matrix.python-version }}
         source .venv/bin/activate
         uv sync --frozen
