@@ -4,6 +4,8 @@ import socket
 from pathlib import Path
 from platform import system
 
+from rich.table import Table
+
 from borgboi import rich_utils, validator
 from borgboi.clients import borg, dynamodb, s3
 from borgboi.lib.colors import COLOR_HEX
@@ -126,6 +128,11 @@ def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bo
 def list_repos() -> None:
     repos = dynamodb.get_all_repos()
     rich_utils.output_repos_table(repos)
+
+
+def get_repos_table() -> Table:
+    repos = dynamodb.get_all_repos()
+    return rich_utils.build_repos_table(repos)
 
 
 def list_archives(repo_path: str | None, repo_name: str | None) -> None:

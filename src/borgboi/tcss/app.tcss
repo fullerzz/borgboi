@@ -1,0 +1,14 @@
+Static {
+    content-align: center middle;
+    background: #24273a;
+    border: solid #c6a0f6;
+    height: 1fr;
+}
+
+.row {
+    height: 1fr;
+}
+
+.column {
+    width: 1fr;
+}

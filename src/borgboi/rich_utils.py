@@ -101,6 +101,36 @@ def output_repos_table(repos: list[BorgBoiRepo]) -> None:
     console.print(table)
 
 
+def build_repos_table(repos: list[BorgBoiRepo]) -> Table:
+    table = Table(title="BorgBoi Repositories", show_lines=True)
+    table.add_column("Name")
+    table.add_column("Local Path 📁")
+    table.add_column("Hostname 🖥")
+    table.add_column("Last Archive 📆")
+    table.add_column("Size 💾", justify="right")
+    table.add_column("Backup Target 🎯")
+
+    for repo in repos:
+        name = f"[bold cyan]{repo.name}[/]"
+        local_path = f"[bold blue]{repo.path}[/]"
+        env_var_name = f"[bold green]{repo.hostname}[/]"
+        backup_target = f"[bold magenta]{repo.backup_target}[/]"
+        if repo.last_backup:
+            archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
+        else:
+            archive_date = "[italic red]Never[/]"
+
+        if repo.metadata is None:
+            size = "🤷[italic red]Unknown[/]"
+        elif repo.metadata.cache.unique_csize_gb != 0.0:
+            size = f"[dark_orange]{repo.metadata.cache.unique_csize_gb} GB[/]"
+        else:
+            size = "🤷[italic red]Unknown[/]"
+
+        table.add_row(name, local_path, env_var_name, archive_date, size, backup_target)
+    return table
+
+
 def confirm_deletion(repo_name: str, archive_name: str = "") -> None:
     """
     Prompts the user to confirm deletion of a Borg repository or archive.

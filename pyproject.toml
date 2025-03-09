@@ -14,6 +14,7 @@ dependencies = [
     "click>=8.1.8",
     "pydantic>=2.10.4",
     "rich>=13.9.4",
+    "textual[syntax]>=2.1.2",
 ]
 
 [project.scripts]
@@ -39,6 +40,7 @@ dev = [
     "pytest-sugar>=1.0.0",
     "ruff>=0.8.6",
     "rust-just>=1.39.0",
+    "textual-dev>=1.7.0",
     "vulture>=2.14",
 ]
 docs = [

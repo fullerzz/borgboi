@@ -50,3 +50,7 @@ tflint:
 # run mkdocs local server
 serve-docs:
     uv run mkdocs serve
+
+# run borgboi tui
+tui:
+    uv run textual run --dev src/borgboi/tui.py
