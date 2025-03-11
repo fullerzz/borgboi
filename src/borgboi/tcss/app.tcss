@@ -1,14 +1,26 @@
 Static {
     content-align: center middle;
-    background: #24273a;
     border: solid #c6a0f6;
+}
+
+.topPanel {
     height: 1fr;
+    background: #1e1e2e;
+}
+
+.bottomPanel {
+    height: 1fr;
+    background: #181825;
 }
 
 .row {
-    height: 1fr;
+    border: solid #c6a0f6;
 }
 
 .column {
     width: 1fr;
+}
+
+#command-picker-label {
+    color: #74c7ec;
 }

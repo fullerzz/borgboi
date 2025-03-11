@@ -1,40 +1,83 @@
 from typing import Any
 
+from rich.table import Table
 from textual.app import App, ComposeResult
-from textual.containers import Vertical
+from textual.containers import ScrollableContainer, Vertical
+from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import OptionList, Static
+from textual.widgets import Label, OptionList, Static
+from textual.widgets.option_list import Option
 
 from borgboi import orchestrator
 
+COMMAND_OPTIONS = [
+    {"name": "list-repos", "description": "List all BorgBoi repositories"},
+    {"name": "repo-info", "description": "Get info about a specific repository"},
+    {"name": "create-repo", "description": "Create a new Borg repository"},
+    {"name": "create-exclusions", "description": "Create a new exclusions list for a Borg repository"},
+    {"name": "list-archives", "description": "List the archives in a Borg repository"},
+    {"name": "get-repo", "description": "Get a Borg repository by name or path"},
+    {"name": "daily-backup", "description": "Perform a daily backup"},
+    {"name": "restore", "description": "Restore a Borg repository"},
+    {"name": "delete-repo", "description": "Delete a Borg repository"},
+    {"name": "delete-archive", "description": "Delete an archive from a Borg repository"},
+]
+
 
 class CommandPicker(Widget):
+    class Output(Message):
+        """Command output message."""
+
+        def __init__(self, output: str | Table) -> None:
+            self.output = output
+            super().__init__()
+
     def compose(self) -> ComposeResult:
-        yield OptionList(
-            "list-repos",
-            "repo-info",
-        )
-        yield Static("", id="repos-table")
+        yield Label("⚡️ [bold]Command Picker[/]", id="command-picker-label")
+        yield OptionList()  # TODO: Update selected option highlight color
+
+    def on_mount(self) -> None:
+        """
+        Populate the option list with command options.
+        """
+        options_list = self.query_one(OptionList)
+        for option in COMMAND_OPTIONS:
+            prompt = f"[bold #a6e3a1] {option['name']}[/] - [#74c7ec]{option['description']}[/]"
+            options_list.add_option(Option(prompt=prompt, id=option["name"]))
+        options_list.focus()
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
-        if event.option.prompt == "list-repos":
-            self.app.notify("list-repos selected")
-            # TODO: Pass the repos table to something in the TUI that can render it
-            repos_table = orchestrator.get_repos_table()
-            self.query_one("#repos-table", Static).update(repos_table)
-        elif event.option.prompt == "repo-info":
-            self.app.notify("repo-info selected")
-        else:
-            self.app.notify("Unknown option selected", severity="error")
+        """
+        Handle option selection from the OptionList and call the appropriate BorgBoi function.
+        """
+        match event.option.id:
+            case "list-repos":
+                self.app.notify("list-repos selected")
+                repos_table = orchestrator.get_repos_table()
+                self.post_message(
+                    self.Output(repos_table),  # pyright: ignore
+                )
+            case "repo-info":
+                self.app.notify("repo-info selected")
+            case _:
+                self.app.notify("Unknown option selected", severity="error")
 
 
 class BorgBoiTui(App[Any]):
     CSS_PATH = "tcss/app.tcss"
 
+    def on_mount(self) -> None:
+        self.theme = "catppuccin-mocha"
+
     def compose(self) -> ComposeResult:
-        with Vertical():
-            yield Static("BorgBoi 👦🏼", expand=True, classes="row")
-            yield CommandPicker(classes="row")
+        with ScrollableContainer():
+            with Vertical(classes="row topPanel"):
+                yield Static("BorgBoi 👦🏼", classes="column")
+                yield CommandPicker(classes="column")
+            yield Static("Output placeholder", id="output", classes="row bottomPanel")
+
+    def on_command_picker_output(self, event: CommandPicker.Output) -> None:
+        self.query_one("#output", Static).update(event.output)
 
 
 if __name__ == "__main__":
