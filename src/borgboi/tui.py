@@ -1,11 +1,14 @@
+import json
 from typing import Any
 
+from rich.columns import Columns
 from rich.table import Table
 from textual.app import App, ComposeResult
-from textual.containers import ScrollableContainer, Vertical
+from textual.containers import Grid, ScrollableContainer, Vertical
 from textual.message import Message
+from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Label, OptionList, Static
+from textual.widgets import Button, Input, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
 from borgboi import orchestrator
@@ -24,11 +27,32 @@ COMMAND_OPTIONS = [
 ]
 
 
+class CommandInputScreen(ModalScreen[dict[str, str]]):
+    """Screen with a dialog to quit."""
+
+    CSS_PATH = "tcss/modal.tcss"
+
+    def compose(self) -> ComposeResult:
+        yield Grid(
+            Label("Enter the name of the repo:", id="repo-name-label"),
+            Input(placeholder="repo name", id="repo-name-input"),
+            Button("Confirm", variant="primary", id="confirm"),
+            Button("Cancel", variant="default", id="cancel"),
+            id="dialog",
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "confirm":
+            self.dismiss({"repo_name": self.query_one("#repo-name-input", Input).value})
+        else:
+            self.dismiss(None)
+
+
 class CommandPicker(Widget):
     class Output(Message):
         """Command output message."""
 
-        def __init__(self, output: str | Table) -> None:
+        def __init__(self, output: str | Table | Columns) -> None:
             self.output = output
             super().__init__()
 
@@ -50,6 +74,18 @@ class CommandPicker(Widget):
         """
         Handle option selection from the OptionList and call the appropriate BorgBoi function.
         """
+
+        def handle_command_input(inputs: dict[str, str] | None) -> None:
+            if inputs is None:
+                self.app.notify("CommandInputScreen cancelled")
+                return
+            else:
+                self.app.notify(json.dumps(inputs))
+                repo_info_panels = orchestrator.get_repo_info_tui(None, inputs["repo_name"])
+                self.post_message(
+                    self.Output(repo_info_panels),  # pyright: ignore
+                )
+
         match event.option.id:
             case "list-repos":
                 self.app.notify("list-repos selected")
@@ -59,6 +95,7 @@ class CommandPicker(Widget):
                 )
             case "repo-info":
                 self.app.notify("repo-info selected")
+                self.app.push_screen(CommandInputScreen(), handle_command_input)
             case _:
                 self.app.notify("Unknown option selected", severity="error")
 

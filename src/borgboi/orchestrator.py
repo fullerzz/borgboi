@@ -4,6 +4,7 @@ import socket
 from pathlib import Path
 from platform import system
 
+from rich.columns import Columns
 from rich.table import Table
 
 from borgboi import rich_utils, validator
@@ -123,6 +124,25 @@ def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bo
             last_modified=repo.metadata.repository.last_modified,
         )
     dynamodb.update_repo(repo)
+
+
+def get_repo_info_tui(repo_path: str | None, repo_name: str | None) -> Columns:
+    repo = lookup_repo(repo_path, repo_name)
+    if validator.repo_is_local(repo) is False:
+        raise ValueError("Repository must be local to view info")
+    if repo.metadata is None:
+        raise ValueError("Repo metadata is None")
+    panels = rich_utils.get_repo_info_panels(
+        name=repo.name,
+        total_size_gb=repo.metadata.cache.total_size_gb,
+        total_csize_gb=repo.metadata.cache.total_csize_gb,
+        unique_csize_gb=repo.metadata.cache.unique_csize_gb,
+        encryption_mode=repo.metadata.encryption.mode,
+        repo_id=repo.metadata.repository.id,
+        repo_location=repo.metadata.repository.location,
+        last_modified=repo.metadata.repository.last_modified,
+    )
+    return panels
 
 
 def list_repos() -> None:

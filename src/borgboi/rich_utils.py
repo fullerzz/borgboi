@@ -71,6 +71,23 @@ def output_repo_info(
     console.rule(f"[bold {COLOR_HEX.mauve}]Repo ID:[/] [{COLOR_HEX.mauve}]{repo_id}[/]", style=COLOR_HEX.blue)
 
 
+def get_repo_info_panels(
+    *,
+    name: str,
+    total_size_gb: str,
+    total_csize_gb: str,
+    unique_csize_gb: str,
+    encryption_mode: str,
+    repo_id: str,
+    repo_location: str,
+    last_modified: str,
+) -> Columns:
+    size_panel = _build_size_panel(total_size_gb, total_csize_gb, unique_csize_gb)
+    metadata_panel = _build_metadata_panel(encryption_mode, repo_id, repo_location, last_modified)
+    columns = Columns([size_panel, metadata_panel])
+    return columns
+
+
 def output_repos_table(repos: list[BorgBoiRepo]) -> None:
     table = Table(title="BorgBoi Repositories", show_lines=True)
     table.add_column("Name")
