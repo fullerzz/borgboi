@@ -8,7 +8,7 @@ from textual.containers import Grid, ScrollableContainer, Vertical
 from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Button, Input, Label, OptionList, Static
+from textual.widgets import Button, Input, Label, OptionList, Static, Header
 from textual.widgets.option_list import Option
 
 from borgboi import orchestrator
@@ -108,8 +108,8 @@ class BorgBoiTui(App[Any]):
 
     def compose(self) -> ComposeResult:
         with ScrollableContainer():
+            yield Header(True, name="BorgBoi", icon="👦🏼")
             with Vertical(classes="row topPanel"):
-                yield Static("BorgBoi 👦🏼", classes="column")
                 yield CommandPicker(classes="column")
             yield Static("Output placeholder", id="output", classes="row bottomPanel")
 

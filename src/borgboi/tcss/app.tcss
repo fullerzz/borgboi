@@ -1,6 +1,6 @@
 Static {
     content-align: center middle;
-    border: solid #c6a0f6;
+    padding: 1;
 }
 
 .topPanel {
@@ -17,12 +17,9 @@ Static {
     border: solid #c6a0f6;
 }
 
-.column {
-    width: 1fr;
-}
-
 #command-picker-label {
     color: #74c7ec;
+    align: center top;
 }
 
 OptionList {
