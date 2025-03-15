@@ -31,7 +31,7 @@ Options:
 ```text
 Usage: bb append-excludes [OPTIONS]
 
-  Display the exclude patterns for a repository.
+  Append a new exclusion pattern to the repository.
 
 Options:
   -n, --repo-name TEXT          Name of the repository  [required]
