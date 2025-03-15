@@ -112,7 +112,7 @@ def delete_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> 
 @click.option("--repo-name", "-n", required=True, type=str, help="Name of the repository")
 @click.option("--exclusion-pattern", "-x", required=True, type=str, help="Exclusion pattern to add")
 def append_excludes(repo_name: str, exclusion_pattern: str) -> None:
-    """Append new exclusion pattern to the excludes fle for a repository."""
+    """Append new exclusion pattern to the excludes file for a repository."""
     try:
         excludes_file = orchestrator.get_excludes_file(repo_name)
         orchestrator.append_to_excludes_file(excludes_file, exclusion_pattern)
