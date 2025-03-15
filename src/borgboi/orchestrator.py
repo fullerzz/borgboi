@@ -6,6 +6,7 @@ from platform import system
 
 from borgboi import rich_utils, validator
 from borgboi.clients import borg, dynamodb, s3
+from borgboi.lib.colors import COLOR_HEX
 from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
 from borgboi.rich_utils import console
 
@@ -135,7 +136,7 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
     archives = borg.list_archives(repo.path)
     console.rule(f"[bold]Archives for {repo.name}[/]")
     for archive in archives:
-        console.print(f"↳ [bold cyan]{archive.name}[/]")
+        console.print(f"↳ [bold {COLOR_HEX.sky}]{archive.name}[/]")
     console.rule()
 
 
@@ -148,7 +149,7 @@ def perform_daily_backup(repo_path: str) -> None:
         "Creating new archive",
         "Archive created successfully",
         borg.create_archive(repo.path, repo.name, repo.backup_target, log_json=False),
-        ruler_color="#c6a0f6",
+        ruler_color=COLOR_HEX.mauve,
     )
 
     # prune
@@ -156,7 +157,7 @@ def perform_daily_backup(repo_path: str) -> None:
         "Pruning old backups",
         "Pruning completed successfully",
         borg.prune(repo.path, log_json=False),
-        ruler_color="#f5a97f",
+        ruler_color=COLOR_HEX.peach,
     )
 
     # compact
@@ -165,7 +166,7 @@ def perform_daily_backup(repo_path: str) -> None:
         "Compacting completed successfully",
         borg.compact(repo.path, log_json=False),
         spinner="dots",
-        ruler_color="#7dc4e4",
+        ruler_color=COLOR_HEX.sapphire,
     )
 
     # sync with s3 and update dynamodb
@@ -174,7 +175,7 @@ def perform_daily_backup(repo_path: str) -> None:
         "S3 sync completed successfully",
         s3.sync_with_s3(repo.path, repo.name),
         spinner="arrow",
-        ruler_color="#dd7878",
+        ruler_color=COLOR_HEX.green,
     )
 
     # Refresh metadata after backup and pruning complete
@@ -201,7 +202,7 @@ def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
         "Successfully deleted archive",
         borg.delete_archive(repo.path, repo.name, archive_name, dry_run, log_json=False),
         spinner="pipe",
-        ruler_color="#7dc4e4",
+        ruler_color=COLOR_HEX.sapphire,
     )
     if not dry_run:
         # NOTE: Space is NOT reclaimed on disk until the 'compact' command is ran
@@ -210,7 +211,7 @@ def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
             "Compacting completed successfully",
             borg.compact(repo.path, log_json=False),
             spinner="dots",
-            ruler_color="#c6a0f6",
+            ruler_color=COLOR_HEX.mauve,
         )
 
 

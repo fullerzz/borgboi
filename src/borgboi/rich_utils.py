@@ -14,9 +14,10 @@ from borgboi.clients.utils.borg_logs import (
     ProgressMessage,
     ProgressPercent,
 )
+from borgboi.lib.colors import COLOR_HEX, PYGMENTS_STYLES
 from borgboi.models import BorgBoiRepo
 
-TEXT_COLOR = "#74c7ec"
+TEXT_COLOR = COLOR_HEX.text
 console = Console(record=True)
 
 
@@ -61,13 +62,13 @@ def output_repo_info(
     """
     Pretty print Borg repository information.
     """
-    console.rule("[bold]Borg Repo Info", style="blue")
-    console.print(f"[bold magenta]Repo Name:[/] {name}")
+    console.rule("[bold]Borg Repo Info", style=COLOR_HEX.blue)
+    console.print(f"[bold {COLOR_HEX.mauve}]Repo Name:[/] {name}")
     size_panel = _build_size_panel(total_size_gb, total_csize_gb, unique_csize_gb)
     metadata_panel = _build_metadata_panel(encryption_mode, repo_id, repo_location, last_modified)
     columns = Columns([size_panel, metadata_panel])
     console.print(columns)
-    console.rule(f"[bold magenta]Repo ID:[/] [magenta]{repo_id}[/]", style="blue")
+    console.rule(f"[bold {COLOR_HEX.mauve}]Repo ID:[/] [{COLOR_HEX.mauve}]{repo_id}[/]", style=COLOR_HEX.blue)
 
 
 def output_repos_table(repos: list[BorgBoiRepo]) -> None:
@@ -80,21 +81,21 @@ def output_repos_table(repos: list[BorgBoiRepo]) -> None:
     table.add_column("Backup Target 🎯")
 
     for repo in repos:
-        name = f"[bold cyan]{repo.name}[/]"
-        local_path = f"[bold blue]{repo.path}[/]"
+        name = f"[bold {COLOR_HEX.sky}]{repo.name}[/]"
+        local_path = f"[bold {COLOR_HEX.blue}]{repo.path}[/]"
         env_var_name = f"[bold green]{repo.hostname}[/]"
-        backup_target = f"[bold magenta]{repo.backup_target}[/]"
+        backup_target = f"[bold {COLOR_HEX.mauve}]{repo.backup_target}[/]"
         if repo.last_backup:
-            archive_date = f"[bold yellow]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
+            archive_date = f"[bold {COLOR_HEX.yellow}]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
         else:
-            archive_date = "[italic red]Never[/]"
+            archive_date = f"[italic {COLOR_HEX.red}]Never[/]"
 
         if repo.metadata is None:
-            size = "🤷[italic red]Unknown[/]"
+            size = f"🤷[italic {COLOR_HEX.red}]Unknown[/]"
         elif repo.metadata.cache.unique_csize_gb != 0.0:
-            size = f"[dark_orange]{repo.metadata.cache.unique_csize_gb} GB[/]"
+            size = f"[{COLOR_HEX.peach}]{repo.metadata.cache.unique_csize_gb} GB[/]"
         else:
-            size = "🤷[italic red]Unknown[/]"
+            size = f"🤷[italic {COLOR_HEX.red}]Unknown[/]"
 
         table.add_row(name, local_path, env_var_name, archive_date, size, backup_target)
     console.print(table)
@@ -117,7 +118,7 @@ def confirm_deletion(repo_name: str, archive_name: str = "") -> None:
     confirmation_key = repo_name
     if archive_name:
         confirmation_key = f"{repo_name}::{archive_name}"
-    resp = console.input(f"[red]Type [bold]{confirmation_key}[/] to confirm deletion: ")
+    resp = console.input(f"[{COLOR_HEX.red}]Type [bold]{confirmation_key}[/] to confirm deletion: ")
     if resp.lower() == confirmation_key.lower():
         return None
     console.print("Deletion aborted.")
@@ -166,7 +167,7 @@ def render_cmd_output_lines(
     """
     console.rule(f"[bold {TEXT_COLOR}]{status}[/]", style=ruler_color)
 
-    with console.status(status=f"[bold blue]{status}[/]", spinner=spinner):
+    with console.status(status=f"[bold {COLOR_HEX.blue}]{status}[/]", spinner=spinner):
         for log in log_stream:
             print(log, end="")  # noqa: T201
 
@@ -186,7 +187,11 @@ def render_excludes_file(excludes_file_path: str, lines_to_highlight: set[int] |
         None
     """
     syntax = Syntax.from_path(
-        excludes_file_path, line_numbers=True, theme="dracula", padding=1, highlight_lines=lines_to_highlight
+        excludes_file_path,
+        line_numbers=True,
+        theme=PYGMENTS_STYLES["catppuccin-mocha"],
+        padding=1,
+        highlight_lines=lines_to_highlight,
     )
     panel = Panel(syntax, title="Excludes File", expand=False)
     console.print(panel)
