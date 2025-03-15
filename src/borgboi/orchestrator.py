@@ -218,3 +218,79 @@ def extract_repo_key(repo_path: str) -> Path:
     repo = lookup_repo(repo_path, None)
     key_path = borg.export_repo_key(repo.path, repo.name)
     return key_path
+
+
+def get_excludes_file(repo_name: str) -> Path:
+    """
+    Get the content of the excludes file for a repository.
+
+    Args:
+        repo_name: Name of the repository
+
+    Returns:
+        str: The content of the excludes file
+
+    Raises:
+        FileNotFoundError: If the excludes file does not exist
+    """
+    # Validate repository is local
+    repo = lookup_repo(None, repo_name)
+    if validator.repo_is_local(repo) is False:
+        raise ValueError("Repository must be local to view excludes content")
+
+    # Get the path to the exclude file
+    excludes_path = _get_excludes_path(repo_name)
+
+    # Check if the exclude file exists
+    if not excludes_path.exists():
+        raise FileNotFoundError(f"No exclude file found for repository {repo_name}")
+
+    return excludes_path
+
+
+def append_to_excludes_file(excludes_path: Path, new_content: str) -> None:
+    """
+    Update the content of the excludes file for a repository.
+
+    Args:
+        excludes_path: Path to the excludes file
+        new_content: New line to be added to the excludes file
+    """
+    # Check if the excludes file exists
+    if not excludes_path.exists():
+        raise FileNotFoundError(f"No exclude file found at {excludes_path}")
+
+    # Update the content of the excludes file
+    with excludes_path.open("a") as f:
+        f.write(new_content + "\n")
+    console.print(f"Updated exclude list at [bold cyan]{excludes_path}[/]")
+
+    # Count the total number of lines in the excludes file to use for highlighting
+    with excludes_path.open("r") as f:
+        line_count = sum(1 for _ in f)
+    rich_utils.render_excludes_file(excludes_path.as_posix(), lines_to_highlight={line_count})
+
+
+def remove_from_excludes_file(excludes_path: Path, line_number: int) -> None:
+    """
+    Remove a line from the excludes file for a repository.
+
+    Args:
+        excludes_path: Path to the excludes file
+        line_number: Line number to be removed from the excludes file
+    """
+    # Check if the excludes file exists
+    if not excludes_path.exists():
+        raise FileNotFoundError(f"No exclude file found at {excludes_path}")
+    # Read the content of the excludes file
+    with excludes_path.open("r") as f:
+        lines = f.readlines()
+    # Remove the specified line
+    if line_number < 1 or line_number > len(lines):
+        raise ValueError(f"Line number {line_number} is out of range")
+    lines.pop(line_number - 1)
+    # Write the updated content back to the excludes file
+    with excludes_path.open("w") as f:
+        f.writelines(lines)
+    console.print(f"Removed line {line_number} from exclude list at [bold cyan]{excludes_path}[/]")
+    rich_utils.render_excludes_file(excludes_path.as_posix())
