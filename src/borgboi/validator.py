@@ -91,4 +91,4 @@ def valid_line(lines: list[str], line_num: int) -> bool:
         bool: True if the line number is valid, False otherwise.
     """
     # line numbers start from 1 so 0 is invalid
-    return 0 < line_num < len(lines)
+    return 0 < line_num <= len(lines)
