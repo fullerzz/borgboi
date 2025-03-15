@@ -1,3 +1,17 @@
+## v1.1.0 (2025-03-15)
+
+### Feat
+
+- **excludes**: add commands to append line and remove line from excludes file
+
+### Fix
+
+- **validator**: line number is valid if it equals len of lines as it's 1-indexed
+
+### Refactor
+
+- **excludes-ops**: improved docstrings and added validation in validator
+
 ## v1.0.3 (2025-03-07)
 
 ### Fix

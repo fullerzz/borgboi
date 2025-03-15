@@ -1,6 +1,6 @@
 [project]
 name = "borgboi"
-version = "1.0.3"
+version = "1.1.0"
 description = "Add your description here"
 license = "MIT"
 readme = "README.md"
