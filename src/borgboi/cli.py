@@ -108,6 +108,34 @@ def delete_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> 
     orchestrator.delete_borg_repo(repo_path, repo_name, dry_run)
 
 
+@cli.command()
+@click.option("--repo-name", "-n", required=True, type=str, help="Name of the repository")
+@click.option("--exclusion-pattern", "-x", required=True, type=str, help="Exclusion pattern to add")
+def append_excludes(repo_name: str, exclusion_pattern: str) -> None:
+    """Display the exclude patterns for a repository."""
+    try:
+        excludes_file = orchestrator.get_excludes_file(repo_name)
+        orchestrator.append_to_excludes_file(excludes_file, exclusion_pattern)
+    except FileNotFoundError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] An unexpected error occurred: {e}")
+
+
+@cli.command()
+@click.option("--repo-name", "-n", required=True, type=str, help="Name of the repository")
+@click.option("--delete-line-num", "-D", required=True, type=int, help="Line number to delete")
+def modify_excludes(repo_name: str, delete_line_num: int) -> None:
+    """Delete a line from a repository's excludes file."""
+    try:
+        excludes_file = orchestrator.get_excludes_file(repo_name)
+        orchestrator.remove_from_excludes_file(excludes_file, delete_line_num)
+    except FileNotFoundError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] An unexpected error occurred: {e}")
+
+
 def main() -> None:
     cli()
 

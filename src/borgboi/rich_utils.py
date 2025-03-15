@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.table import Table
 
 from borgboi.clients.utils.borg_logs import (
@@ -171,3 +172,19 @@ def render_cmd_output_lines(
 
     console.rule(f":heavy_check_mark: [bold {TEXT_COLOR}]{success_msg}[/]", style=ruler_color)
     console.print("")
+
+
+def render_excludes_file(excludes_file_path: str, lines_to_highlight: set[int] | None = None) -> None:
+    """
+    Render the contents of the excludes file to the console.
+
+    Args:
+        excludes_file_path (str): Path to the excludes file.
+
+    Returns:
+        None
+    """
+    syntax = Syntax.from_path(
+        excludes_file_path, line_numbers=True, theme="dracula", padding=1, highlight_lines=lines_to_highlight
+    )
+    console.print(syntax)
