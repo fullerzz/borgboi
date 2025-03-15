@@ -26,6 +26,32 @@ Options:
 
 ```
 
+## `append-excludes`
+
+```text
+Usage: bb append-excludes [OPTIONS]
+
+  Display the exclude patterns for a repository.
+
+Options:
+  -n, --repo-name TEXT          Name of the repository  [required]
+  -x, --exclusion-pattern TEXT  Exclusion pattern to add  [required]
+
+```
+
+## `modify-excludes`
+
+```text
+Usage: bb modify-excludes [OPTIONS]
+
+  Delete a line from a repository's excludes file.
+
+Options:
+  -n, --repo-name TEXT           Name of the repository  [required]
+  -D, --delete-line-num INTEGER  Line number to delete  [required]
+
+```
+
 ## `list-repos`
 
 ```text
