@@ -35,10 +35,11 @@ wheels = [
 
 [[package]]
 name = "borgboi"
-version = "1.0.3"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
+    { name = "catppuccin", extra = ["pygments"] },
     { name = "click" },
     { name = "pydantic" },
     { name = "rich" },
@@ -66,6 +67,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "boto3", specifier = ">=1.35.92" },
+    { name = "catppuccin", extras = ["pygments"], specifier = ">=2.4.1" },
     { name = "click", specifier = ">=8.1.8" },
     { name = "pydantic", specifier = ">=2.10.4" },
     { name = "rich", specifier = ">=13.9.4" },
@@ -152,6 +154,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/84/29/756631d4f16b80c0b14fc862dd4ac6294779ca0dff5b3c65c0ebf752c282/botocore_stubs-1.37.13.tar.gz", hash = "sha256:ea1e9a380e4119c570cc077a94c737727d8c81e0b867a3d75dd94beb17bb17b7", size = 42115 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/62/5b/f0ae52bcfba7af5ca6ba9052e495072bb9cfad4119f3b0751fe59ad4e1c8/botocore_stubs-1.37.13-py3-none-any.whl", hash = "sha256:cf0cd46a722b831397758d5b34a2d68543e76ac881213784e474a3d9340a2d72", size = 65386 },
+]
+
+[[package]]
+name = "catppuccin"
+version = "2.4.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2f/cd/e46ceb560c027af592bfacac73f7f203f67a6cc6fba4d7abc6c095c81963/catppuccin-2.4.1.tar.gz", hash = "sha256:bed41d14189a52569f6c1fd941155d7fc13561e76e84f11c5cf04dd0cb07b3c1", size = 1885055 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/4f/4f893a4bf8515c57b9a37fc9355e0adb994e920b0e3f154dde529dc6ca6a/catppuccin-2.4.1-py3-none-any.whl", hash = "sha256:7821374c18a2c51ce1fd9239bce5689a4da6d9f26d1e324e0d19cc0e2ad7f77b", size = 18654 },
+]
+
+[package.optional-dependencies]
+pygments = [
+    { name = "pygments" },
 ]
 
 [[package]]
