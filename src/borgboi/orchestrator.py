@@ -222,16 +222,17 @@ def extract_repo_key(repo_path: str) -> Path:
 
 def get_excludes_file(repo_name: str) -> Path:
     """
-    Get the content of the excludes file for a repository.
+    Get the Path of the excludes file for a repository.
 
     Args:
         repo_name: Name of the repository
 
     Returns:
-        str: The content of the excludes file
+        Path: The pathlib Path of the excludes file
 
     Raises:
         FileNotFoundError: If the excludes file does not exist
+        ValueError: If the repository is not local
     """
     # Validate repository is local
     repo = lookup_repo(None, repo_name)
@@ -250,7 +251,7 @@ def get_excludes_file(repo_name: str) -> Path:
 
 def append_to_excludes_file(excludes_path: Path, new_content: str) -> None:
     """
-    Update the content of the excludes file for a repository.
+    Append new content to the excludes file for a repository.
 
     Args:
         excludes_path: Path to the excludes file
@@ -285,9 +286,9 @@ def remove_from_excludes_file(excludes_path: Path, line_number: int) -> None:
     # Read the content of the excludes file
     with excludes_path.open("r") as f:
         lines = f.readlines()
+    if not validator.valid_line(lines, line_number):
+        raise ValueError(f"Line number {line_number} is not valid")
     # Remove the specified line
-    if line_number < 1 or line_number > len(lines):
-        raise ValueError(f"Line number {line_number} is out of range")
     lines.pop(line_number - 1)
     # Write the updated content back to the excludes file
     with excludes_path.open("w") as f:

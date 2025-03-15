@@ -77,3 +77,18 @@ def parse_logs(
                 except ValidationError:
                     log_msg = LogMessage.model_validate_json(log)
         yield log_msg
+
+
+def valid_line(lines: list[str], line_num: int) -> bool:
+    """
+    Check if the line number is valid for the given lines.
+
+    Args:
+        lines (list[str]): List of lines.
+        line_num (int): Line number to check.
+
+    Returns:
+        bool: True if the line number is valid, False otherwise.
+    """
+    # line numbers start from 1 so 0 is invalid
+    return 0 < line_num < len(lines)

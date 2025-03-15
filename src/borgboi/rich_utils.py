@@ -180,6 +180,7 @@ def render_excludes_file(excludes_file_path: str, lines_to_highlight: set[int] |
 
     Args:
         excludes_file_path (str): Path to the excludes file.
+        lines_to_highlight (set[int], optional): Set of line numbers to highlight. Defaults to None.
 
     Returns:
         None
@@ -187,4 +188,5 @@ def render_excludes_file(excludes_file_path: str, lines_to_highlight: set[int] |
     syntax = Syntax.from_path(
         excludes_file_path, line_numbers=True, theme="dracula", padding=1, highlight_lines=lines_to_highlight
     )
-    console.print(syntax)
+    panel = Panel(syntax, title="Excludes File", expand=False)
+    console.print(panel)
