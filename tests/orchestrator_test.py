@@ -134,4 +134,30 @@ def test_append_to_excludes_file(borg_repo: BorgBoiRepo) -> None:
         excludes = f.readlines()
     new_line_count = len(excludes)
     assert new_line_count == original_line_count + 1
-    assert excludes[-1] == new_excludes_line
+    assert excludes[-1].rstrip("\r\n") == new_excludes_line
+
+
+@pytest.mark.usefixtures("create_dynamodb_table")
+def test_remove_from_excludes_file(borg_repo: BorgBoiRepo) -> None:
+    from borgboi.orchestrator import get_excludes_file, remove_from_excludes_file
+
+    excludes_file = get_excludes_file(borg_repo.name)
+    assert excludes_file.exists() is True
+    # Get line count from the original excludes file
+    with excludes_file.open("r") as f:
+        excludes_content = f.readlines()
+    original_line_count = len(excludes_content)
+
+    # Create dict of line_number: line_content
+    line_dict = {line_num: line for line_num, line in enumerate(excludes_content)}
+    # Remove line 2 from the excludes file
+    index_to_remove = 2
+
+    remove_from_excludes_file(excludes_file, index_to_remove)
+
+    with excludes_file.open("r") as f:
+        excludes = f.readlines()
+    new_line_count = len(excludes)
+    assert new_line_count == original_line_count - 1
+    updated_line_dict = {line_num: line for line_num, line in enumerate(excludes)}
+    assert updated_line_dict[index_to_remove] != line_dict[index_to_remove]
