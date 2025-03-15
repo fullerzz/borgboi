@@ -101,3 +101,37 @@ def test_delete_repo_no_exclusions_list(borg_repo_without_excludes: BorgBoiRepo)
     repo = borg_repo_without_excludes
     delete_borg_repo(repo.path, repo.name, False)
     # This test passes if no exception is raised
+
+
+@pytest.mark.usefixtures("create_dynamodb_table")
+def test_get_excludes_file(borg_repo: BorgBoiRepo) -> None:
+    from borgboi.orchestrator import get_excludes_file
+
+    repo_name = borg_repo.name
+    excludes_file = get_excludes_file(repo_name)
+    assert excludes_file is not None
+    assert excludes_file.exists() is True
+
+
+@pytest.mark.usefixtures("create_dynamodb_table")
+def test_append_to_excludes_file(borg_repo: BorgBoiRepo) -> None:
+    from borgboi.orchestrator import append_to_excludes_file, get_excludes_file
+
+    new_excludes_line = "foo/*"
+
+    excludes_file = get_excludes_file(borg_repo.name)
+    assert excludes_file.exists() is True
+    with excludes_file.open("r") as f:
+        excludes_content = f.readlines()
+    original_line_count = len(excludes_content)
+    # Verify that the new_excludes_line is not already in the excludes file
+    for line in excludes_content:
+        assert line != new_excludes_line
+
+    # Append new_excludes_line to the excludes file
+    append_to_excludes_file(excludes_file, new_excludes_line)
+    with excludes_file.open("r") as f:
+        excludes = f.readlines()
+    new_line_count = len(excludes)
+    assert new_line_count == original_line_count + 1
+    assert excludes[-1] == new_excludes_line
