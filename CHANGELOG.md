@@ -1,3 +1,9 @@
+## v1.2.0 (2025-03-15)
+
+### Feat
+
+- integrated with catppuccin pkg for better color consistency
+
 ## v1.1.0 (2025-03-15)
 
 ### Feat
