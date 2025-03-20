@@ -8,7 +8,7 @@ from textual.containers import Grid, ScrollableContainer, Vertical
 from textual.message import Message
 from textual.screen import ModalScreen
 from textual.widget import Widget
-from textual.widgets import Button, Input, Label, OptionList, Static, Header
+from textual.widgets import Button, Header, Input, Label, OptionList, Static
 from textual.widgets.option_list import Option
 
 from borgboi import orchestrator

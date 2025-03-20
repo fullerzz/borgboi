@@ -1,13 +1,14 @@
 from catppuccin import PALETTE
 from catppuccin.extras.pygments import FrappeStyle, LatteStyle, MacchiatoStyle, MochaStyle
 from pydantic import BaseModel
+from rich.syntax import SyntaxTheme
 
-PYGMENTS_STYLES = {
+PYGMENTS_STYLES: dict[str, SyntaxTheme] = {
     "catppuccin-latte": LatteStyle,
     "catppuccin-frappe": FrappeStyle,
     "catppuccin-macchiato": MacchiatoStyle,
     "catppuccin-mocha": MochaStyle,
-}
+}  # type: ignore
 
 flavor = PALETTE.mocha
 
