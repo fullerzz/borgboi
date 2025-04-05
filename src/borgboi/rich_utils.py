@@ -189,7 +189,7 @@ def render_excludes_file(excludes_file_path: str, lines_to_highlight: set[int] |
     syntax = Syntax.from_path(
         excludes_file_path,
         line_numbers=True,
-        theme=PYGMENTS_STYLES["catppuccin-mocha"],
+        theme=PYGMENTS_STYLES["catppuccin-mocha"],  # type: ignore
         padding=1,
         highlight_lines=lines_to_highlight,
     )
