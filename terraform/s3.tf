@@ -62,3 +62,13 @@ resource "aws_s3_bucket_public_access_block" "borgboi" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+
+resource "aws_s3_bucket_intelligent_tiering_configuration" "borgboi" {
+  bucket = aws_s3_bucket.borgboi.id
+  name   = "EntireBucket"
+
+  tiering {
+    access_tier = "ARCHIVE_ACCESS"
+    days        = 180
+  }
+}
