@@ -1,3 +1,9 @@
+## v1.3.0 (2025-05-04)
+
+### Feat
+
+- **tf**: add s3 intelligent tiering config to bucket
+
 ## v1.2.0 (2025-03-15)
 
 ### Feat
