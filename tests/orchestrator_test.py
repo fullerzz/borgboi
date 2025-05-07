@@ -11,10 +11,13 @@ EXCLUDES_SRC = "tests/data/excludes.txt"
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
-def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path) -> None:
+@pytest.mark.parametrize("offline_mode", [True, False])
+def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, offline_mode: bool) -> None:
     from borgboi.orchestrator import create_borg_repo
 
-    new_repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "test-repo")
+    new_repo = create_borg_repo(
+        repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "test-repo", offline=offline_mode
+    )
     assert new_repo.path == repo_storage_dir.as_posix()
     assert new_repo.backup_target == backup_target_dir.as_posix()
     assert new_repo.name == "test-repo"
