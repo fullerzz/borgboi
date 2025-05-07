@@ -38,7 +38,7 @@ def create_excludes_list(repo_name: str, excludes_source_file: str) -> Path:
     return dest_file
 
 
-def create_borg_repo(path: str, backup_path: str, name: str) -> BorgBoiRepo:
+def create_borg_repo(path: str, backup_path: str, name: str, offline: bool) -> BorgBoiRepo:
     if os.getenv("BORG_NEW_PASSPHRASE") is None:
         raise ValueError("Environment variable BORG_NEW_PASSPHRASE must be set")
     repo_path = Path(path)
@@ -61,7 +61,8 @@ def create_borg_repo(path: str, backup_path: str, name: str) -> BorgBoiRepo:
         os_platform=system(),
         metadata=repo_info,
     )
-    dynamodb.add_repo_to_table(borgboi_repo)
+    if not offline:
+        dynamodb.add_repo_to_table(borgboi_repo)
     return borgboi_repo
 
 

@@ -15,10 +15,11 @@ def cli() -> None:
 @cli.command()
 @click.option("--repo-path", "-r", required=True, type=click.Path(exists=False), prompt=True)
 @click.option("--backup-target", "-b", required=True, type=click.Path(exists=True), prompt=True)
-def create_repo(repo_path: str, backup_target: str) -> None:
+@click.option("--offline", envvar="BORGBOI_OFFLINE", is_flag=True, default=False)
+def create_repo(repo_path: str, backup_target: str, offline: bool) -> None:
     """Create a new Borg repository."""
     name = click.prompt("Enter a name for this repository")
-    repo = orchestrator.create_borg_repo(path=repo_path, backup_path=backup_target, name=name)
+    repo = orchestrator.create_borg_repo(path=repo_path, backup_path=backup_target, name=name, offline=offline)
     console.print(f"Created new Borg repo at [bold cyan]{repo.path}[/]")
 
 
