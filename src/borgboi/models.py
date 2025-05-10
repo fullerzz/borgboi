@@ -41,9 +41,9 @@ class BorgBoiRepo(BaseModel):
             str: posix path to the Borg repository
         """
         # FIXME: Handle scenario when username is different on the two platforms
-        if self.path.startswith("/home/") and self.os_platform == "Darwin":
-            return self.path.replace("/home/", "/Users/")
-        elif self.path.startswith("/Users/") and self.os_platform == "Linux":
-            return self.path.replace("/Users/", "/home/")
+        if self.path.startswith("/home/") and self.os_platform != "Linux":
+            return self.path.replace("home/", "Users/", 1)
+        elif self.path.startswith("/Users/") and self.os_platform != "Darwin":
+            return self.path.replace("Users/", "home/", 1)
         else:
             return Path(self.path).as_posix()
