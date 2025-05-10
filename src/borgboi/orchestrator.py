@@ -183,6 +183,33 @@ def perform_daily_backup(repo_path: str) -> None:
     dynamodb.update_repo(repo)
 
 
+def restore_repo(repo: BorgBoiRepo, dry_run: bool = True) -> None:
+    """
+    Restore a Borg repository from S3.
+    """
+    if validator.repo_is_local(repo):
+        raise ValueError("Repository already exists locally")
+
+    if dry_run:
+        # Perform dry run and display results to user
+        rich_utils.render_cmd_output_lines(
+            "Syncing repo with S3 bucket",
+            "S3 sync completed successfully",
+            s3.restore_from_s3_dry_run(repo.safe_path, repo.name),
+            spinner="arrow",
+            ruler_color=COLOR_HEX.blue,
+        )
+    else:
+        # Perform actual sync
+        rich_utils.render_cmd_output_lines(
+            "Syncing repo with S3 bucket",
+            "S3 sync completed successfully",
+            s3.sync_with_s3(repo.safe_path, repo.name),
+            spinner="arrow",
+            ruler_color=COLOR_HEX.blue,
+        )
+
+
 def restore_archive(repo_path: str, archive_name: str) -> None:
     repo = lookup_repo(repo_path, None)
     for log_msg in borg.extract(repo.path, archive_name):

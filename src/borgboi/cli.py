@@ -136,6 +136,24 @@ def modify_excludes(repo_name: str, delete_line_num: int) -> None:
         console.print(f"[bold red]Error:[/] An unexpected error occurred: {e}")
 
 
+@cli.command()
+@click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
+@click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
+def restore_repo(repo_path: str | None, repo_name: str | None) -> None:
+    """Restore a Borg repository by name or path by downloading it from S3."""
+    repo = orchestrator.lookup_repo(repo_path, repo_name)
+    if repo.metadata and repo.metadata.cache:
+        console.print(
+            f"Repository found: [bold cyan]{repo.path} - Total size: {repo.metadata.cache.total_size_gb} GB[/]"
+        )
+    else:
+        console.print(f"Repository found: [bold cyan]{repo.path}[/]")
+    _ = click.confirm("Perform dry run of restore process?", abort=True)
+    orchestrator.restore_repo(repo, dry_run=True)
+    _ = click.confirm(f"Confirm you want to restore the repository to: {repo.safe_path}", abort=True)
+    orchestrator.restore_repo(repo, dry_run=False)
+
+
 def main() -> None:
     cli()
 
