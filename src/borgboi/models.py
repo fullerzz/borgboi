@@ -2,8 +2,9 @@ from datetime import datetime
 from functools import cached_property
 from os import getenv
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator
 
 from borgboi.clients.borg import RepoInfo
 
@@ -22,6 +23,13 @@ class BorgBoiRepo(BaseModel):
     os_platform: str = Field(min_length=3)
     last_backup: datetime | None = None
     metadata: RepoInfo | None
+
+    @field_validator("os_platform")
+    @classmethod
+    def validate_os_platform(cls, v: str) -> str:
+        if v not in {"Linux", "Darwin"}:
+            raise ValueError("os_platform must be either 'Linux' or 'Darwin'. Windows is not supported.")
+        return v
 
     @computed_field  # mypy: ignore[prop-decorator]
     @cached_property
