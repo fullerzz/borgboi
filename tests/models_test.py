@@ -34,7 +34,7 @@ def borg_repo_mac() -> BorgBoiRepo:
 @pytest.mark.skipif(system() == "Linux", reason="Test only runs on non-Linux systems")
 def test_safe_path_convert_linux_repo(borg_repo_linux: BorgBoiRepo) -> None:
     expected_path_parts = ["Users", "$USER", "borg-repos", "repo"]
-    safe_path_parts = borg_repo_linux.safe_path.split("/")
+    safe_path_parts = borg_repo_linux.safe_path.split("/")[1:]
     assert len(safe_path_parts) == len(expected_path_parts)
     for part in range(len(expected_path_parts)):
         if expected_path_parts[part] == "$USER":
@@ -45,7 +45,7 @@ def test_safe_path_convert_linux_repo(borg_repo_linux: BorgBoiRepo) -> None:
 @pytest.mark.skipif(system() == "Darwin", reason="Test only runs on non-Mac systems")
 def test_safe_path_convert_mac_repo(borg_repo_mac: BorgBoiRepo) -> None:
     expected_path_parts = ["home", "$USER", "borg-repos", "repo"]
-    safe_path_parts = borg_repo_mac.safe_path.split("/")
+    safe_path_parts = borg_repo_mac.safe_path.split("/")[1:]
     assert len(safe_path_parts) == len(expected_path_parts)
     for part in range(len(expected_path_parts)):
         if expected_path_parts[part] == "$USER":

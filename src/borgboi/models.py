@@ -2,6 +2,7 @@ from datetime import datetime
 from functools import cached_property
 from os import getenv
 from pathlib import Path
+from platform import system
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
@@ -40,10 +41,11 @@ class BorgBoiRepo(BaseModel):
         Returns:
             str: posix path to the Borg repository
         """
+        current_os = system()
         # FIXME: Handle scenario when username is different on the two platforms
-        if self.path.startswith("/home/") and self.os_platform != "Linux":
+        if self.path.startswith("/home/") and current_os != "Linux":
             return self.path.replace("home/", "Users/", 1)
-        elif self.path.startswith("/Users/") and self.os_platform != "Darwin":
+        elif self.path.startswith("/Users/") and current_os != "Darwin":
             return self.path.replace("Users/", "home/", 1)
         else:
             return Path(self.path).as_posix()
