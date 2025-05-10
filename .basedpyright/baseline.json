@@ -422,24 +422,6 @@
                 }
             }
         ],
-        "./src/borgboi/clients/s3.py": [
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 21,
-                    "endColumn": 29,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportOptionalMemberAccess",
-                "range": {
-                    "startColumn": 26,
-                    "endColumn": 34,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./src/borgboi/orchestrator.py": [
             {
                 "code": "reportUnusedCallResult",

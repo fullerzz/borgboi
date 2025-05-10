@@ -30,8 +30,11 @@ def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stdout
 
-    while out_stream.readable():  # type: ignore
-        line = out_stream.readline()  # type: ignore
+    if not out_stream:
+        raise ValueError("stdout is None")
+
+    while out_stream.readable():
+        line = out_stream.readline()
         if not line:
             if proc.stdout:
                 proc.stdout.close()
@@ -46,7 +49,7 @@ def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
-def restore_from_s3_dry_run(repo_path: str, repo_name: str) -> Generator[str]:
+def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool) -> Generator[str]:
     """
     Restore a Borg repository from an S3 bucket while yielding the output line by line.
 
@@ -62,14 +65,23 @@ def restore_from_s3_dry_run(repo_path: str, repo_name: str) -> Generator[str]:
     """
     sync_source = f"s3://{environ['BORG_S3_BUCKET']}/{repo_name}"
     s3_destination_uri = repo_path
-    cmd = [
-        "aws",
-        "s3",
-        "--dryrun",
-        "sync",
-        sync_source,
-        s3_destination_uri,
-    ]
+    if dry_run:
+        cmd = [
+            "aws",
+            "s3",
+            "--dryrun",
+            "sync",
+            sync_source,
+            s3_destination_uri,
+        ]
+    else:
+        cmd = [
+            "aws",
+            "s3",
+            "sync",
+            sync_source,
+            s3_destination_uri,
+        ]
 
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
     out_stream = proc.stdout

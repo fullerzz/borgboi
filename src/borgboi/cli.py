@@ -139,7 +139,8 @@ def modify_excludes(repo_name: str, delete_line_num: int) -> None:
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
 @click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
-def restore_repo(repo_path: str | None, repo_name: str | None) -> None:
+@click.option("--dry-run", is_flag=True, show_default=True, default=False, help="Perform a dry run of the restore")
+def restore_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> None:
     """Restore a Borg repository by name or path by downloading it from S3."""
     repo = orchestrator.lookup_repo(repo_path, repo_name)
     if repo.metadata and repo.metadata.cache:
@@ -148,10 +149,7 @@ def restore_repo(repo_path: str | None, repo_name: str | None) -> None:
         )
     else:
         console.print(f"Repository found: [bold cyan]{repo.path}[/]")
-    _ = click.confirm("Perform dry run of restore process?", abort=True)
-    orchestrator.restore_repo(repo, dry_run=True)
-    _ = click.confirm(f"Confirm you want to restore the repository to: {repo.safe_path}", abort=True)
-    orchestrator.restore_repo(repo, dry_run=False)
+    orchestrator.restore_repo(repo, dry_run)
 
 
 def main() -> None:
