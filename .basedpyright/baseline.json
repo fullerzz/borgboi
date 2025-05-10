@@ -1,0 +1,774 @@
+{
+    "files": {
+        "./src/borgboi/cli.py": [
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 0,
+                    "endColumn": 25,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 8,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 89,
+                    "endColumn": 93,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 67,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 5,
+                    "lineCount": 3
+                }
+            }
+        ],
+        "./src/borgboi/clients/borg.py": [
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 21,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 26,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportExplicitAny",
+                "range": {
+                    "startColumn": 29,
+                    "endColumn": 32,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 21,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 26,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 21,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 26,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 21,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 26,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 27,
+                    "endColumn": 36,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 21,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 26,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 20,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 21,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 26,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./src/borgboi/clients/dynamodb.py": [
+            {
+                "code": "reportImportCycles",
+                "range": {
+                    "startColumn": 0,
+                    "endColumn": 0,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownMemberType",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 71,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownMemberType",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 60,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 60,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 60,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 60,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 60,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 60,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 60,
+                    "endColumn": 64,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownMemberType",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportTypedDictNotRequiredAccess",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 75,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownMemberType",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 79,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 79,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 79,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 79,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 79,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 79,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 59,
+                    "endColumn": 79,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownMemberType",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 51,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownMemberType",
+                "range": {
+                    "startColumn": 12,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 71,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./src/borgboi/clients/s3.py": [
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 21,
+                    "endColumn": 29,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportOptionalMemberAccess",
+                "range": {
+                    "startColumn": 26,
+                    "endColumn": 34,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./src/borgboi/orchestrator.py": [
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 47,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 28,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 35,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 30,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./src/borgboi/rich_utils.py": [
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 48,
+                    "endColumn": 55,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnnecessaryComparison",
+                "range": {
+                    "startColumn": 13,
+                    "endColumn": 55,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportArgumentType",
+                "range": {
+                    "startColumn": 14,
+                    "endColumn": 49,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./tests/cli_test.py": [
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 31,
+                    "endColumn": 35,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 31,
+                    "endColumn": 35,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportExplicitAny",
+                "range": {
+                    "startColumn": 37,
+                    "endColumn": 40,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 44,
+                    "endColumn": 50,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 44,
+                    "endColumn": 50,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportExplicitAny",
+                "range": {
+                    "startColumn": 52,
+                    "endColumn": 55,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportPrivateUsage",
+                "range": {
+                    "startColumn": 24,
+                    "endColumn": 45,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 94,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./tests/conftest.py": [
+            {
+                "code": "reportUnusedFunction",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 22,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 7,
+                    "endColumn": 22,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownMemberType",
+                "range": {
+                    "startColumn": 14,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 13,
+                    "endColumn": 28,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnknownMemberType",
+                "range": {
+                    "startColumn": 14,
+                    "endColumn": 26,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 15,
+                    "endColumn": 30,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportExplicitAny",
+                "range": {
+                    "startColumn": 57,
+                    "endColumn": 60,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 5,
+                    "lineCount": 25
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 63,
+                    "endColumn": 84,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 53,
+                    "endColumn": 74,
+                    "lineCount": 1
+                }
+            }
+        ],
+        "./tests/orchestrator_test.py": [
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 31,
+                    "endColumn": 35,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportExplicitAny",
+                "range": {
+                    "startColumn": 37,
+                    "endColumn": 40,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 44,
+                    "endColumn": 50,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 44,
+                    "endColumn": 50,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportExplicitAny",
+                "range": {
+                    "startColumn": 52,
+                    "endColumn": 55,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 15,
+                    "endColumn": 22,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 31,
+                    "endColumn": 35,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportExplicitAny",
+                "range": {
+                    "startColumn": 37,
+                    "endColumn": 40,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 44,
+                    "endColumn": 50,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedParameter",
+                "range": {
+                    "startColumn": 44,
+                    "endColumn": 50,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportExplicitAny",
+                "range": {
+                    "startColumn": 52,
+                    "endColumn": 55,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 15,
+                    "endColumn": 22,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportPrivateUsage",
+                "range": {
+                    "startColumn": 24,
+                    "endColumn": 45,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportAny",
+                "range": {
+                    "startColumn": 8,
+                    "endColumn": 21,
+                    "lineCount": 1
+                }
+            },
+            {
+                "code": "reportUnusedCallResult",
+                "range": {
+                    "startColumn": 4,
+                    "endColumn": 54,
+                    "lineCount": 1
+                }
+            }
+        ]
+    }
+}
