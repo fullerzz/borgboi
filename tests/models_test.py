@@ -13,7 +13,7 @@ def borg_repo_linux() -> BorgBoiRepo:
         backup_target="/home/zach/Documents",
         name="docs-repo",
         hostname="ubuntu-desktop",
-        os_platform="linux",
+        os_platform="Linux",
         metadata=None,
     )
 
@@ -26,7 +26,7 @@ def borg_repo_mac() -> BorgBoiRepo:
         backup_target="/Users/zachfuller/Pictures",
         name="pictures-repo",
         hostname="zach-macbook",
-        os_platform="mac",
+        os_platform="Darwin",
         metadata=None,
     )
 

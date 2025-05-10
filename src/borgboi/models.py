@@ -28,7 +28,7 @@ class BorgBoiRepo(BaseModel):
     @classmethod
     def validate_os_platform(cls, v: str) -> str:
         if v not in {"Linux", "Darwin"}:
-            raise ValueError("os_platform must be either 'Linux' or 'Darwin'. Windows is not supported.")
+            raise ValueError(f"os_platform must be either 'Linux' or 'Darwin'. '{v}' is not supported.")
         return v
 
     @computed_field  # mypy: ignore[prop-decorator]
