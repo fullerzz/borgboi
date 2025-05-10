@@ -29,6 +29,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.29.1",
     "boto3-stubs[essential]>=1.35.92",
     "moto[dynamodb,iam,s3]>=5.0.26",
     "mypy[faster-cache]>=1.14.1",
@@ -63,6 +64,13 @@ filterwarnings = [
     "ignore::DeprecationWarning:botocore.auth:425", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
 ]
 
+
+[tool.basedpyright]
+include = [
+    "src/**",
+    "tests/**",
+]
+typeCheckingMode = "recommended"
 
 [tool.mypy]
 plugins = [
