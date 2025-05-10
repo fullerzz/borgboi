@@ -1,3 +1,9 @@
+## v1.4.0 (2025-05-10)
+
+### Feat
+
+- New Command to Restore BorgBoi Repo from S3 (#86)
+
 ## v1.3.0 (2025-05-04)
 
 ### Feat
