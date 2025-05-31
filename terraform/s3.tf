@@ -82,3 +82,16 @@ resource "aws_s3_bucket_intelligent_tiering_configuration" "borgboi" {
     days        = 180
   }
 }
+
+resource "aws_s3_bucket_lifecycle_configuration" "borgboi-logs" {
+  bucket = aws_s3_bucket.borgboi-logs.id
+
+  rule {
+    id = "TransitionStorageClass"
+    transition {
+      days          = 30
+      storage_class = "GLACIER"
+    }
+    status = "Enabled"
+  }
+}
