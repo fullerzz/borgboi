@@ -135,9 +135,12 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
     """
     repo = lookup_repo(repo_path, repo_name)
     archives = borg.list_archives(repo.path)
+    archives.sort(key=lambda x: x.name, reverse=True)
     console.rule(f"[bold]Archives for {repo.name}[/]")
     for archive in archives:
-        console.print(f"↳ [bold {COLOR_HEX.sky}]{archive.name}[/]\t[{COLOR_HEX.mauve}]ID={archive.id}[/]")
+        console.print(
+            f"↳ [bold {COLOR_HEX.sky}]{archive.name}[/]\t[bold {COLOR_HEX.green}]Age: {utils.calculate_archive_age(archive.name)}[/]\t[{COLOR_HEX.mauve}]ID: {archive.id}[/]"
+        )
     console.rule()
 
 
