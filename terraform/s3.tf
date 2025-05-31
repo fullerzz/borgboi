@@ -54,6 +54,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "borgboi" {
   }
 }
 
+resource "aws_s3_bucket_server_side_encryption_configuration" "borgboi-logs" {
+  bucket = aws_s3_bucket.borgboi-logs.id
+  rule {
+    bucket_key_enabled = true
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "aws:kms"
+    }
+  }
+}
+
 resource "aws_s3_bucket_public_access_block" "borgboi" {
   bucket = aws_s3_bucket.borgboi.id
 
