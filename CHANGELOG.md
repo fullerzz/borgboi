@@ -1,3 +1,9 @@
+## v1.5.1 (2025-05-31)
+
+### Fix
+
+- **cli**: update type of --repo-name option from click.Path to str
+
 ## v1.5.0 (2025-05-31)
 
 ### Feat
