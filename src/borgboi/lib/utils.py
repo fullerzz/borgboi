@@ -1,4 +1,4 @@
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -31,10 +31,8 @@ def calculate_archive_age(archive_time: str) -> str:
     Returns:
         str: A human-readable string representing the age of the archive (i.e. "2d 3h 15m").
     """
-    from datetime import datetime, timezone
-
     # Parse the custom format string and make it timezone-aware (UTC)
-    archive_datetime = datetime.strptime(archive_time, "%Y-%m-%d_%H:%M:%S").replace(tzinfo=timezone.utc)
+    archive_datetime = datetime.strptime(archive_time, "%Y-%m-%d_%H:%M:%S").replace(tzinfo=UTC)
     now = datetime.now(tz=UTC)
     age = now - archive_datetime
     days = age.days
