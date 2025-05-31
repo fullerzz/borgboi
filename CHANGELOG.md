@@ -1,3 +1,13 @@
+## v1.5.0 (2025-05-31)
+
+### Feat
+
+- **s3**: default to using INTELLIGENT_TIERING for S3 storage class
+
+### Fix
+
+- **restore-repo**: add --force flag to restore even if repo is detected locally
+
 ## v1.4.0 (2025-05-10)
 
 ### Feat
