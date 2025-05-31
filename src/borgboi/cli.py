@@ -39,7 +39,7 @@ def list_repos() -> None:
 
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
-@click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
+@click.option("--repo-name", "-n", required=False, type=str)
 def list_archives(repo_path: str | None, repo_name: str | None) -> None:
     """List the archives in a Borg repository."""
     orchestrator.list_archives(repo_path, repo_name)
@@ -47,7 +47,7 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
 
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
-@click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
+@click.option("--repo-name", "-n", required=False, type=str)
 @click.option("--archive-name", "-a", required=True, type=str)
 @click.option("--output", "-o", required=False, type=str, default="stdout", help="Output file path or stdout")
 def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_name: str, output: str) -> None:
@@ -57,7 +57,7 @@ def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_
 
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
-@click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
+@click.option("--repo-name", "-n", required=False, type=str)
 def get_repo(repo_path: str | None, repo_name: str | None) -> None:
     """Get a Borg repository by name or path."""
     repo = orchestrator.lookup_repo(repo_path, repo_name)
@@ -82,7 +82,7 @@ def export_repo_key(repo_path: str) -> None:
 
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
-@click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
+@click.option("--repo-name", "-n", required=False, type=str)
 @click.option("--pp", is_flag=True, show_default=True, default=True, help="Pretty print the repo info")
 def repo_info(repo_path: str | None, repo_name: str | None, pp: bool) -> None:
     """List a local Borg repository's info."""
@@ -111,7 +111,7 @@ def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
 
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
-@click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
+@click.option("--repo-name", "-n", required=False, type=str)
 @click.option("--dry-run", is_flag=True, show_default=True, default=False, help="Perform a dry run of the deletion")
 def delete_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> None:
     """Delete a Borg repository."""
@@ -148,7 +148,7 @@ def modify_excludes(repo_name: str, delete_line_num: int) -> None:
 
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
-@click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
+@click.option("--repo-name", "-n", required=False, type=str)
 @click.option("--dry-run", is_flag=True, show_default=True, default=False, help="Perform a dry run of the restore")
 @click.option("--force", is_flag=True, show_default=True, default=False, help="Force restore even if repo exists")
 def restore_repo(repo_path: str | None, repo_name: str | None, dry_run: bool, force: bool) -> None:
