@@ -25,6 +25,8 @@ def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
         "sync",
         sync_source,
         s3_destination_uri,
+        "--storage-class",
+        "INTELLIGENT_TIERING",
     ]
 
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
