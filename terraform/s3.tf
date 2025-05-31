@@ -82,3 +82,13 @@ resource "aws_s3_bucket_intelligent_tiering_configuration" "borgboi" {
     days        = 180
   }
 }
+
+resource "aws_s3_bucket_intelligent_tiering_configuration" "borgboi-logs" {
+  bucket = aws_s3_bucket.borgboi-logs.id
+  name   = "EntireBucket"
+
+  tiering {
+    access_tier = "ARCHIVE_ACCESS"
+    days        = 90
+  }
+}
