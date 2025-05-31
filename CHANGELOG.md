@@ -1,3 +1,9 @@
+## v1.6.0 (2025-05-31)
+
+### Feat
+
+- **tofu**: enable bucket key encryption for s3 logs bucket
+
 ## v1.5.1 (2025-05-31)
 
 ### Fix
