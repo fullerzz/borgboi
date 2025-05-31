@@ -83,15 +83,12 @@ resource "aws_s3_bucket_intelligent_tiering_configuration" "borgboi" {
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "borgboi-logs" {
+resource "aws_s3_bucket_intelligent_tiering_configuration" "borgboi-logs" {
   bucket = aws_s3_bucket.borgboi-logs.id
+  name   = "EntireBucket"
 
-  rule {
-    id = "TransitionStorageClass"
-    transition {
-      days          = 30
-      storage_class = "GLACIER"
-    }
-    status = "Enabled"
+  tiering {
+    access_tier = "ARCHIVE_ACCESS"
+    days        = 90
   }
 }
