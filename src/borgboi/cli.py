@@ -49,9 +49,10 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
 @click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
 @click.option("--archive-name", "-a", required=True, type=str)
-def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_name: str) -> None:
+@click.option("--output", "-o", required=False, type=str, default="stdout", help="Output file path or stdout")
+def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_name: str, output: str) -> None:
     """List the contents of a Borg archive."""
-    orchestrator.list_archive_contents(repo_path, repo_name, archive_name)
+    orchestrator.list_archive_contents(repo_path, repo_name, archive_name, output)
 
 
 @cli.command()
