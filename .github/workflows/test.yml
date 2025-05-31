@@ -21,7 +21,7 @@ jobs:
     env:
       # Configure a constant location for the uv cache
         UV_CACHE_DIR: /tmp/.uv-cache
-        UV_VERSION: 0.6.5
+        UV_VERSION: 0.7.9
         UV_PYTHON_PREFERENCE: only-system
         UV_PYTHON_DOWNLOADS: never
         FORCE_COLOR: 1
