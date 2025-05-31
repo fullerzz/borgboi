@@ -48,6 +48,15 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
 @cli.command()
 @click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
 @click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
+@click.option("--archive-name", "-a", required=True, type=str)
+def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_name: str) -> None:
+    """List the contents of a Borg archive."""
+    orchestrator.list_archive_contents(repo_path, repo_name, archive_name)
+
+
+@cli.command()
+@click.option("--repo-path", "-r", required=False, type=click.Path(exists=False))
+@click.option("--repo-name", "-n", required=False, type=click.Path(exists=False))
 def get_repo(repo_path: str | None, repo_name: str | None) -> None:
     """Get a Borg repository by name or path."""
     repo = orchestrator.lookup_repo(repo_path, repo_name)

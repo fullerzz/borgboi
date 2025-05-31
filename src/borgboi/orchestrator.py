@@ -140,6 +140,20 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
     console.rule()
 
 
+def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_name: str) -> None:
+    """
+    Lists the contents of a specific Borg archive.
+    """
+    repo = lookup_repo(repo_path, repo_name)
+    if not validator.repo_is_local(repo):
+        raise ValueError("Repository must be local to list archive contents")
+    contents = borg.list_archive_contents(repo.path, archive_name)
+    console.rule(f"[bold]Contents of {archive_name}[/]")
+    for item in contents:
+        console.print(f"↳ [bold {COLOR_HEX.sky}]{item}[/]")
+    console.rule()
+
+
 def perform_daily_backup(repo_path: str) -> None:
     repo = lookup_repo(repo_path, None)
     if validator.exclude_list_created(repo.name) is False:

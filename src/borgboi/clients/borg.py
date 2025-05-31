@@ -405,3 +405,28 @@ def list_archives(repo_path: str) -> list[RepoArchive]:
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
     list_archives_output = ListArchivesOutput.model_validate_json(result.stdout)
     return list_archives_output.archives
+
+
+class ArchivedFile(BaseModel):
+    type: str
+    mode: str
+    user: str
+    group: str
+    uid: int
+    gid: int
+    path: str
+    healthy: bool
+    source: str
+    size: int
+    mtime: datetime
+
+
+def list_archive_contents(repo_path: str, archive_name: str, json_log: bool = True) -> list[ArchivedFile]:
+    """List the contents of a Borg archive."""
+    cmd = ["borg", "list", f"{repo_path}::{archive_name}", "--json-lines"]
+    if json_log is False:
+        cmd.remove("--json-lines")
+    result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
+    if result.returncode != 0 and result.returncode != 1:
+        raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
+    return [ArchivedFile.model_validate_json(item) for item in result.stdout.splitlines() if item]
