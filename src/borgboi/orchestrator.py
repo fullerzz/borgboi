@@ -6,6 +6,7 @@ from platform import system
 
 from borgboi import rich_utils, validator
 from borgboi.clients import borg, dynamodb, s3
+from borgboi.lib import utils
 from borgboi.lib.colors import COLOR_HEX
 from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
 from borgboi.rich_utils import console
@@ -148,9 +149,8 @@ def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_
     if not validator.repo_is_local(repo):
         raise ValueError("Repository must be local to list archive contents")
     contents = borg.list_archive_contents(repo.path, archive_name)
-    console.rule(f"[bold]Contents of {archive_name}[/]")
     for item in contents:
-        console.print(f"↳ [bold {COLOR_HEX.sky}]{item}[/]")
+        console.print(f"↳ [bold {COLOR_HEX.sky}]{utils.shorten_archive_path(item.path)}[/]")
     console.rule()
 
 
