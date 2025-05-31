@@ -1,3 +1,9 @@
+## v1.6.1 (2025-05-31)
+
+### Fix
+
+- **tofu**: Enable Intelligent Tiering on S3 Logs Bucket (#100)
+
 ## v1.6.0 (2025-05-31)
 
 ### Feat
