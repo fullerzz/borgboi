@@ -23,3 +23,5 @@ terraform/.terraform
 .dmypy.json
 .envrc
 exclude.txt
+output.txt
+*.txt

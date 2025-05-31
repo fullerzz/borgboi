@@ -144,7 +144,9 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
     console.rule()
 
 
-def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_name: str) -> None:
+def list_archive_contents(
+    repo_path: str | None, repo_name: str | None, archive_name: str, output_file: str = "stdout"
+) -> None:
     """
     Lists the contents of a specific Borg archive.
     """
@@ -152,9 +154,22 @@ def list_archive_contents(repo_path: str | None, repo_name: str | None, archive_
     if not validator.repo_is_local(repo):
         raise ValueError("Repository must be local to list archive contents")
     contents = borg.list_archive_contents(repo.path, archive_name)
-    for item in contents:
-        console.print(f"↳ [bold {COLOR_HEX.sky}]{utils.shorten_archive_path(item.path)}[/]")
-    console.rule()
+
+    if output_file == "stdout":
+        output_lines = [f"↳ [bold {COLOR_HEX.sky}]{utils.shorten_archive_path(item.path)}[/]" for item in contents]
+    else:
+        output_lines = [f"{item.path}" for item in contents]  # Use original path for file output
+
+    if output_file == "stdout":
+        for line in output_lines:
+            console.print(line)
+        console.rule()
+    else:
+        output_path = Path(output_file)
+        with output_path.open("w") as f:
+            for line in output_lines:
+                _ = f.write(line + "\n")  # No prefix to remove
+        console.print(f"Archive contents written to [bold cyan]{output_path.as_posix()}[/]")
 
 
 def perform_daily_backup(repo_path: str) -> None:
