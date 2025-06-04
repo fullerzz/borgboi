@@ -23,6 +23,32 @@ def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, offli
     assert new_repo.name == "test-repo"
 
 
+def test_create_borg_repo_offline_metadata(tmp_path: Path, backup_target_dir: Path) -> None:
+    """
+    Test that creating a repo in offline mode stores metadata in the offline metadata directory.
+    """
+    from borgboi.clients.borg import BORGBOI_DIR_NAME
+    from borgboi.orchestrator import create_borg_repo
+
+    repo_storage_dir = tmp_path / "offline_repo"
+    repo_storage_dir.mkdir()
+    repo_name = "offline-test-repo"
+    offline = True
+
+    new_repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, offline=offline)
+    assert new_repo.path == repo_storage_dir.as_posix()
+    assert new_repo.backup_target == backup_target_dir.as_posix()
+    assert new_repo.name == repo_name
+
+    # Validate the offline metadata file is created
+    metadata_dir = Path(BORGBOI_DIR_NAME) / ".borgboi_metadata"
+    metadata_file = metadata_dir / f"{repo_name}.json"
+    assert metadata_file.exists(), f"Offline metadata file {metadata_file} was not created"
+    with metadata_file.open("r") as f:
+        borgboi_repo = BorgBoiRepo.model_validate_json(f.read())
+        assert borgboi_repo.name == repo_name
+
+
 @pytest.mark.usefixtures("create_dynamodb_table")
 @pytest.mark.parametrize(("repo_path", "repo_name"), [(None, "test-repo"), ("/path/to/repo", None)])
 def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: pytest.MonkeyPatch) -> None:

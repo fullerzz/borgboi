@@ -5,7 +5,7 @@ from pathlib import Path
 from platform import system
 
 from borgboi import rich_utils, validator
-from borgboi.clients import borg, dynamodb, s3
+from borgboi.clients import borg, dynamodb, offline_storage, s3
 from borgboi.lib import utils
 from borgboi.lib.colors import COLOR_HEX
 from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
@@ -63,6 +63,9 @@ def create_borg_repo(path: str, backup_path: str, name: str, offline: bool) -> B
     )
     if not offline:
         dynamodb.add_repo_to_table(borgboi_repo)
+    else:
+        offline_storage.store_borgboi_repo_metadata(borgboi_repo)
+
     return borgboi_repo
 
 
