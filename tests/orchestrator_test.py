@@ -65,7 +65,7 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
 
     monkeypatch.setattr(borgboi.clients.dynamodb, "get_repo_by_path", mock_get_repo_by_path)
     monkeypatch.setattr(borgboi.clients.dynamodb, "get_repo_by_name", mock_get_repo_by_name)
-    resp = lookup_repo(repo_path, repo_name)
+    resp = lookup_repo(repo_path, repo_name, False)
     if repo_path:
         # If repo_path is provided, the mocked function should return the repo path
         assert resp == repo_path
@@ -74,6 +74,9 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
         assert resp == repo_name
     else:
         raise AssertionError("Either get_repo_by_path or get_repo_by_name should have been called")
+
+
+# TODO: Implement test_lookup_repo_offline(...) to test the offline mode of lookup_repo
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
@@ -128,7 +131,7 @@ def test_delete_repo_no_exclusions_list(borg_repo_without_excludes: BorgBoiRepo)
     from borgboi.orchestrator import delete_borg_repo
 
     repo = borg_repo_without_excludes
-    delete_borg_repo(repo.path, repo.name, False)
+    delete_borg_repo(repo.path, repo.name, False, False)
     # This test passes if no exception is raised
 
 
@@ -137,7 +140,7 @@ def test_get_excludes_file(borg_repo: BorgBoiRepo) -> None:
     from borgboi.orchestrator import get_excludes_file
 
     repo_name = borg_repo.name
-    excludes_file = get_excludes_file(repo_name)
+    excludes_file = get_excludes_file(repo_name, False)
     assert excludes_file is not None
     assert excludes_file.exists() is True
 
@@ -148,7 +151,7 @@ def test_append_to_excludes_file(borg_repo: BorgBoiRepo) -> None:
 
     new_excludes_line = "foo/*"
 
-    excludes_file = get_excludes_file(borg_repo.name)
+    excludes_file = get_excludes_file(borg_repo.name, False)
     assert excludes_file.exists() is True
     with excludes_file.open("r") as f:
         excludes_content = f.readlines()
@@ -170,7 +173,7 @@ def test_append_to_excludes_file(borg_repo: BorgBoiRepo) -> None:
 def test_remove_from_excludes_file(borg_repo: BorgBoiRepo) -> None:
     from borgboi.orchestrator import get_excludes_file, remove_from_excludes_file
 
-    excludes_file = get_excludes_file(borg_repo.name)
+    excludes_file = get_excludes_file(borg_repo.name, False)
     assert excludes_file.exists() is True
     # Get line count from the original excludes file
     with excludes_file.open("r") as f:
