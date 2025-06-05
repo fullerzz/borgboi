@@ -42,3 +42,21 @@ def store_borgboi_repo_metadata(repo: BorgBoiRepo) -> None:
     with metadata_file.open("w") as f:
         _ = f.write(repo.model_dump_json(indent=2))
     return None
+
+
+def get_repo(repo_name: str | None = None) -> BorgBoiRepo:
+    """
+    Retrieve a BorgBoi repository by name from offline storage.
+
+    Args:
+        repo_name (str | None): The name of the BorgBoi repository.
+
+    Returns:
+        BorgBoiRepo | None: The BorgBoi repository object if found, otherwise None.
+    """
+    if not repo_name:
+        raise ValueError("repo_name must be provided to retrieve a BorgBoi repository in offline mode")
+    metadata: BorgBoiRepo | None = get_repo_metadata(repo_name)
+    if metadata is None:
+        raise ValueError(f"Repository '{repo_name}' not found in offline storage")
+    return metadata
