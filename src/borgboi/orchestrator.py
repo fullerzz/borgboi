@@ -86,8 +86,7 @@ def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool
         if not offline:
             dynamodb.delete_repo(repo)
         else:
-            # Placeholder for offline deletion of repo metadata
-            pass
+            offline_storage.delete_repo_metadata(repo.name)
         delete_excludes_list(repo.name)
 
 

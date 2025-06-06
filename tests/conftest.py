@@ -54,7 +54,7 @@ def dynamodb(aws_credentials: None) -> Generator[DynamoDBClient]:
 
 
 @pytest.fixture
-def mocked_aws(aws_credentials: None) -> Generator[None, Any, None]:
+def mocked_aws(aws_credentials: None) -> Generator[None, Any]:
     """
     Mock all AWS interactions
     Requires you to create your own boto3 clients

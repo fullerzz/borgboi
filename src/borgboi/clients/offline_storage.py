@@ -1,13 +1,14 @@
 from pathlib import Path
 
 from borgboi.clients.borg import BORGBOI_DIR_NAME
+from borgboi.clients.utils import trash
 from borgboi.models import BorgBoiRepo
 
 METADATA_DIR_NAME = ".borgboi_metadata"
 METADATA_DIR: Path = Path.home() / Path(BORGBOI_DIR_NAME) / METADATA_DIR_NAME
 
 
-def get_repo_metadata(repo_name: str) -> BorgBoiRepo | None:
+def _get_repo_metadata(repo_name: str) -> BorgBoiRepo | None:
     """
     Retrieve BorgBoi repository metadata from offline storage.
 
@@ -27,6 +28,24 @@ def get_repo_metadata(repo_name: str) -> BorgBoiRepo | None:
     return None
 
 
+def get_repo(repo_name: str | None = None) -> BorgBoiRepo:
+    """
+    Retrieve a BorgBoi repository by name from offline storage.
+
+    Args:
+        repo_name (str | None): The name of the BorgBoi repository.
+
+    Returns:
+        BorgBoiRepo | None: The BorgBoi repository object if found, otherwise None.
+    """
+    if not repo_name:
+        raise ValueError("repo_name must be provided to retrieve a BorgBoi repository in offline mode")
+    metadata: BorgBoiRepo | None = _get_repo_metadata(repo_name)
+    if metadata is None:
+        raise ValueError(f"Repository '{repo_name}' not found in offline storage")
+    return metadata
+
+
 def store_borgboi_repo_metadata(repo: BorgBoiRepo) -> None:
     """
     Store BorgBoi repository metadata in offline storage.
@@ -44,19 +63,14 @@ def store_borgboi_repo_metadata(repo: BorgBoiRepo) -> None:
     return None
 
 
-def get_repo(repo_name: str | None = None) -> BorgBoiRepo:
+def delete_repo_metadata(repo_name: str) -> None:
     """
-    Retrieve a BorgBoi repository by name from offline storage.
-
-    Args:
-        repo_name (str | None): The name of the BorgBoi repository.
-
-    Returns:
-        BorgBoiRepo | None: The BorgBoi repository object if found, otherwise None.
+    Delete BorgBoi repository metadata from offline storage.
     """
-    if not repo_name:
-        raise ValueError("repo_name must be provided to retrieve a BorgBoi repository in offline mode")
-    metadata: BorgBoiRepo | None = get_repo_metadata(repo_name)
-    if metadata is None:
-        raise ValueError(f"Repository '{repo_name}' not found in offline storage")
-    return metadata
+    metadata_file = METADATA_DIR / f"{repo_name}.json"
+    try:
+        trash.trash_file(metadata_file)
+    except trash.TrashError as e:
+        # TODO: Potentially allow force deletion without trashing
+        # For now, we will raise an error if trashing fails
+        raise RuntimeError(f"Failed to delete {repo_name} metadata") from e
