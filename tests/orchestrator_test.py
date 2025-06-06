@@ -27,7 +27,7 @@ def test_create_borg_repo_offline_metadata(tmp_path: Path, backup_target_dir: Pa
     """
     Test that creating a repo in offline mode stores metadata in the offline metadata directory.
     """
-    from borgboi.clients.borg import BORGBOI_DIR_NAME
+    from borgboi.clients.offline_storage import METADATA_DIR
     from borgboi.orchestrator import create_borg_repo
 
     repo_storage_dir = tmp_path / "offline_repo"
@@ -41,7 +41,7 @@ def test_create_borg_repo_offline_metadata(tmp_path: Path, backup_target_dir: Pa
     assert new_repo.name == repo_name
 
     # Validate the offline metadata file is created
-    metadata_dir = Path(BORGBOI_DIR_NAME) / ".borgboi_metadata"
+    metadata_dir = METADATA_DIR
     metadata_file = metadata_dir / f"{repo_name}.json"
     assert metadata_file.exists(), f"Offline metadata file {metadata_file} was not created"
     with metadata_file.open("r") as f:
