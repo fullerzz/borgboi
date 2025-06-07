@@ -50,7 +50,7 @@ def test_trash_file_nonexistent(tmp_trash: Path, monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(trash, "TRASH_PATH", tmp_trash)
     trash.get_trash.cache_clear()
     file = tmp_trash / "doesnotexist.txt"
-    with pytest.raises(trash.TrashError):
+    with pytest.raises(FileNotFoundError):
         trash.trash_file(file)
 
 
