@@ -1,4 +1,5 @@
 import os
+import warnings
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,21 @@ from borgboi.models import BorgBoiRepo
 from tests.orchestrator_test import EXCLUDES_SRC
 
 DYNAMO_TABLE_NAME = "borg-repos-test"
+
+
+def _cleanup_borg_security_files(repo_id: str, security_dir: str) -> None:
+    """Clean up borg security files for a test repository."""
+    try:
+        # Clean up files in the security directory that match the repo id
+        security_path = Path(security_dir)
+        if security_path.exists():
+            # Look for files that contain the repo id
+            for file_path in security_path.iterdir():
+                if file_path.is_file() and repo_id in file_path.parts:
+                    file_path.unlink(missing_ok=True)
+            security_path.rmdir()
+    except Exception:
+        warnings.warn(f"Failed to cleanup borg security files for repo {repo_id} in {security_dir}", stacklevel=2)
 
 
 @pytest.fixture(autouse=True)
@@ -116,16 +132,23 @@ def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_t
     exclusion_list = create_excludes_list(repo_name, EXCLUDES_SRC)
     yield repo
     exclusion_list.unlink(missing_ok=True)
+    # Clean up borg security files
+    if repo.metadata and repo.metadata.repository and repo.metadata.repository.id:
+        _cleanup_borg_security_files(repo.metadata.repository.id, repo.metadata.security_dir)
 
 
 @pytest.fixture
 def borg_repo_without_excludes(
     repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None
-) -> BorgBoiRepo:
+) -> Generator[BorgBoiRepo]:
     """
     Provides a BorgRepo without an excludes list already created.
     """
     from borgboi.orchestrator import create_borg_repo
 
     repo_name = uuid4().hex[0:5]
-    return create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, False)
+    repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, False)
+    yield repo
+    # Clean up borg security files
+    if repo.metadata and repo.metadata.repository and repo.metadata.repository.id:
+        _cleanup_borg_security_files(repo.metadata.repository.id, repo.metadata.security_dir)
