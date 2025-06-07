@@ -11,13 +11,42 @@ EXCLUDES_SRC = "tests/data/excludes.txt"
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
-def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path) -> None:
+@pytest.mark.parametrize("offline_mode", [True, False])
+def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, offline_mode: bool) -> None:
     from borgboi.orchestrator import create_borg_repo
 
-    new_repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "test-repo")
+    new_repo = create_borg_repo(
+        repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "test-repo", offline=offline_mode
+    )
     assert new_repo.path == repo_storage_dir.as_posix()
     assert new_repo.backup_target == backup_target_dir.as_posix()
     assert new_repo.name == "test-repo"
+
+
+def test_create_borg_repo_offline_metadata(tmp_path: Path, backup_target_dir: Path) -> None:
+    """
+    Test that creating a repo in offline mode stores metadata in the offline metadata directory.
+    """
+    from borgboi.clients.offline_storage import METADATA_DIR
+    from borgboi.orchestrator import create_borg_repo
+
+    repo_storage_dir = tmp_path / "offline_repo"
+    repo_storage_dir.mkdir()
+    repo_name = "offline-test-repo"
+    offline = True
+
+    new_repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, offline=offline)
+    assert new_repo.path == repo_storage_dir.as_posix()
+    assert new_repo.backup_target == backup_target_dir.as_posix()
+    assert new_repo.name == repo_name
+
+    # Validate the offline metadata file is created
+    metadata_dir = METADATA_DIR
+    metadata_file = metadata_dir / f"{repo_name}.json"
+    assert metadata_file.exists(), f"Offline metadata file {metadata_file} was not created"
+    with metadata_file.open("r") as f:
+        borgboi_repo = BorgBoiRepo.model_validate_json(f.read())
+        assert borgboi_repo.name == repo_name
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
@@ -36,7 +65,7 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
 
     monkeypatch.setattr(borgboi.clients.dynamodb, "get_repo_by_path", mock_get_repo_by_path)
     monkeypatch.setattr(borgboi.clients.dynamodb, "get_repo_by_name", mock_get_repo_by_name)
-    resp = lookup_repo(repo_path, repo_name)
+    resp = lookup_repo(repo_path, repo_name, False)
     if repo_path:
         # If repo_path is provided, the mocked function should return the repo path
         assert resp == repo_path
@@ -45,6 +74,9 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
         assert resp == repo_name
     else:
         raise AssertionError("Either get_repo_by_path or get_repo_by_name should have been called")
+
+
+# TODO: Implement test_lookup_repo_offline(...) to test the offline mode of lookup_repo
 
 
 @pytest.mark.usefixtures("create_dynamodb_table")
@@ -99,7 +131,7 @@ def test_delete_repo_no_exclusions_list(borg_repo_without_excludes: BorgBoiRepo)
     from borgboi.orchestrator import delete_borg_repo
 
     repo = borg_repo_without_excludes
-    delete_borg_repo(repo.path, repo.name, False)
+    delete_borg_repo(repo.path, repo.name, False, False)
     # This test passes if no exception is raised
 
 
@@ -108,7 +140,7 @@ def test_get_excludes_file(borg_repo: BorgBoiRepo) -> None:
     from borgboi.orchestrator import get_excludes_file
 
     repo_name = borg_repo.name
-    excludes_file = get_excludes_file(repo_name)
+    excludes_file = get_excludes_file(repo_name, False)
     assert excludes_file is not None
     assert excludes_file.exists() is True
 
@@ -119,7 +151,7 @@ def test_append_to_excludes_file(borg_repo: BorgBoiRepo) -> None:
 
     new_excludes_line = "foo/*"
 
-    excludes_file = get_excludes_file(borg_repo.name)
+    excludes_file = get_excludes_file(borg_repo.name, False)
     assert excludes_file.exists() is True
     with excludes_file.open("r") as f:
         excludes_content = f.readlines()
@@ -141,7 +173,7 @@ def test_append_to_excludes_file(borg_repo: BorgBoiRepo) -> None:
 def test_remove_from_excludes_file(borg_repo: BorgBoiRepo) -> None:
     from borgboi.orchestrator import get_excludes_file, remove_from_excludes_file
 
-    excludes_file = get_excludes_file(borg_repo.name)
+    excludes_file = get_excludes_file(borg_repo.name, False)
     assert excludes_file.exists() is True
     # Get line count from the original excludes file
     with excludes_file.open("r") as f:

@@ -5,7 +5,7 @@ from pathlib import Path
 from platform import system
 
 from borgboi import rich_utils, validator
-from borgboi.clients import borg, dynamodb, s3
+from borgboi.clients import borg, dynamodb, offline_storage, s3
 from borgboi.lib import utils
 from borgboi.lib.colors import COLOR_HEX
 from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
@@ -38,7 +38,7 @@ def create_excludes_list(repo_name: str, excludes_source_file: str) -> Path:
     return dest_file
 
 
-def create_borg_repo(path: str, backup_path: str, name: str) -> BorgBoiRepo:
+def create_borg_repo(path: str, backup_path: str, name: str, offline: bool) -> BorgBoiRepo:
     if os.getenv("BORG_NEW_PASSPHRASE") is None:
         raise ValueError("Environment variable BORG_NEW_PASSPHRASE must be set")
     repo_path = Path(path)
@@ -61,25 +61,32 @@ def create_borg_repo(path: str, backup_path: str, name: str) -> BorgBoiRepo:
         os_platform=system(),
         metadata=repo_info,
     )
-    dynamodb.add_repo_to_table(borgboi_repo)
+    if not offline:
+        dynamodb.add_repo_to_table(borgboi_repo)
+    else:
+        offline_storage.store_borgboi_repo_metadata(borgboi_repo)
+
     return borgboi_repo
 
 
-def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool) -> None:
+def delete_borg_repo(repo_path: str | None, repo_name: str | None, dry_run: bool, offline: bool) -> None:
     """
     Delete a Borg repository.
 
     Raises:
         ValueError: Repository must be local to delete
     """
-    repo = lookup_repo(repo_path, repo_name)
+    repo = lookup_repo(repo_path, repo_name, offline)
     if not validator.repo_is_local(repo):
         raise ValueError("Repository must be local to delete")
     for log_msg in borg.delete(repo.path, repo.name, dry_run):
         msg = validator.parse_log(log_msg)
         console.print(msg)
     if not dry_run:
-        dynamodb.delete_repo(repo)
+        if not offline:
+            dynamodb.delete_repo(repo)
+        else:
+            offline_storage.delete_repo_metadata(repo.name)
         delete_excludes_list(repo.name)
 
 
@@ -93,8 +100,10 @@ def delete_excludes_list(repo_name: str) -> None:
         console.print(f"Deleted exclude list for [bold cyan]{repo_name}[/]")
 
 
-def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgBoiRepo:
-    if repo_path is not None:
+def lookup_repo(repo_path: str | None, repo_name: str | None, offline: bool) -> BorgBoiRepo:
+    if offline:
+        return offline_storage.get_repo(repo_name)
+    elif repo_path is not None:
         return dynamodb.get_repo_by_path(repo_path)
     elif repo_name is not None:
         return dynamodb.get_repo_by_name(repo_name)
@@ -102,8 +111,8 @@ def lookup_repo(repo_path: str | None, repo_name: str | None) -> BorgBoiRepo:
         raise ValueError("Either repo_name or repo_path must be provided")
 
 
-def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bool) -> None:
-    repo = lookup_repo(repo_path, repo_name)
+def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bool, offline: bool) -> None:
+    repo = lookup_repo(repo_path, repo_name, offline)
     if validator.repo_is_local(repo) is False:
         raise ValueError("Repository must be local to view info")
     if pretty_print is False:
@@ -121,19 +130,24 @@ def get_repo_info(repo_path: str | None, repo_name: str | None, pretty_print: bo
             repo_location=repo.metadata.repository.location,
             last_modified=repo.metadata.repository.last_modified,
         )
-    dynamodb.update_repo(repo)
+    if not offline:
+        dynamodb.update_repo(repo)
 
 
-def list_repos() -> None:
+def list_repos(offline: bool) -> None:
+    if offline:
+        # Placeholder for listing offline repos
+        console.print("Listing repositories in offline mode is not yet implemented.")
+        return
     repos = dynamodb.get_all_repos()
     rich_utils.output_repos_table(repos)
 
 
-def list_archives(repo_path: str | None, repo_name: str | None) -> None:
+def list_archives(repo_path: str | None, repo_name: str | None, offline: bool) -> None:
     """
     Retrieves Borg repo and lists all archives present within it.
     """
-    repo = lookup_repo(repo_path, repo_name)
+    repo = lookup_repo(repo_path, repo_name, offline)
     archives = borg.list_archives(repo.path)
     archives.sort(key=lambda x: x.name, reverse=True)
     console.rule(f"[bold]Archives for {repo.name}[/]")
@@ -145,12 +159,12 @@ def list_archives(repo_path: str | None, repo_name: str | None) -> None:
 
 
 def list_archive_contents(
-    repo_path: str | None, repo_name: str | None, archive_name: str, output_file: str = "stdout"
+    repo_path: str | None, repo_name: str | None, archive_name: str, output_file: str = "stdout", offline: bool = False
 ) -> None:
     """
     Lists the contents of a specific Borg archive.
     """
-    repo = lookup_repo(repo_path, repo_name)
+    repo = lookup_repo(repo_path, repo_name, offline)
     if not validator.repo_is_local(repo):
         raise ValueError("Repository must be local to list archive contents")
     contents = borg.list_archive_contents(repo.path, archive_name)
@@ -172,8 +186,8 @@ def list_archive_contents(
         console.print(f"Archive contents written to [bold cyan]{output_path.as_posix()}[/]")
 
 
-def perform_daily_backup(repo_path: str) -> None:
-    repo = lookup_repo(repo_path, None)
+def perform_daily_backup(repo_path: str, offline: bool) -> None:
+    repo = lookup_repo(repo_path, None, offline)
     if validator.exclude_list_created(repo.name) is False:
         raise ValueError("Exclude list must be created before performing a backup")
     # create archive
@@ -201,46 +215,54 @@ def perform_daily_backup(repo_path: str) -> None:
         ruler_color=COLOR_HEX.sapphire,
     )
 
-    # sync with s3 and update dynamodb
-    rich_utils.render_cmd_output_lines(
-        "Syncing repo with S3 bucket",
-        "S3 sync completed successfully",
-        s3.sync_with_s3(repo.path, repo.name),
-        spinner="arrow",
-        ruler_color=COLOR_HEX.green,
-    )
+    if not offline:
+        # sync with s3 and update dynamodb
+        rich_utils.render_cmd_output_lines(
+            "Syncing repo with S3 bucket",
+            "S3 sync completed successfully",
+            s3.sync_with_s3(repo.path, repo.name),
+            spinner="arrow",
+            ruler_color=COLOR_HEX.green,
+        )
 
-    # Refresh metadata after backup and pruning complete
-    repo.metadata = borg.info(repo.path)
-    dynamodb.update_repo(repo)
+        # Refresh metadata after backup and pruning complete
+        repo.metadata = borg.info(repo.path)
+        dynamodb.update_repo(repo)
+    else:
+        # In offline mode, just update local metadata
+        repo.metadata = borg.info(repo.path)
+        offline_storage.store_borgboi_repo_metadata(repo)
 
 
-def restore_repo(repo: BorgBoiRepo, dry_run: bool, force: bool = False) -> None:
+def restore_repo(repo: BorgBoiRepo, dry_run: bool, force: bool = False, offline: bool = False) -> None:
     """
     Restore a Borg repository from S3.
     """
-    if not force and validator.repo_is_local(repo):
-        raise ValueError("Repository already exists locally")
+    if not offline:
+        if not force and validator.repo_is_local(repo):
+            raise ValueError("Repository already exists locally")
 
-    status = "Performing dry run of S3 sync..." if dry_run else "Restoring repo from S3..."
-    rich_utils.render_cmd_output_lines(
-        status,
-        "S3 sync completed successfully",
-        s3.restore_from_s3(repo.safe_path, repo.name, dry_run),
-        spinner="arrow",
-        ruler_color=COLOR_HEX.blue,
-    )
+        status = "Performing dry run of S3 sync..." if dry_run else "Restoring repo from S3..."
+        rich_utils.render_cmd_output_lines(
+            status,
+            "S3 sync completed successfully",
+            s3.restore_from_s3(repo.safe_path, repo.name, dry_run),
+            spinner="arrow",
+            ruler_color=COLOR_HEX.blue,
+        )
+    else:
+        console.print("Restoring a repository from S3 is not supported in offline mode.")
 
 
-def restore_archive(repo_path: str, archive_name: str) -> None:
-    repo = lookup_repo(repo_path, None)
+def restore_archive(repo_path: str, archive_name: str, offline: bool) -> None:
+    repo = lookup_repo(repo_path, None, offline)
     for log_msg in borg.extract(repo.path, archive_name):
         msg = validator.parse_log(log=log_msg)
         console.print(msg)
 
 
-def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
-    repo = lookup_repo(repo_path, None)
+def delete_archive(repo_path: str, archive_name: str, dry_run: bool, offline: bool) -> None:
+    repo = lookup_repo(repo_path, None, offline)
     if not validator.repo_is_local(repo):
         raise ValueError("Repository must be local to delete")
     if dry_run is False:
@@ -262,15 +284,22 @@ def delete_archive(repo_path: str, archive_name: str, dry_run: bool) -> None:
             spinner="dots",
             ruler_color=COLOR_HEX.mauve,
         )
+        if not offline:
+            # Refresh metadata after delete and compact complete
+            repo.metadata = borg.info(repo.path)
+            dynamodb.update_repo(repo)
+        else:
+            repo.metadata = borg.info(repo.path)
+            offline_storage.store_borgboi_repo_metadata(repo)
 
 
-def extract_repo_key(repo_path: str) -> Path:
-    repo = lookup_repo(repo_path, None)
+def extract_repo_key(repo_path: str, offline: bool) -> Path:
+    repo = lookup_repo(repo_path, None, offline)
     key_path = borg.export_repo_key(repo.path, repo.name)
     return key_path
 
 
-def get_excludes_file(repo_name: str) -> Path:
+def get_excludes_file(repo_name: str, offline: bool) -> Path:
     """
     Get the Path of the excludes file for a repository.
 
@@ -285,7 +314,7 @@ def get_excludes_file(repo_name: str) -> Path:
         ValueError: If the repository is not local
     """
     # Validate repository is local
-    repo = lookup_repo(None, repo_name)
+    repo = lookup_repo(None, repo_name, offline)
     if validator.repo_is_local(repo) is False:
         raise ValueError("Repository must be local to view excludes content")
 

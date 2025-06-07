@@ -16,18 +16,33 @@ def test_help() -> None:
     assert result.stdout.startswith("Usage: cli [OPTIONS] COMMAND [ARGS]")
 
 
+@pytest.mark.parametrize("offline_mode", [True, False])
 def test_create_repo(
-    monkeypatch: pytest.MonkeyPatch, repo_storage_dir: Path, backup_target_dir: Path, borg_repo: BorgBoiRepo
+    monkeypatch: pytest.MonkeyPatch,
+    repo_storage_dir: Path,
+    backup_target_dir: Path,
+    borg_repo: BorgBoiRepo,
+    offline_mode: bool,
 ) -> None:
     def mock_create_borg_repo(*args: Any, **kwargs: Any) -> BorgBoiRepo:
         return borg_repo
 
     monkeypatch.setattr(orchestrator, "create_borg_repo", mock_create_borg_repo)
 
+    cmd_args = [
+        "create-repo",
+        "--repo-path",
+        str(repo_storage_dir),
+        "--backup-target",
+        str(backup_target_dir),
+    ]
+    if offline_mode:
+        cmd_args.append("--offline")
+
     runner = CliRunner()
     result = runner.invoke(
         cli,
-        ["create-repo", "--repo-path", str(repo_storage_dir), "--backup-target", str(backup_target_dir)],
+        cmd_args,
         input="BORG_PASSPHRASE\nTestRepo\n",
     )
     assert result.exit_code == 0

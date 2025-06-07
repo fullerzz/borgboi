@@ -54,7 +54,7 @@ def dynamodb(aws_credentials: None) -> Generator[DynamoDBClient]:
 
 
 @pytest.fixture
-def mocked_aws(aws_credentials: None) -> Generator[None, Any, None]:
+def mocked_aws(aws_credentials: None) -> Generator[None, Any]:
     """
     Mock all AWS interactions
     Requires you to create your own boto3 clients
@@ -112,7 +112,7 @@ def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_t
     from borgboi.orchestrator import create_borg_repo, create_excludes_list
 
     repo_name = uuid4().hex[0:5]
-    repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name)
+    repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, offline=False)
     exclusion_list = create_excludes_list(repo_name, EXCLUDES_SRC)
     yield repo
     exclusion_list.unlink(missing_ok=True)
@@ -128,4 +128,4 @@ def borg_repo_without_excludes(
     from borgboi.orchestrator import create_borg_repo
 
     repo_name = uuid4().hex[0:5]
-    return create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name)
+    return create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, False)
