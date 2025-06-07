@@ -31,7 +31,7 @@ class BorgBoiRepo(BaseModel):
             raise ValueError(f"os_platform must be either 'Linux' or 'Darwin'. '{v}' is not supported.")
         return v
 
-    @computed_field  # mypy: ignore[prop-decorator]
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def safe_path(self) -> str:
         """
