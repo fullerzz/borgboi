@@ -1,3 +1,9 @@
+## v1.8.0 (2025-06-25)
+
+### Feat
+
+- **terraform**: update AWS provider version to v6 (#108)
+
 ## v1.7.0 (2025-06-07)
 
 ### Feat
