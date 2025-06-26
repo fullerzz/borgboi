@@ -1,5 +1,8 @@
 # BorgBoi Commands
 
+!!! info "Offline Mode"
+    All commands support an `--offline` flag (or `BORGBOI_OFFLINE` environment variable) that enables offline mode. In offline mode, BorgBoi stores repository metadata locally in `~/.borgboi/.borgboi_metadata/` instead of using AWS DynamoDB and S3 services.
+
 ## `create-repo`
 
 ```text
@@ -10,6 +13,7 @@ Usage: borgboi create-repo [OPTIONS]
 Options:
   -r, --repo-path PATH      [required]
   -b, --backup-target PATH  [required]
+  --offline                 Enable offline mode (no AWS services)
 
 ```
 
@@ -23,6 +27,7 @@ Usage: bb create-exclusions [OPTIONS]
 Options:
   -r, --repo-path PATH          [required]
   -x, --exclusions-source FILE  [required]
+  --offline                     Enable offline mode (no AWS services)
 
 ```
 
@@ -36,6 +41,7 @@ Usage: bb append-excludes [OPTIONS]
 Options:
   -n, --repo-name TEXT          Name of the repository  [required]
   -x, --exclusion-pattern TEXT  Exclusion pattern to add  [required]
+  --offline                     Enable offline mode (no AWS services)
 
 ```
 
@@ -49,6 +55,7 @@ Usage: bb modify-excludes [OPTIONS]
 Options:
   -n, --repo-name TEXT           Name of the repository  [required]
   -D, --delete-line-num INTEGER  Line number to delete  [required]
+  --offline                      Enable offline mode (no AWS services)
 
 ```
 
@@ -59,7 +66,13 @@ Usage: bb list-repos [OPTIONS]
 
   List all BorgBoi repositories.
 
+Options:
+  --offline                 Enable offline mode (no AWS services)
+
 ```
+
+!!! warning "Offline Mode Limitation"
+    The `list-repos` command is not yet implemented in offline mode. Use `get-repo` to access individual repositories by name or path in offline mode.
 
 ## `list-archives`
 
@@ -71,6 +84,23 @@ Usage: bb list-archives [OPTIONS]
 Options:
   -r, --repo-path PATH
   -n, --repo-name PATH
+  --offline                 Enable offline mode (no AWS services)
+
+```
+
+## `list-archive-contents`
+
+```text
+Usage: bb list-archive-contents [OPTIONS]
+
+  List the contents of a Borg archive.
+
+Options:
+  -r, --repo-path PATH
+  -n, --repo-name TEXT
+  -a, --archive-name TEXT   [required]
+  -o, --output TEXT         Output file path or stdout  [default: stdout]
+  --offline                 Enable offline mode (no AWS services)
 
 ```
 
@@ -84,6 +114,22 @@ Usage: bb get-repo [OPTIONS]
 Options:
   -r, --repo-path PATH
   -n, --repo-name PATH
+  --offline                 Enable offline mode (no AWS services)
+
+```
+
+## `repo-info`
+
+```text
+Usage: bb repo-info [OPTIONS]
+
+  List a local Borg repository's info.
+
+Options:
+  -r, --repo-path PATH
+  -n, --repo-name TEXT
+  --pp / --no-pp            Pretty print the repo info  [default: pp]
+  --offline                 Enable offline mode (no AWS services)
 
 ```
 
@@ -97,6 +143,7 @@ Usage: bb daily-backup [OPTIONS]
 
 Options:
   -r, --repo-path PATH  [required]
+  --offline             Enable offline mode (no AWS services)
 
 ```
 
@@ -110,6 +157,7 @@ Usage: bb extract-archive [OPTIONS]
 Options:
   -r, --repo-path PATH     [required]
   -a, --archive-name TEXT  [required]
+  --offline                Enable offline mode (no AWS services)
 ```
 
 ## `export-repo-key`
@@ -121,6 +169,7 @@ Usage: bb export-repo-key [OPTIONS]
 
 Options:
   -r, --repo-path PATH  [required]
+  --offline             Enable offline mode (no AWS services)
 
 ```
 
@@ -135,6 +184,7 @@ Options:
   -r, --repo-path PATH     [required]
   -a, --archive-name TEXT  [required]
   --dry-run                Perform a dry run of the deletion
+  --offline                Enable offline mode (no AWS services)
 
 ```
 
@@ -149,5 +199,22 @@ Options:
   -r, --repo-path PATH
   -n, --repo-name PATH
   --dry-run             Perform a dry run of the deletion
+  --offline             Enable offline mode (no AWS services)
+
+```
+
+## `restore-repo`
+
+```text
+Usage: bb restore-repo [OPTIONS]
+
+  Restore a Borg repository by name or path by downloading it from S3.
+
+Options:
+  -r, --repo-path PATH
+  -n, --repo-name TEXT
+  --dry-run                 Perform a dry run of the restore
+  --force                   Force restore even if repo exists
+  --offline                 Enable offline mode (no AWS services)
 
 ```

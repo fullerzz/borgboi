@@ -23,6 +23,9 @@ For BorgBoi to function properly, it requires an S3 bucket and DynamoDB table.
 
 Use the [IAC present in the `terraform` directory](https://github.com/fullerzz/borgboi/tree/main/terraform) to provision these resources on AWS with Terraform or OpenTofu.
 
+!!! note "Offline Mode Available"
+    If you prefer not to use AWS services, BorgBoi also supports offline mode. See the [Offline Mode](#offline-mode) section below.
+
 ## Configuring Environment
 
 ### AWS Credentials
@@ -31,21 +34,49 @@ Use the [IAC present in the `terraform` directory](https://github.com/fullerzz/b
 
 ### BorgBoi Environment Variables
 
-The following environment variables must be set.
+The following environment variables can be set:
 
-| Name | Description |
-| ------------ | -------------------------------------|
-| `BORG_NEW_PASSPHRASE` | Passphrase to use for securing any new Borg repositories |
-| `BORG_PASSPHRASE` | Passphrase to use for accessing any Borg repositories on your system |
-| `BORG_S3_BUCKET` | Name of the S3 bucket responsible storing Borg repositories |
-| `BORG_DYNAMODB_TABLE` | Name of the DynamoDB table responsible for storing repo metadata |
+| Name | Description | Required |
+| ------------ | -------------------------------------|----------|
+| `BORG_NEW_PASSPHRASE` | Passphrase to use for securing any new Borg repositories | Yes |
+| `BORG_PASSPHRASE` | Passphrase to use for accessing any Borg repositories on your system | Yes |
+| `BORG_S3_BUCKET` | Name of the S3 bucket responsible storing Borg repositories | Online mode only |
+| `BORG_DYNAMODB_TABLE` | Name of the DynamoDB table responsible for storing repo metadata | Online mode only |
+| `BORGBOI_OFFLINE` | Set to enable offline mode (no AWS services required) | No |
+
+## Offline Mode
+
+BorgBoi supports offline mode for users who prefer not to use AWS services or want to use BorgBoi without cloud dependencies.
+
+### Enabling Offline Mode
+
+You can enable offline mode in two ways:
+
+1. **Environment Variable**: Set `BORGBOI_OFFLINE=1` in your environment
+2. **Command Flag**: Add `--offline` to any BorgBoi command
+
+### How Offline Mode Works
+
+In offline mode:
+
+- Repository metadata is stored locally in `~/.borgboi/.borgboi_metadata/` instead of DynamoDB
+- No S3 synchronization occurs during backups
+- All Borg operations work normally (create, backup, extract, etc.)
+- AWS credentials are not required
+
+### Offline Mode Limitations
+
+- Repository restoration from S3 is not available
+- Repository metadata is not shared across systems
+- No cloud backup of repository metadata
+- The `list-repos` command is not yet implemented in offline mode
 
 ## Create a BorgBoi Repo
 
 You can now create a Borg repository with the following BorgBoi command:
 
 ```sh
-bb create-crepo --repo-path /opt/borg-repos/docs \
+bb create-repo --repo-path /opt/borg-repos/docs \
     --backup-target ~/Documents
 ```
 

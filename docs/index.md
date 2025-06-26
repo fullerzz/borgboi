@@ -14,8 +14,9 @@ BorgBoi is a thin wrapper around the BorgBackup tool that I will refer to as Bor
 It contains the following features:
 
 * Daily backup command that **creates** a new archive, **prunes** stale archives, and **compacts** the Borg repository to free up space
-* Metadata about your Borg repositories is stored in DynamoDB
+* Metadata about your Borg repositories is stored in DynamoDB (or locally in offline mode)
 * Borg repositories are synced with S3 to enable cloud backups and archive restoration from other systems
+* **Offline mode** support for users who prefer not to use AWS services
 
 ## Installation
 
