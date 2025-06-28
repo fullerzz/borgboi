@@ -13,6 +13,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import Container, Horizontal, ScrollableContainer, Vertical
 from textual.message import Message
 from textual.screen import Screen
+from textual.types import CSSPathType
 from textual.widgets import Button, DataTable, Footer, Header, Label, LoadingIndicator, Static
 
 from borgboi import orchestrator
@@ -23,6 +24,7 @@ from borgboi.models import BorgBoiRepo
 
 class SortOrder(Enum):
     """Sort order enumeration."""
+
     NAME_ASC = "name_asc"
     NAME_DESC = "name_desc"
     SIZE_ASC = "size_asc"
@@ -114,7 +116,7 @@ class RepoListWidget(Static):
             "Host",
             f"Size (GB){self._get_sort_indicator('size')}",
             "Location",
-            f"Last Archive{self._get_sort_indicator('date')}"
+            f"Last Archive{self._get_sort_indicator('date')}",
         )
 
         sorted_repos = self._sort_repos()
@@ -133,18 +135,18 @@ class RepoListWidget(Static):
             # Get last backup/archive date
             last_backup = repo.last_backup.strftime("%Y-%m-%d %H:%M") if repo.last_backup else "Never"
 
-            _ =table.add_row(repo.name, host, size, location, last_backup, key=repo.name)
+            _ = table.add_row(repo.name, host, size, location, last_backup, key=repo.name)
 
     @override
     def compose(self) -> ComposeResult:
         """Create child widgets."""
         table: DataTable[Any] = DataTable()
-        _ =table.add_columns(
+        _ = table.add_columns(
             f"Name{self._get_sort_indicator('name')}",
             "Host",
             f"Size (GB){self._get_sort_indicator('size')}",
             "Location",
-            f"Last Archive{self._get_sort_indicator('date')}"
+            f"Last Archive{self._get_sort_indicator('date')}",
         )
 
         sorted_repos = self._sort_repos()
@@ -163,7 +165,7 @@ class RepoListWidget(Static):
             # Get last backup/archive date
             last_backup = repo.last_backup.strftime("%Y-%m-%d %H:%M") if repo.last_backup else "Never"
 
-            _ =table.add_row(repo.name, host, size, location, last_backup, key=repo.name)
+            _ = table.add_row(repo.name, host, size, location, last_backup, key=repo.name)
 
         yield table
 
@@ -272,11 +274,9 @@ class RepoDetailWidget(Static):
                 if hasattr(archive, "name"):
                     name = archive.name
                     created = archive.start if hasattr(archive, "start") else "Unknown"
-                    archive_id = archive.id if hasattr(archive, "id") else ""
                 else:
                     name = archive.name
                     created = archive.start
-                    archive_id = archive.id
 
                 _ = table.add_row(
                     name,
@@ -379,7 +379,7 @@ class MainScreen(Screen[None]):
                 await container.mount(
                     Label("BorgBoi Repositories", classes="title"),
                     Label("Press 's' to sort by size, 'd' for date, 'n' for name", classes="help-text"),
-                    RepoListWidget(repos)
+                    RepoListWidget(repos),
                 )
             else:
                 await container.mount(
@@ -419,70 +419,7 @@ class DetailScreen(Screen[None]):
 class BorgBoiApp(App[None]):
     """Main TUI application for borgboi."""
 
-    CSS: ClassVar[str] = """
-    .title {
-        text-align: center;
-        text-style: bold;
-        color: $primary;
-        margin: 1 0;
-    }
-
-    .help-text {
-        text-align: center;
-        color: $secondary;
-        margin: 0 0 1 0;
-        text-style: italic;
-    }
-
-    .warning {
-        color: $warning;
-        text-align: center;
-        margin: 2;
-    }
-
-    .error {
-        color: $error;
-        text-align: center;
-        margin: 2;
-    }
-
-    #main-container {
-        align: center middle;
-        padding: 1;
-    }
-
-    #detail-container {
-        padding: 1;
-    }
-
-    #repo-details-header, #archives-header {
-        text-style: bold;
-        color: $primary;
-    }
-
-    #archives-container {
-        height: 1fr;
-        margin: 1 0;
-    }
-
-    #action-buttons {
-        align: center middle;
-        margin: 1 0;
-        height: 3;
-    }
-
-    #action-buttons Button {
-        margin: 0 1;
-    }
-
-    DataTable {
-        height: 1fr;
-    }
-
-    LoadingIndicator {
-        margin: 2;
-    }
-    """
+    CSS_PATH: ClassVar[CSSPathType | None] = "tui.tcss"
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("q", "quit", "Quit"),
@@ -491,6 +428,7 @@ class BorgBoiApp(App[None]):
 
     def on_mount(self) -> None:
         """Called when app starts."""
+        self.theme = "catppuccin-mocha"  # pyright: ignore[reportUnannotatedClassAttribute]
         _ = self.push_screen(MainScreen())
 
     def action_refresh(self) -> None:
