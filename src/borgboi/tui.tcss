@@ -1,0 +1,71 @@
+/* Textual CSS for borgboi TUI */
+
+/* General layout and typography */
+.title {
+    text-align: center;
+    text-style: bold;
+    color: $primary;
+    margin: 1 0;
+}
+
+.help-text {
+    text-align: center;
+    color: $secondary;
+    margin: 0 0 1 0;
+    text-style: italic;
+}
+
+.warning {
+    color: $warning;
+    text-align: center;
+    margin: 2;
+}
+
+.error {
+    color: $error;
+    text-align: center;
+    margin: 2;
+}
+
+/* Main containers */
+#main-container {
+    align: center middle;
+    padding: 1;
+}
+
+#detail-container {
+    padding: 1;
+}
+
+/* Repository detail headers */
+#repo-details-header, #archives-header {
+    text-style: bold;
+    color: $primary;
+}
+
+/* Archives container */
+#archives-container {
+    height: 1fr;
+    margin: 1 0;
+}
+
+/* Action buttons layout */
+#action-buttons {
+    align: center middle;
+    margin: 1 0;
+    height: 3;
+}
+
+#action-buttons Button {
+    margin: 0 1;
+}
+
+/* Data tables */
+DataTable {
+    height: 1fr;
+}
+
+/* Loading indicator */
+LoadingIndicator {
+    margin: 2;
+}

@@ -184,6 +184,7 @@ def restore_repo(repo_path: str | None, repo_name: str | None, dry_run: bool, fo
 def tui() -> None:
     """Launch the Terminal User Interface for borgboi."""
     from borgboi.tui import run_tui  # noqa: PLC0415
+
     run_tui()
 
 
