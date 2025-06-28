@@ -17,7 +17,7 @@ def shorten_archive_path(archive_path: str) -> str:
         archive_path = archive_path.replace(home_dir, "~", 1)
     parts = archive_path.split("/")
     if len(parts) > 3:
-        return "/".join(parts[:4] + ["..."] + parts[-2:])
+        return "/".join([*parts[:4], "...", *parts[-2:]])
     return archive_path
 
 
