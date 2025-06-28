@@ -180,6 +180,13 @@ def restore_repo(repo_path: str | None, repo_name: str | None, dry_run: bool, fo
     orchestrator.restore_repo(repo, dry_run, force, offline)
 
 
+@cli.command()
+def tui() -> None:
+    """Launch the Terminal User Interface for borgboi."""
+    from borgboi.tui import run_tui  # noqa: PLC0415
+    run_tui()
+
+
 def main() -> None:
     cli()
 

@@ -4,9 +4,7 @@ version = "1.8.1"
 description = "Add your description here"
 license = "MIT"
 readme = "README.md"
-authors = [
-    { name = "Zach Fuller", email = "zach.fuller1222@gmail.com" }
-]
+authors = [{ name = "Zach Fuller", email = "zach.fuller1222@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.35.92",
@@ -44,10 +42,7 @@ dev = [
     "textual-dev>=1.7.0",
     "ty>=0.0.1a12",
 ]
-docs = [
-    "mkdocs-glightbox>=0.4.0",
-    "mkdocs-material>=9.6.6",
-]
+docs = ["mkdocs-glightbox>=0.4.0", "mkdocs-material>=9.6.6"]
 
 [tool.uv]
 default-groups = ["dev", "docs"]
@@ -58,7 +53,7 @@ addopts = [
     "--disable-socket",
     "--allow-unix-socket",
     "--cov=src/borgboi",
-    "--cov-report=term"
+    "--cov-report=term",
 ]
 filterwarnings = [
     "error",
@@ -69,16 +64,11 @@ filterwarnings = [
 
 
 [tool.basedpyright]
-include = [
-    "src/**",
-    "tests/**",
-]
+include = ["src/**", "tests/**"]
 typeCheckingMode = "recommended"
 
 [tool.mypy]
-plugins = [
-    "pydantic.mypy"
-]
+plugins = ["pydantic.mypy"]
 warn_redundant_casts = true
 warn_unused_ignores = true
 disallow_any_generics = true
@@ -98,7 +88,32 @@ indent-width = 4
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "C90", "I", "N", "UP", "ASYNC", "S", "B", "ERA", "PLE", "PLW", "PLC", "PLW", "PERF", "RUF", "SIM", "PT", "T20", "PTH", "LOG", "G"]
+select = [
+    "E",
+    "F",
+    "W",
+    "C90",
+    "I",
+    "N",
+    "UP",
+    "ASYNC",
+    "S",
+    "B",
+    "ERA",
+    "PLE",
+    "PLW",
+    "PLC",
+    "PLW",
+    "PERF",
+    "RUF",
+    "SIM",
+    "PT",
+    "T20",
+    "PTH",
+    "LOG",
+    "G",
+    "DTZ",
+]
 ignore = ["E501", "S101", "PLC0415"]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
