@@ -3,6 +3,8 @@
   "extends": [
     "config:best-practices"
   ],
+  "labels": ["renovate 🤖"],
+  "reviewers": ["fullerzz"],
   "lockFileMaintenance": {
     "enabled": true
   }
