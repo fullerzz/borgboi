@@ -60,6 +60,7 @@ addopts = [
 ]
 filterwarnings = [
     "error",
+    "ignore::DeprecationWarning:botocore.auth:422", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
     "ignore::DeprecationWarning:botocore.auth:424", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
     "ignore::DeprecationWarning:botocore.auth:425", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
 ]
