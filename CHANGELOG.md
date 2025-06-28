@@ -1,3 +1,9 @@
+## v1.8.1 (2025-06-28)
+
+### Fix
+
+- **dynamodb**: specify throughput config for table and GSI
+
 ## v1.8.0 (2025-06-25)
 
 ### Feat
