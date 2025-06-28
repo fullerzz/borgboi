@@ -1,3 +1,5 @@
+# ruff: noqa: PLC0415
+
 from pathlib import Path
 from typing import Any
 

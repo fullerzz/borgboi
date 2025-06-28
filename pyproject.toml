@@ -66,6 +66,8 @@ filterwarnings = [
 [tool.basedpyright]
 include = ["src/**", "tests/**"]
 typeCheckingMode = "recommended"
+allowedUntypedLibraries = ["textual"]
+reportExplicitAny = false
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
