@@ -13,10 +13,10 @@ def test_sync_with_s3_success(monkeypatch: pytest.MonkeyPatch) -> None:
     class MockProc:
         def __init__(self):
             self.stdout = MockStdout()
-            
+
         def wait(self):
             return 0
-            
+
     class MockStdout:
         def __init__(self):
             self.call_count = 0
@@ -25,16 +25,16 @@ def test_sync_with_s3_success(monkeypatch: pytest.MonkeyPatch) -> None:
                 b"upload: ./file2.txt to s3://test-bucket/test-repo/file2.txt\n",
                 b"",
             ]
-            
+
         def readable(self):
             self.call_count += 1
             return self.call_count <= 2
-            
+
         def readline(self):
             if self.call_count <= len(self.lines):
                 return self.lines[self.call_count - 1]
             return b""
-            
+
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
     output_lines = list(s3.sync_with_s3("/path/to/repo", "test-repo"))
@@ -58,14 +58,15 @@ def test_sync_with_s3_command_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     class MockProc:
         def __init__(self):
             self.stdout = MockStdout()
-            
+            self.returncode = 1  # Non-zero exit code
+
         def wait(self):
             return 1  # Non-zero exit code
-            
+
     class MockStdout:
         def readable(self):
             return False
-            
+
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
     with pytest.raises(sp.CalledProcessError):
@@ -79,7 +80,7 @@ def test_sync_with_s3_stdout_none(monkeypatch: pytest.MonkeyPatch) -> None:
     class MockProc:
         def __init__(self):
             self.stdout = None
-            
+
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
     with pytest.raises(ValueError, match="stdout is None"):
@@ -93,14 +94,14 @@ def test_sync_with_s3_correct_command(monkeypatch: pytest.MonkeyPatch) -> None:
     class MockProc:
         def __init__(self):
             self.stdout = MockStdout()
-            
+
         def wait(self):
             return 0
-            
+
     class MockStdout:
         def readable(self):
             return False
-            
+
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)
     list(s3.sync_with_s3("/home/user/repos/my-repo", "my-repo"))

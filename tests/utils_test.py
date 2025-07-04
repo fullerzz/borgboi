@@ -1,5 +1,4 @@
 from datetime import UTC, datetime
-from pathlib import Path
 
 import pytest
 
@@ -41,9 +40,19 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-            
-        monkeypatch.setattr("borgboi.lib.utils.datetime.now", mock_datetime_now)
-        
+
+
+        class MockDateTime:
+            @staticmethod
+            def now(tz=None):
+                return mock_datetime_now()
+
+            @staticmethod
+            def strptime(date_string, format):
+                return datetime.strptime(date_string, format)
+
+        monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
+
         result = calculate_archive_age(archive_time)
         assert result == "2d 3h 15m"
 
@@ -54,9 +63,19 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-            
-        monkeypatch.setattr("borgboi.lib.utils.datetime.now", mock_datetime_now)
-        
+
+
+        class MockDateTime:
+            @staticmethod
+            def now(tz=None):
+                return mock_datetime_now()
+
+            @staticmethod
+            def strptime(date_string, format):
+                return datetime.strptime(date_string, format)
+
+        monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
+
         result = calculate_archive_age(archive_time)
         assert result == "3h 30m"
 
@@ -67,9 +86,19 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-            
-        monkeypatch.setattr("borgboi.lib.utils.datetime.now", mock_datetime_now)
-        
+
+
+        class MockDateTime:
+            @staticmethod
+            def now(tz=None):
+                return mock_datetime_now()
+
+            @staticmethod
+            def strptime(date_string, format):
+                return datetime.strptime(date_string, format)
+
+        monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
+
         result = calculate_archive_age(archive_time)
         assert result == "25m 30s"
 
@@ -80,9 +109,19 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-            
-        monkeypatch.setattr("borgboi.lib.utils.datetime.now", mock_datetime_now)
-        
+
+
+        class MockDateTime:
+            @staticmethod
+            def now(tz=None):
+                return mock_datetime_now()
+
+            @staticmethod
+            def strptime(date_string, format):
+                return datetime.strptime(date_string, format)
+
+        monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
+
         result = calculate_archive_age(archive_time)
         assert result == "45s"
 
@@ -93,15 +132,25 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-            
-        monkeypatch.setattr("borgboi.lib.utils.datetime.now", mock_datetime_now)
-        
+
+
+        class MockDateTime:
+            @staticmethod
+            def now(tz=None):
+                return mock_datetime_now()
+
+            @staticmethod
+            def strptime(date_string, format):
+                return datetime.strptime(date_string, format)
+
+        monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
+
         result = calculate_archive_age(archive_time)
         assert result == "0s"
 
     def test_calculate_archive_age_invalid_format(self) -> None:
         """Test that invalid time format raises ValueError."""
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="time data .* does not match format"):
             calculate_archive_age("invalid-time-format")
 
     def test_calculate_archive_age_future_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -111,9 +160,19 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-            
-        monkeypatch.setattr("borgboi.lib.utils.datetime.now", mock_datetime_now)
-        
+
+
+        class MockDateTime:
+            @staticmethod
+            def now(tz=None):
+                return mock_datetime_now()
+
+            @staticmethod
+            def strptime(date_string, format):
+                return datetime.strptime(date_string, format)
+
+        monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
+
         # Should handle negative age gracefully (though this is an edge case)
         result = calculate_archive_age(archive_time)
         # The function doesn't explicitly handle negative ages,
