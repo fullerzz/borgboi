@@ -1,5 +1,3 @@
-# ruff: noqa: PLC0415
-
 import os
 import warnings
 from collections.abc import Generator

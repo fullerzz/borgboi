@@ -41,7 +41,6 @@ class TestCalculateArchiveAge:
         def mock_datetime_now():
             return mock_now
 
-
         class MockDateTime:
             @staticmethod
             def now(tz=None):
@@ -63,7 +62,6 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-
 
         class MockDateTime:
             @staticmethod
@@ -87,7 +85,6 @@ class TestCalculateArchiveAge:
         def mock_datetime_now():
             return mock_now
 
-
         class MockDateTime:
             @staticmethod
             def now(tz=None):
@@ -110,7 +107,6 @@ class TestCalculateArchiveAge:
         def mock_datetime_now():
             return mock_now
 
-
         class MockDateTime:
             @staticmethod
             def now(tz=None):
@@ -132,7 +128,6 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-
 
         class MockDateTime:
             @staticmethod
@@ -160,7 +155,6 @@ class TestCalculateArchiveAge:
 
         def mock_datetime_now():
             return mock_now
-
 
         class MockDateTime:
             @staticmethod

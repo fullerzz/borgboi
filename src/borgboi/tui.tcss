@@ -8,6 +8,13 @@
     margin: 1 0;
 }
 
+.subtitle {
+    text-align: center;
+    text-style: bold;
+    color: $accent;
+    margin: 0 0 1 0;
+}
+
 .help-text {
     text-align: center;
     color: $secondary;
@@ -68,4 +75,41 @@ DataTable {
 /* Loading indicator */
 LoadingIndicator {
     margin: 2;
+}
+
+/* Home screen layout */
+#home-container {
+    align: center middle;
+    padding: 1;
+}
+
+#commands-container {
+    height: 1fr;
+    margin: 1 0;
+    align: center middle;
+}
+
+#command-list {
+    width: 80%;
+    max-width: 60;
+    height: 1fr;
+}
+
+#help-container {
+    height: 2;
+    align: center middle;
+}
+
+/* Command list items */
+#command-list ListItem {
+    padding: 0 1;
+    margin: 0;
+}
+
+#command-list ListItem:hover {
+    background: $primary 20%;
+}
+
+#command-list ListItem Label {
+    width: 100%;
 }

@@ -14,7 +14,7 @@ from textual.containers import Container, Horizontal, ScrollableContainer, Verti
 from textual.message import Message
 from textual.screen import Screen
 from textual.types import CSSPathType
-from textual.widgets import Button, DataTable, Footer, Header, Label, LoadingIndicator, Static
+from textual.widgets import Button, DataTable, Footer, Header, Label, ListItem, ListView, LoadingIndicator, Static
 
 from borgboi import orchestrator
 from borgboi.clients import borg, dynamodb
@@ -168,6 +168,11 @@ class RepoListWidget(Static):
             _ = table.add_row(repo.name, host, size, location, last_backup, key=repo.name)
 
         yield table
+
+    def on_mount(self) -> None:
+        """Called when widget is mounted."""
+        # Focus the DataTable so arrow keys work immediately
+        self.query_one(DataTable).focus()
 
     def action_sort_by_size(self) -> None:
         """Toggle sort by size."""
@@ -341,8 +346,84 @@ class RepoDetailWidget(Static):
         _ = self.app.pop_screen()
 
 
+class HomeScreen(Screen[None]):
+    """Home screen with command list."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("enter", "select_command", "Select"),
+        Binding("l", "list_repos", "List Repos"),
+    ]
+
+    @override
+    def compose(self) -> ComposeResult:
+        """Create child widgets."""
+        yield Header()
+        with Container(id="home-container"):
+            yield Label("BorgBoi - Terminal User Interface", classes="title")
+            yield Label("Select a command to execute:", classes="subtitle")
+
+            with ScrollableContainer(id="commands-container"):
+                yield ListView(
+                    ListItem(Label("📦 create-repo - Create a new Borg repository"), id="create-repo"),
+                    ListItem(Label("📝 list-repos - List all BorgBoi repositories"), id="list-repos"),
+                    ListItem(Label("📅 daily-backup - Perform daily backup operation"), id="daily-backup"),
+                    ListItem(Label("📋 list-archives - List archives in a repository"), id="list-archives"),
+                    ListItem(
+                        Label("📄 list-archive-contents - List contents of an archive"), id="list-archive-contents"
+                    ),
+                    ListItem(Label("🔍 get-repo - Get repository by name or path"), id="get-repo"),
+                    ListItem(Label("🔑 export-repo-key - Extract repository key"), id="export-repo-key"),
+                    ListItem(Label("ℹ️ repo-info - Show repository information"), id="repo-info"),
+                    ListItem(Label("📤 extract-archive - Extract archive to current directory"), id="extract-archive"),
+                    ListItem(Label("🗑️ delete-archive - Delete an archive"), id="delete-archive"),
+                    ListItem(Label("🗂️ delete-repo - Delete a repository"), id="delete-repo"),
+                    ListItem(Label("➕ append-excludes - Add exclusion pattern"), id="append-excludes"),
+                    ListItem(Label("✏️ modify-excludes - Modify exclusion patterns"), id="modify-excludes"),
+                    ListItem(Label("🔄 restore-repo - Restore repository from S3"), id="restore-repo"),
+                    ListItem(Label("➡️ Go to Repository List"), id="go-to-repos"),
+                    id="command-list",
+                )
+
+            with Container(id="help-container"):
+                yield Label(
+                    "Use arrow keys to navigate, Enter to select, 'l' for quick repo list access", classes="help-text"
+                )
+        yield Footer()
+
+    def on_mount(self) -> None:
+        """Called when screen is mounted."""
+        # Focus the command list so arrow keys work immediately
+        self.query_one("#command-list", ListView).focus()
+
+    def action_select_command(self) -> None:
+        """Handle command selection."""
+        list_view = self.query_one("#command-list", ListView)
+        if list_view.highlighted_child:
+            command_id = list_view.highlighted_child.id
+            if command_id == "go-to-repos" or command_id == "list-repos":
+                self.action_list_repos()
+            else:
+                self.app.notify(f"Command '{command_id}' selected. CLI implementation would be called here.")
+
+    def action_list_repos(self) -> None:
+        """Navigate to repository list screen."""
+        _ = self.app.push_screen(MainScreen())
+
+    @on(ListView.Selected)
+    def on_list_view_selected(self, message: ListView.Selected) -> None:
+        """Handle ListView selection."""
+        if message.item.id == "go-to-repos" or message.item.id == "list-repos":
+            self.action_list_repos()
+        else:
+            self.app.notify(f"Command '{message.item.id}' selected. CLI implementation would be called here.")
+
+
 class MainScreen(Screen[None]):
     """Main screen showing repository list."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("h", "home", "Home"),
+    ]
 
     @override
     def compose(self) -> ComposeResult:
@@ -358,6 +439,10 @@ class MainScreen(Screen[None]):
     def on_mount(self) -> None:
         """Called when screen is mounted."""
         _ = self.load_repositories()
+
+    def action_home(self) -> None:
+        """Navigate back to home screen."""
+        _ = self.app.pop_screen()
 
     @work(exclusive=True)
     async def load_repositories(self) -> None:
@@ -378,9 +463,11 @@ class MainScreen(Screen[None]):
             if repos:
                 await container.mount(
                     Label("BorgBoi Repositories", classes="title"),
-                    Label("Press 's' to sort by size, 'd' for date, 'n' for name", classes="help-text"),
+                    Label("Press 's' to sort by size, 'd' for date, 'n' for name, 'h' for home", classes="help-text"),
                     RepoListWidget(repos),
                 )
+                # Focus the DataTable so arrow keys work immediately
+                self.query_one(DataTable).focus()
             else:
                 await container.mount(
                     Label("No repositories found. Use 'borgboi create-repo' to create one.", classes="warning")
@@ -399,6 +486,10 @@ class MainScreen(Screen[None]):
 class DetailScreen(Screen[None]):
     """Detail screen for a specific repository."""
 
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("h", "home", "Home"),
+    ]
+
     def __init__(self, repo: BorgBoiRepo) -> None:
         super().__init__()
         self.repo: BorgBoiRepo = repo
@@ -415,6 +506,11 @@ class DetailScreen(Screen[None]):
         detail_widget = self.query_one(RepoDetailWidget)
         detail_widget.repo = self.repo
 
+    def action_home(self) -> None:
+        """Navigate back to home screen."""
+        _ = self.app.pop_screen()
+        _ = self.app.pop_screen()  # Pop twice to get back to home
+
 
 class BorgBoiApp(App[None]):
     """Main TUI application for borgboi."""
@@ -429,7 +525,7 @@ class BorgBoiApp(App[None]):
     def on_mount(self) -> None:
         """Called when app starts."""
         self.theme = "catppuccin-mocha"  # pyright: ignore[reportUnannotatedClassAttribute]
-        _ = self.push_screen(MainScreen())
+        _ = self.push_screen(HomeScreen())
 
     def action_refresh(self) -> None:
         """Refresh the current screen."""
