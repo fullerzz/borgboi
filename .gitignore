@@ -25,3 +25,4 @@ terraform/.terraform
 exclude.txt
 output.txt
 *.txt
+.claude/settings.local.json
