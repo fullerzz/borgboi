@@ -1,0 +1,1 @@
+"""TUI styles for borgboi."""
