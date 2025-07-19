@@ -54,6 +54,8 @@ addopts = [
     "--allow-unix-socket",
     "--cov=src/borgboi",
     "--cov-report=term",
+    "--strict-markers",
+    "--strict-config",
 ]
 filterwarnings = [
     "error",
