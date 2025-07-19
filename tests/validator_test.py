@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -47,34 +49,34 @@ class TestRepoIsLocal:
         # Create a simple mock object with hostname attribute
         class MockTableItem:
             def __init__(self, hostname: str):
-                self.hostname = hostname
+                self.hostname: str = hostname
 
         table_item = MockTableItem("test-host")
 
         monkeypatch.setattr("socket.gethostname", lambda: "test-host")
-        assert repo_is_local(table_item) is True
+        assert repo_is_local(table_item) is True  # pyright: ignore[reportArgumentType]
 
         monkeypatch.setattr("socket.gethostname", lambda: "other-host")
-        assert repo_is_local(table_item) is False
+        assert repo_is_local(table_item) is False  # pyright: ignore[reportArgumentType]
 
 
 class TestExcludeListCreated:
     """Test cases for exclude_list_created function."""
 
-    def test_exclude_list_created_true(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exclude_list_created_true(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that function returns True when exclude file exists."""
         from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME
 
         # Create the borgboi directory and exclude file
-        borgboi_dir = tmp_path / BORGBOI_DIR_NAME
+        borgboi_dir: Path = tmp_path / BORGBOI_DIR_NAME
         borgboi_dir.mkdir()
-        exclude_file = borgboi_dir / f"test-repo_{EXCLUDE_FILENAME}"
-        exclude_file.write_text("*.tmp\n")
+        exclude_file: Path = borgboi_dir / f"test-repo_{EXCLUDE_FILENAME}"
+        _ = exclude_file.write_text("*.tmp\n")
 
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         assert exclude_list_created("test-repo") is True
 
-    def test_exclude_list_created_false(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exclude_list_created_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that function returns False when exclude file doesn't exist."""
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         assert exclude_list_created("nonexistent-repo") is False
@@ -117,7 +119,7 @@ class TestParseLog:
     def test_parse_log_invalid_json(self) -> None:
         """Test that invalid JSON raises ValidationError."""
         with pytest.raises(ValidationError):
-            parse_log("invalid json")
+            _ = parse_log("invalid json")
 
     def test_parse_log_unknown_type(self) -> None:
         """Test parsing unknown log type falls back to LogMessage."""
@@ -158,7 +160,7 @@ class TestParseLogs:
 
         # The invalid JSON should cause a ValidationError that's not caught
         with pytest.raises(ValidationError):
-            list(parse_logs(log_stream))
+            _ = list(parse_logs(log_stream))
 
 
 class TestValidLine:
