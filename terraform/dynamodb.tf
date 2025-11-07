@@ -106,33 +106,8 @@ resource "aws_dynamodb_table" "bb-archives-table" {
   }
 
   attribute {
-    name = "archive_name"
-    type = "S"
-  }
-
-  attribute {
-    name = "archive_path"
-    type = "S"
-  }
-
-  attribute {
     name = "hostname"
     type = "S"
-  }
-
-  attribute {
-    name = "original_size"
-    type = "N"
-  }
-
-  attribute {
-    name = "compressed_size"
-    type = "N"
-  }
-
-  attribute {
-    name = "deduped_size"
-    type = "N"
   }
 
   global_secondary_index {
