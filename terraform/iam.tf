@@ -33,6 +33,10 @@ data "aws_iam_policy_document" "borgboi" {
     resources = [
       aws_dynamodb_table.borg-repo-table.arn,
       "${aws_dynamodb_table.borg-repo-table.arn}/*",
+      aws_dynamodb_table.bb-repos-table.arn,
+      "${aws_dynamodb_table.bb-repos-table.arn}/*",
+      aws_dynamodb_table.bb-archives-table.arn,
+      "${aws_dynamodb_table.bb-archives-table.arn}/*"
     ]
   }
 }
