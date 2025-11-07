@@ -1,3 +1,9 @@
+## v1.9.0 (2025-11-07)
+
+### Feat
+
+- **tf**: Create 2 New DynamoDB Tables (#133)
+
 ## v1.8.1 (2025-06-28)
 
 ### Fix
