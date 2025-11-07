@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 
@@ -38,17 +39,17 @@ class TestCalculateArchiveAge:
         archive_time = "2025-01-01_12:00:00"
         mock_now = datetime(2025, 1, 3, 15, 15, 0, tzinfo=UTC)
 
-        def mock_datetime_now():
+        def mock_datetime_now() -> datetime:
             return mock_now
-
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None):
+            def now(tz: Any = None) -> datetime:  # pyright: ignore[reportExplicitAny, reportUnusedParameter, reportAny]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format):
+            def strptime(date_string, format) -> datetime:  # type: ignore
+                datetime.now() * 0  # type: ignore
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -61,17 +62,16 @@ class TestCalculateArchiveAge:
         archive_time = "2025-01-01_12:00:00"
         mock_now = datetime(2025, 1, 1, 15, 30, 45, tzinfo=UTC)
 
-        def mock_datetime_now():
+        def mock_datetime_now() -> datetime:
             return mock_now
-
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None):
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format):
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -84,17 +84,16 @@ class TestCalculateArchiveAge:
         archive_time = "2025-01-01_12:00:00"
         mock_now = datetime(2025, 1, 1, 12, 25, 30, tzinfo=UTC)
 
-        def mock_datetime_now():
+        def mock_datetime_now() -> datetime:
             return mock_now
-
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None):
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format):
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -107,17 +106,16 @@ class TestCalculateArchiveAge:
         archive_time = "2025-01-01_12:00:00"
         mock_now = datetime(2025, 1, 1, 12, 0, 45, tzinfo=UTC)
 
-        def mock_datetime_now():
+        def mock_datetime_now() -> datetime:
             return mock_now
-
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None):
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format):
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -130,17 +128,16 @@ class TestCalculateArchiveAge:
         archive_time = "2025-01-01_12:00:00"
         mock_now = datetime(2025, 1, 1, 12, 0, 0, tzinfo=UTC)
 
-        def mock_datetime_now():
+        def mock_datetime_now() -> datetime:
             return mock_now
-
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None):
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format):
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -150,7 +147,7 @@ class TestCalculateArchiveAge:
 
     def test_calculate_archive_age_invalid_format(self) -> None:
         """Test that invalid time format raises ValueError."""
-        with pytest.raises(ValueError, match="time data .* does not match format"):
+        with pytest.raises(ValueError, match=r"time data .* does not match format"):
             calculate_archive_age("invalid-time-format")
 
     def test_calculate_archive_age_future_time(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -158,17 +155,16 @@ class TestCalculateArchiveAge:
         archive_time = "2025-01-01_12:00:00"
         mock_now = datetime(2025, 1, 1, 11, 0, 0, tzinfo=UTC)  # 1 hour before archive
 
-        def mock_datetime_now():
+        def mock_datetime_now() -> datetime:
             return mock_now
-
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None):
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format):
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)

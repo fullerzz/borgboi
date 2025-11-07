@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -52,16 +54,16 @@ class TestRepoIsLocal:
         table_item = MockTableItem("test-host")
 
         monkeypatch.setattr("socket.gethostname", lambda: "test-host")
-        assert repo_is_local(table_item) is True
+        assert repo_is_local(table_item) is True  # type: ignore
 
         monkeypatch.setattr("socket.gethostname", lambda: "other-host")
-        assert repo_is_local(table_item) is False
+        assert repo_is_local(table_item) is False  # type: ignore
 
 
 class TestExcludeListCreated:
     """Test cases for exclude_list_created function."""
 
-    def test_exclude_list_created_true(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exclude_list_created_true(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that function returns True when exclude file exists."""
         from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME
 
@@ -74,7 +76,7 @@ class TestExcludeListCreated:
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         assert exclude_list_created("test-repo") is True
 
-    def test_exclude_list_created_false(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exclude_list_created_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that function returns False when exclude file doesn't exist."""
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
         assert exclude_list_created("nonexistent-repo") is False
