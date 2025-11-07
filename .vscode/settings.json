@@ -1,6 +1,4 @@
 {
-    "python.languageServer": "None",
-    "python.analysis.typeCheckingMode": "off",
     "mcp": {
         "inputs": [],
         "servers": {
