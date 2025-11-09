@@ -92,3 +92,16 @@ resource "aws_s3_bucket_intelligent_tiering_configuration" "borgboi-logs" {
     days        = 90
   }
 }
+
+resource "aws_s3_bucket_lifecycle_configuration" "borgboi" {
+  bucket = aws_s3_bucket.borgboi.id
+
+  rule {
+    id     = "delete-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 2
+    }
+  }
+}
