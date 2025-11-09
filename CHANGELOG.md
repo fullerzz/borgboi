@@ -1,3 +1,9 @@
+## v1.9.1 (2025-11-09)
+
+### Fix
+
+- **s3**: add s3 lifecycle rule to abort multipart uploads after 2 days (#135)
+
 ## v1.9.0 (2025-11-07)
 
 ### Feat
