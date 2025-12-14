@@ -38,6 +38,7 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BORG_NEW_PASSPHRASE", "test")
     monkeypatch.setenv("BORG_S3_BUCKET", "test")
     monkeypatch.setenv("BORG_DYNAMODB_TABLE", DYNAMO_TABLE_NAME)
+    monkeypatch.setenv("BB_REPOS_TABLE", DYNAMO_TABLE_NAME)
     monkeypatch.setenv("BORGBOI_DIR_NAME", ".borgboi")
 
 
@@ -85,17 +86,19 @@ def create_dynamodb_table(dynamodb: DynamoDBClient) -> None:
         TableName=DYNAMO_TABLE_NAME,
         KeySchema=[
             {"AttributeName": "repo_path", "KeyType": "HASH"},
+            {"AttributeName": "hostname", "KeyType": "RANGE"},
         ],
         AttributeDefinitions=[
             {"AttributeName": "repo_path", "AttributeType": "S"},
-            {"AttributeName": "common_name", "AttributeType": "S"},
+            {"AttributeName": "hostname", "AttributeType": "S"},
+            {"AttributeName": "repo_name", "AttributeType": "S"},
         ],
         ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
         GlobalSecondaryIndexes=[
             {
                 "IndexName": "name_gsi",
                 "KeySchema": [
-                    {"AttributeName": "common_name", "KeyType": "HASH"},
+                    {"AttributeName": "repo_name", "KeyType": "HASH"},
                 ],
                 "Projection": {
                     "ProjectionType": "ALL",

@@ -100,11 +100,13 @@ def delete_excludes_list(repo_name: str) -> None:
         console.print(f"Deleted exclude list for [bold cyan]{repo_name}[/]")
 
 
-def lookup_repo(repo_path: str | None, repo_name: str | None, offline: bool) -> BorgBoiRepo:
+def lookup_repo(
+    repo_path: str | None, repo_name: str | None, offline: bool, hostname: str | None = None
+) -> BorgBoiRepo:
     if offline:
         return offline_storage.get_repo(repo_name)
     elif repo_path is not None:
-        return dynamodb.get_repo_by_path(repo_path)
+        return dynamodb.get_repo_by_path(repo_path, hostname) if hostname else dynamodb.get_repo_by_path(repo_path)
     elif repo_name is not None:
         return dynamodb.get_repo_by_name(repo_name)
     else:

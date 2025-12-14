@@ -53,7 +53,10 @@ def test_add_repo_to_table(dynamodb: DynamoDBClient, borgboi_repo: BorgBoiRepo) 
 
     add_repo_to_table(borgboi_repo)
 
-    response = dynamodb.get_item(TableName=DYNAMO_TABLE_NAME, Key={"repo_path": {"S": borgboi_repo.path}})
+    response = dynamodb.get_item(
+        TableName=DYNAMO_TABLE_NAME,
+        Key={"repo_path": {"S": borgboi_repo.path}, "hostname": {"S": borgboi_repo.hostname}},
+    )
     assert "Item" in response
     assert response["Item"]["repo_path"]["S"] == borgboi_repo.path  # pyright: ignore[reportTypedDictNotRequiredAccess]
 
@@ -63,21 +66,26 @@ def test_update_repo(dynamodb: DynamoDBClient, borgboi_repo: BorgBoiRepo) -> Non
     from borgboi.clients.dynamodb import add_repo_to_table, get_repo_by_path, update_repo
 
     new_name = "updated-test-repo-name"
-    new_hostname = "updated-test-hostname"
+    original_hostname = borgboi_repo.hostname
 
     # Populate test table with initial repo
     add_repo_to_table(borgboi_repo)
-    response = dynamodb.get_item(TableName=DYNAMO_TABLE_NAME, Key={"repo_path": {"S": borgboi_repo.path}})
+    response = dynamodb.get_item(
+        TableName=DYNAMO_TABLE_NAME,
+        Key={"repo_path": {"S": borgboi_repo.path}, "hostname": {"S": borgboi_repo.hostname}},
+    )
     assert "Item" in response
     assert response["Item"]["repo_path"]["S"] == borgboi_repo.path  # pyright: ignore[reportTypedDictNotRequiredAccess]
 
-    # Update repo fields and call update_repo(...)
+    # Update repo name field and call update_repo(...)
     borgboi_repo.name = new_name
-    borgboi_repo.hostname = new_hostname
     update_repo(borgboi_repo)
 
     # Verify that the repo was updated in the table
-    repo_from_table = get_repo_by_path(borgboi_repo.path)
+    repo_from_table = get_repo_by_path(borgboi_repo.path, original_hostname)
     assert repo_from_table.name == new_name
-    assert repo_from_table.hostname == new_hostname
-    assert repo_from_table.model_dump() == borgboi_repo.model_dump()
+    assert repo_from_table.hostname == original_hostname
+    # Compare excluding metadata (not stored in table, fetched fresh for local repos)
+    assert repo_from_table.model_dump(exclude={"metadata", "safe_path"}) == borgboi_repo.model_dump(
+        exclude={"metadata", "safe_path"}
+    )

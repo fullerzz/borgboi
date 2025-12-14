@@ -54,10 +54,10 @@ class TestRepoIsLocal:
         table_item = MockTableItem("test-host")
 
         monkeypatch.setattr("socket.gethostname", lambda: "test-host")
-        assert repo_is_local(table_item) is True  # type: ignore
+        assert repo_is_local(table_item) is True
 
         monkeypatch.setattr("socket.gethostname", lambda: "other-host")
-        assert repo_is_local(table_item) is False  # type: ignore
+        assert repo_is_local(table_item) is False
 
 
 class TestExcludeListCreated:

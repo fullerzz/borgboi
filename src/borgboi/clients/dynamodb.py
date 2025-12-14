@@ -1,3 +1,4 @@
+import socket
 from datetime import datetime
 from os import environ
 
@@ -7,24 +8,42 @@ from pydantic import BaseModel
 
 from borgboi import validator
 from borgboi.clients import borg
-from borgboi.clients.borg import RepoInfo
 from borgboi.models import BorgBoiRepo
 from borgboi.rich_utils import console
 
 boto_config = Config(retries={"mode": "standard"})
 
 
-class BorgRepoTableItem(BaseModel):
-    repo_path: str
-    backup_target_path: str
-    common_name: str
+class BorgBoiArchiveTableItem(BaseModel):
+    repo_name: str
+    iso_timestamp: str
+    archive_id: str
+    archive_name: str
+    archive_path: str
     hostname: str
-    os_platform: str
+    original_size: int
+    compressed_size: int
+    deduped_size: int
+
+
+class BorgBoiRepoTableItem(BaseModel):
+    """DynamoDB table item for a Borg repository."""
+
+    repo_path: str
+    hostname: str
+    backup_target_path: str
+    repo_name: str
     last_backup: str | None = None
-    metadata: RepoInfo | None = None
+    last_s3_sync: str | None = None
+    os_platform: str | None = None
+    passphrase: str | None = None
+    retention_keep_daily: int | None = None
+    retention_keep_weekly: int | None = None
+    retention_keep_monthly: int | None = None
+    retention_keep_yearly: int | None = None
 
 
-def _convert_repo_to_table_item(repo: BorgBoiRepo) -> BorgRepoTableItem:
+def _convert_repo_to_table_item(repo: BorgBoiRepo) -> BorgBoiRepoTableItem:
     """
     Convert a Borg repository to a DynamoDB table item.
 
@@ -32,49 +51,37 @@ def _convert_repo_to_table_item(repo: BorgBoiRepo) -> BorgRepoTableItem:
         repo (BorgBoiRepo): Borg repository to convert
 
     Returns:
-        BorgRepoTableItem: Borg repository converted to a DynamoDB table item
+        BorgBoiRepoTableItem: Borg repository converted to a DynamoDB table item
     """
-    if not validator.metadata_is_present(repo):
-        raise ValueError("The 'metadata' field must be present in the BorgBoiRepo object")
-
-    return BorgRepoTableItem(
+    return BorgBoiRepoTableItem(
         repo_path=repo.path,
-        backup_target_path=repo.backup_target,
-        common_name=repo.name,
         hostname=repo.hostname,
-        os_platform=repo.os_platform,
+        backup_target_path=repo.backup_target,
+        repo_name=repo.name,
         last_backup=repo.last_backup.isoformat() if repo.last_backup else None,
-        metadata=repo.metadata,
+        os_platform=repo.os_platform,
     )
 
 
-def _convert_table_item_to_repo(repo: BorgRepoTableItem) -> BorgBoiRepo:
+def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
     """
     Convert a DynamoDB table item to a Borg repository.
 
     Args:
-        repo (BorgRepoTableItem): Borg repository table item to convert
+        item (BorgBoiRepoTableItem): Borg repository table item to convert
 
     Returns:
-        BorgRepo: Borg repository
+        BorgBoiRepo: Borg repository
     """
-    last_backup = None
-    if repo.last_backup:
-        last_backup = datetime.fromisoformat(repo.last_backup)
-
-    if repo.metadata:
-        metadata = repo.metadata
-    elif validator.repo_is_local(repo):
-        metadata = borg.info(repo.repo_path)
-    else:
-        metadata = None
+    last_backup = datetime.fromisoformat(item.last_backup) if item.last_backup else None
+    metadata = borg.info(item.repo_path) if validator.repo_is_local(item) else None
 
     return BorgBoiRepo(
-        path=repo.repo_path,
-        backup_target=repo.backup_target_path,
-        name=repo.common_name,
-        hostname=repo.hostname,
-        os_platform=repo.os_platform,
+        path=item.repo_path,
+        backup_target=item.backup_target_path,
+        name=item.repo_name,
+        hostname=item.hostname,
+        os_platform=item.os_platform or "",
         last_backup=last_backup,
         metadata=metadata,
     )
@@ -85,10 +92,10 @@ def add_repo_to_table(repo: BorgBoiRepo) -> None:
     Add a Borg repository to the DynamoDB table.
 
     Args:
-        repo (BorgRepo): Borg repository to add to the table
+        repo (BorgBoiRepo): Borg repository to add to the table
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
-    table.put_item(Item=_convert_repo_to_table_item(repo).model_dump())
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table.put_item(Item=_convert_repo_to_table_item(repo).model_dump(exclude_none=True))
     console.print(f"Added repo to DynamoDB table: [bold cyan]{repo.path}[/]")
 
 
@@ -99,24 +106,25 @@ def get_all_repos() -> list[BorgBoiRepo]:
     Returns:
         list[BorgBoiRepo]: List of Borg repositories
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
     response = table.scan()
-    return [_convert_table_item_to_repo(BorgRepoTableItem(**repo)) for repo in response["Items"]]  # type: ignore
+    return [_convert_table_item_to_repo(BorgBoiRepoTableItem(**repo)) for repo in response["Items"]]  # type: ignore
 
 
-def get_repo_by_path(repo_path: str) -> BorgBoiRepo:
+def get_repo_by_path(repo_path: str, hostname: str = socket.gethostname()) -> BorgBoiRepo:
     """
     Get a Borg repository by its path from the DynamoDB table.
 
     Args:
         repo_path (str): Path of the Borg repository
+        hostname (str): Hostname of the machine where the repo exists. Defaults to current hostname.
 
     Returns:
         BorgBoiRepo: Borg repository
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
-    response = table.get_item(Key={"repo_path": repo_path})
-    return _convert_table_item_to_repo(BorgRepoTableItem(**response["Item"]))  # type: ignore
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    response = table.get_item(Key={"repo_path": repo_path, "hostname": hostname})
+    return _convert_table_item_to_repo(BorgBoiRepoTableItem(**response["Item"]))  # type: ignore
 
 
 def get_repo_by_name(repo_name: str) -> BorgBoiRepo:
@@ -129,14 +137,14 @@ def get_repo_by_name(repo_name: str) -> BorgBoiRepo:
     Returns:
         BorgBoiRepo: Borg repository
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
     response = table.query(
         IndexName="name_gsi",
-        KeyConditionExpression="common_name = :name",
+        KeyConditionExpression="repo_name = :name",
         ExpressionAttributeValues={":name": repo_name},
         Limit=1,
     )
-    return _convert_table_item_to_repo(BorgRepoTableItem(**response["Items"][0]))  # type: ignore
+    return _convert_table_item_to_repo(BorgBoiRepoTableItem(**response["Items"][0]))  # type: ignore
 
 
 def delete_repo(repo: BorgBoiRepo) -> None:
@@ -146,8 +154,8 @@ def delete_repo(repo: BorgBoiRepo) -> None:
     Args:
         repo (BorgBoiRepo): Borg repository to delete
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
-    table.delete_item(Key={"repo_path": repo.path})
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table.delete_item(Key={"repo_path": repo.path, "hostname": repo.hostname})
     console.print(f"Deleted repo from DynamoDB table: [bold cyan]{repo.path}[/]")
 
 
@@ -156,8 +164,8 @@ def update_repo(repo: BorgBoiRepo) -> None:
     Update a Borg repository in the DynamoDB table.
 
     Args:
-        repo (BorgRepo): Borg repository to update
+        repo (BorgBoiRepo): Borg repository to update
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BORG_DYNAMODB_TABLE"])
-    table.put_item(Item=_convert_repo_to_table_item(repo).model_dump())
+    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table.put_item(Item=_convert_repo_to_table_item(repo).model_dump(exclude_none=True))
     console.print(f"Updated repo in DynamoDB table: [bold cyan]{repo.path}[/]")

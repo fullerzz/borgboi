@@ -1,10 +1,10 @@
 import socket
 from collections.abc import Generator, Iterable
 from pathlib import Path
+from typing import Protocol
 
 from pydantic import ValidationError
 
-from borgboi.clients.dynamodb import BorgRepoTableItem
 from borgboi.clients.utils.borg_logs import (
     ArchiveProgress,
     FileStatus,
@@ -15,11 +15,17 @@ from borgboi.clients.utils.borg_logs import (
 from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
 
 
+class HasHostname(Protocol):
+    """Protocol for objects with a hostname attribute."""
+
+    hostname: str
+
+
 def metadata_is_present(repo: BorgBoiRepo) -> bool:
     return repo.metadata is not None
 
 
-def repo_is_local(repo: BorgBoiRepo | BorgRepoTableItem) -> bool:
+def repo_is_local(repo: HasHostname) -> bool:
     return repo.hostname == socket.gethostname()
 
 
