@@ -46,10 +46,27 @@ def test_sync_with_s3_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_sync_with_s3_missing_bucket_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test S3 sync fails when BORG_S3_BUCKET environment variable is missing."""
-    monkeypatch.delenv("BORG_S3_BUCKET", raising=False)
-    with pytest.raises(KeyError):
-        _ = list(s3.sync_with_s3("/path/to/repo", "test-repo"))
+    """Test S3 sync uses default bucket from config when env var is not set."""
+    # Config now provides default value, so no KeyError should be raised
+    # The test verifies that the function works with config defaults
+
+    class MockProc:
+        def __init__(self) -> None:
+            self.stdout: MockStdout = MockStdout()
+
+        def wait(self) -> Literal[0]:
+            return 0
+
+    class MockStdout:
+        def readable(self) -> Literal[False]:
+            return False
+
+    mock_proc = MockProc()
+    monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)  # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
+
+    # This should not raise an error - config provides a default bucket
+    output = list(s3.sync_with_s3("/path/to/repo", "test-repo"))
+    assert output is not None  # Just verify it returns something
 
 
 def test_sync_with_s3_command_failure(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -49,7 +49,6 @@ class TestCalculateArchiveAge:
 
             @staticmethod
             def strptime(date_string, format) -> datetime:  # type: ignore
-                datetime.now() * 0  # type: ignore
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)

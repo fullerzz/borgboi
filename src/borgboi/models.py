@@ -1,6 +1,5 @@
 from datetime import datetime
 from functools import cached_property
-from os import getenv
 from pathlib import Path
 from platform import system
 
@@ -8,8 +7,6 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 
 from borgboi.clients.borg import RepoInfo
 
-BORGBOI_DIR_NAME = getenv("BORGBOI_DIR_NAME", ".borgboi")
-EXCLUDE_FILENAME = "excludes.txt"
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
 
 

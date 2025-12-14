@@ -6,14 +6,15 @@ from platform import system
 
 from borgboi import rich_utils, validator
 from borgboi.clients import borg, dynamodb, offline_storage, s3
+from borgboi.config import config
 from borgboi.lib import utils
 from borgboi.lib.colors import COLOR_HEX
-from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
+from borgboi.models import BorgBoiRepo
 from borgboi.rich_utils import console
 
 
 def _get_excludes_path(repo_name: str) -> Path:
-    return Path.home() / BORGBOI_DIR_NAME / f"{repo_name}_{EXCLUDE_FILENAME}"
+    return config.borgboi_dir / f"{repo_name}_{config.excludes_filename}"
 
 
 def create_excludes_list(repo_name: str, excludes_source_file: str) -> Path:
@@ -22,7 +23,7 @@ def create_excludes_list(repo_name: str, excludes_source_file: str) -> Path:
     """
     if validator.exclude_list_created(repo_name) is True:
         raise ValueError("Exclude list already created")
-    borgboi_dir = Path.home() / BORGBOI_DIR_NAME
+    borgboi_dir = config.borgboi_dir
     if borgboi_dir.exists() is False:
         borgboi_dir.mkdir()
     console.print("Creating Borg exclude list...")

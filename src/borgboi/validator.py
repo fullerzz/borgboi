@@ -1,6 +1,5 @@
 import socket
 from collections.abc import Generator, Iterable
-from pathlib import Path
 from typing import Protocol
 
 from pydantic import ValidationError
@@ -12,7 +11,8 @@ from borgboi.clients.utils.borg_logs import (
     ProgressMessage,
     ProgressPercent,
 )
-from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
+from borgboi.config import config
+from borgboi.models import BorgBoiRepo
 
 
 class HasHostname(Protocol):
@@ -30,7 +30,7 @@ def repo_is_local(repo: HasHostname) -> bool:
 
 
 def exclude_list_created(repo_name: str) -> bool:
-    exclude_file = Path.home() / BORGBOI_DIR_NAME / f"{repo_name}_{EXCLUDE_FILENAME}"
+    exclude_file = config.borgboi_dir / f"{repo_name}_{config.excludes_filename}"
     return exclude_file.exists()
 
 

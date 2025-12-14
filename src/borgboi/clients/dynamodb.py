@@ -1,6 +1,5 @@
 import socket
 from datetime import datetime
-from os import environ
 
 import boto3
 from botocore.config import Config
@@ -8,6 +7,7 @@ from pydantic import BaseModel
 
 from borgboi import validator
 from borgboi.clients import borg
+from borgboi.config import config
 from borgboi.models import BorgBoiRepo
 from borgboi.rich_utils import console
 
@@ -94,7 +94,7 @@ def add_repo_to_table(repo: BorgBoiRepo) -> None:
     Args:
         repo (BorgBoiRepo): Borg repository to add to the table
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     table.put_item(Item=_convert_repo_to_table_item(repo).model_dump(exclude_none=True))
     console.print(f"Added repo to DynamoDB table: [bold cyan]{repo.path}[/]")
 
@@ -106,7 +106,7 @@ def get_all_repos() -> list[BorgBoiRepo]:
     Returns:
         list[BorgBoiRepo]: List of Borg repositories
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     response = table.scan()
     return [_convert_table_item_to_repo(BorgBoiRepoTableItem(**repo)) for repo in response["Items"]]  # type: ignore
 
@@ -122,7 +122,7 @@ def get_repo_by_path(repo_path: str, hostname: str = socket.gethostname()) -> Bo
     Returns:
         BorgBoiRepo: Borg repository
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     response = table.get_item(Key={"repo_path": repo_path, "hostname": hostname})
     return _convert_table_item_to_repo(BorgBoiRepoTableItem(**response["Item"]))  # type: ignore
 
@@ -137,7 +137,7 @@ def get_repo_by_name(repo_name: str) -> BorgBoiRepo:
     Returns:
         BorgBoiRepo: Borg repository
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     response = table.query(
         IndexName="name_gsi",
         KeyConditionExpression="repo_name = :name",
@@ -154,7 +154,7 @@ def delete_repo(repo: BorgBoiRepo) -> None:
     Args:
         repo (BorgBoiRepo): Borg repository to delete
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     table.delete_item(Key={"repo_path": repo.path, "hostname": repo.hostname})
     console.print(f"Deleted repo from DynamoDB table: [bold cyan]{repo.path}[/]")
 
@@ -166,6 +166,6 @@ def update_repo(repo: BorgBoiRepo) -> None:
     Args:
         repo (BorgBoiRepo): Borg repository to update
     """
-    table = boto3.resource("dynamodb", config=boto_config).Table(environ["BB_REPOS_TABLE"])
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     table.put_item(Item=_convert_repo_to_table_item(repo).model_dump(exclude_none=True))
     console.print(f"Updated repo in DynamoDB table: [bold cyan]{repo.path}[/]")

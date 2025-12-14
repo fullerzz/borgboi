@@ -2,16 +2,14 @@ import subprocess as sp
 from collections.abc import Generator
 from datetime import UTC, datetime
 from functools import cached_property
-from os import getenv
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
 
-BORGBOI_DIR_NAME = getenv("BORGBOI_DIR_NAME", ".borgboi")
-EXCLUDE_FILENAME = "excludes.txt"
+from borgboi.config import config
+
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
-STORAGE_QUOTA = "100G"
 
 
 def init_repository(repo_path: str, config_additional_free_space: bool = True, json_log: bool = True) -> None:
@@ -26,7 +24,7 @@ def init_repository(repo_path: str, config_additional_free_space: bool = True, j
         "--log-json",
         "--progress",
         "--encryption=repokey",
-        f"--storage-quota={STORAGE_QUOTA}",
+        f"--storage-quota={config.borg.storage_quota}",
         repo_path,
     ]
     if json_log is False:
@@ -36,7 +34,15 @@ def init_repository(repo_path: str, config_additional_free_space: bool = True, j
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd)
 
     if config_additional_free_space:
-        config_cmd = ["borg", "config", "--log-json", "--progress", repo_path, "additional_free_space", "2G"]
+        config_cmd = [
+            "borg",
+            "config",
+            "--log-json",
+            "--progress",
+            repo_path,
+            "additional_free_space",
+            config.borg.additional_free_space,
+        ]
         result = sp.run(config_cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
         if result.returncode != 0 and result.returncode != 1:
             raise sp.CalledProcessError(returncode=result.returncode, cmd=config_cmd)
@@ -67,11 +73,11 @@ def create_archive(
         "--show-rc",
         "--list",
         "--stats",
-        "--compression=zstd,1",
+        f"--compression={config.borg.compression}",
         "--exclude-caches",
         "--exclude-nodump",
         "--exclude-from",
-        f"{(Path.home() / BORGBOI_DIR_NAME / f'{repo_name}_{EXCLUDE_FILENAME}').as_posix()}",
+        f"{(config.borgboi_dir / f'{repo_name}_{config.excludes_filename}').as_posix()}",
         f"{repo_path}::{archive_name}",
         backup_target_path,
     ]
@@ -157,7 +163,12 @@ def info(repo_path: str) -> RepoInfo:
 
 
 def prune(
-    repo_path: str, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2, log_json: bool = True
+    repo_path: str,
+    keep_daily: int | None = None,
+    keep_weekly: int | None = None,
+    keep_monthly: int | None = None,
+    keep_yearly: int | None = None,
+    log_json: bool = True,
 ) -> Generator[str]:
     """
     Run a Borg prune command to remove old backups from the repository.
@@ -165,10 +176,17 @@ def prune(
     https://borgbackup.readthedocs.io/en/stable/usage/prune.html
 
     Args:
-        keep_daily (int, optional): Number of daily backups to retain. Defaults to 7.
-        keep_weekly (int, optional): Number of weekly backups to retain. Defaults to 3.
-        keep_monthly (int, optional): Number of monthly backups to retain. Defaults to 2.
+        keep_daily: Number of daily backups to retain. Defaults to config value (7).
+        keep_weekly: Number of weekly backups to retain. Defaults to config value (4).
+        keep_monthly: Number of monthly backups to retain. Defaults to config value (6).
+        keep_yearly: Number of yearly backups to retain. Defaults to config value (0).
     """
+    # Use config defaults if not provided
+    keep_daily = keep_daily if keep_daily is not None else config.borg.retention.keep_daily
+    keep_weekly = keep_weekly if keep_weekly is not None else config.borg.retention.keep_weekly
+    keep_monthly = keep_monthly if keep_monthly is not None else config.borg.retention.keep_monthly
+    keep_yearly = keep_yearly if keep_yearly is not None else config.borg.retention.keep_yearly
+
     cmd = [
         "borg",
         "prune",
@@ -178,8 +196,11 @@ def prune(
         f"--keep-daily={keep_daily}",
         f"--keep-weekly={keep_weekly}",
         f"--keep-monthly={keep_monthly}",
-        repo_path,
     ]
+    if keep_yearly > 0:
+        cmd.append(f"--keep-yearly={keep_yearly}")
+
+    cmd.append(repo_path)
     if log_json is False:
         cmd.remove("--log-json")
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
@@ -241,7 +262,7 @@ def export_repo_key(repo_path: str, repo_name: str) -> Path:
 
     https://borgbackup.readthedocs.io/en/stable/usage/key.html#borg-key-export
     """
-    borgboi_repo_keys_dir = Path.home() / BORGBOI_DIR_NAME
+    borgboi_repo_keys_dir = config.borgboi_dir
     borgboi_repo_keys_dir.mkdir(exist_ok=True)
     key_export_path = borgboi_repo_keys_dir / f"{repo_name}-encrypted-key-backup.txt"
     cmd = ["borg", "key", "export", "--paper", repo_path, key_export_path.as_posix()]
@@ -295,7 +316,7 @@ def delete(repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True)
             "--list",
             "--force",
             "--checkpoint-interval",
-            "10",
+            str(config.borg.checkpoint_interval // 90),
             repo_path,
         ]
     else:
@@ -307,7 +328,7 @@ def delete(repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True)
             "--list",
             "--force",
             "--checkpoint-interval",
-            "10",
+            str(config.borg.checkpoint_interval // 90),
             repo_path,
         ]
     if log_json is False:
@@ -349,7 +370,7 @@ def delete_archive(
             "--list",
             "--force",
             "--checkpoint-interval",
-            "10",
+            str(config.borg.checkpoint_interval // 90),
             f"{repo_path}::{archive_name}",
         ]
     else:
@@ -361,7 +382,7 @@ def delete_archive(
             "--list",
             "--force",
             "--checkpoint-interval",
-            "10",
+            str(config.borg.checkpoint_interval // 90),
             f"{repo_path}::{archive_name}",
         ]
     if log_json is False:

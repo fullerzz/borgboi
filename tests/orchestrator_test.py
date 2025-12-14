@@ -109,19 +109,19 @@ def test_restore_archive(borg_repo: BorgBoiRepo) -> None:
 
 
 def test_create_excludes_list(borg_repo_without_excludes: BorgBoiRepo) -> None:
-    from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME
+    from borgboi.config import config
     from borgboi.orchestrator import create_excludes_list
 
     borg_repo = borg_repo_without_excludes
     # Create an exclusion list for the repo
     create_excludes_list(borg_repo.name, EXCLUDES_SRC)
     # Assert that the exclusion list was created
-    new_exclusions_list = Path.home() / BORGBOI_DIR_NAME / f"{borg_repo.name}_{EXCLUDE_FILENAME}"
+    new_exclusions_list = config.borgboi_dir / f"{borg_repo.name}_{config.excludes_filename}"
     assert new_exclusions_list.exists() is True
 
     with Path(EXCLUDES_SRC).open("r") as f:
         expected_excludes = f.read()
-    with (Path.home() / BORGBOI_DIR_NAME / f"{borg_repo.name}_{EXCLUDE_FILENAME}").open("r") as f:
+    with (config.borgboi_dir / f"{borg_repo.name}_{config.excludes_filename}").open("r") as f:
         actual_excludes = f.read()
     assert actual_excludes == expected_excludes
     new_exclusions_list.unlink()

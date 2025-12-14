@@ -10,7 +10,9 @@ dependencies = [
     "boto3>=1.35.92",
     "catppuccin[pygments]>=2.4.1",
     "click>=8.1.8",
+    "dynaconf>=3.2.12",
     "pydantic>=2.10.4",
+    "pyyaml>=6.0",
     "rich>=13.9.4",
 ]
 
@@ -39,6 +41,7 @@ dev = [
     "ruff>=0.8.6",
     "rust-just>=1.39.0",
     "ty>=0.0.1a12",
+    "types-pyyaml>=6.0.12",
 ]
 docs = ["mkdocs-glightbox>=0.4.0", "mkdocs-material>=9.6.6"]
 

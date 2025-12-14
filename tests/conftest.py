@@ -34,12 +34,22 @@ def _cleanup_borg_security_files(repo_id: str, security_dir: str) -> None:
 
 @pytest.fixture(autouse=True)
 def _common_env_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Set up test environment variables and reload config."""
+    # Keep secrets as environment variables
     monkeypatch.setenv("BORG_PASSPHRASE", "test")
     monkeypatch.setenv("BORG_NEW_PASSPHRASE", "test")
-    monkeypatch.setenv("BORG_S3_BUCKET", "test")
-    monkeypatch.setenv("BORG_DYNAMODB_TABLE", DYNAMO_TABLE_NAME)
-    monkeypatch.setenv("BB_REPOS_TABLE", DYNAMO_TABLE_NAME)
-    monkeypatch.setenv("BORGBOI_DIR_NAME", ".borgboi")
+
+    # Use new BORGBOI_ prefix pattern for config
+    monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "test")
+    monkeypatch.setenv("BORGBOI_AWS__DYNAMODB_REPOS_TABLE", DYNAMO_TABLE_NAME)
+
+    # Update the global config object with test values
+    # This is necessary because config is a module-level singleton
+    from borgboi.config import config
+
+    # Update AWS config with test values
+    config.aws.dynamodb_repos_table = DYNAMO_TABLE_NAME
+    config.aws.s3_bucket = "test"
 
 
 @pytest.fixture

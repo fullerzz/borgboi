@@ -1,11 +1,11 @@
 from pathlib import Path
 
-from borgboi.clients.borg import BORGBOI_DIR_NAME
 from borgboi.clients.utils import trash
+from borgboi.config import config
 from borgboi.models import BorgBoiRepo
 
 METADATA_DIR_NAME = ".borgboi_metadata"
-METADATA_DIR: Path = Path.home() / Path(BORGBOI_DIR_NAME) / METADATA_DIR_NAME
+METADATA_DIR: Path = config.borgboi_dir / METADATA_DIR_NAME
 
 
 def _get_repo_metadata(repo_name: str) -> BorgBoiRepo | None:

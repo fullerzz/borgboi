@@ -1,6 +1,7 @@
 import subprocess as sp
 from collections.abc import Generator
-from os import environ
+
+from borgboi.config import config
 
 
 def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
@@ -18,7 +19,7 @@ def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
         Generator[str]: stdout of S3 sync command line by line
     """
     sync_source = repo_path
-    s3_destination_uri = f"s3://{environ['BORG_S3_BUCKET']}/{repo_name}"
+    s3_destination_uri = f"s3://{config.aws.s3_bucket}/{repo_name}"
     cmd = [
         "aws",
         "s3",
@@ -65,7 +66,7 @@ def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool) -> Generator[
     Yields:
         Generator[str]: stdout of S3 sync command line by line
     """
-    sync_source = f"s3://{environ['BORG_S3_BUCKET']}/{repo_name}"
+    sync_source = f"s3://{config.aws.s3_bucket}/{repo_name}"
     s3_destination_uri = repo_path
     if dry_run:
         cmd = [
