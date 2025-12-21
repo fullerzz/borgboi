@@ -3,11 +3,13 @@ from datetime import datetime
 
 import boto3
 from botocore.config import Config
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from rich.pretty import pprint
 
 from borgboi import validator
 from borgboi.clients import borg
 from borgboi.config import config
+from borgboi.lib.passphrase import resolve_passphrase
 from borgboi.models import BorgBoiRepo
 from borgboi.rich_utils import console
 
@@ -29,14 +31,23 @@ class BorgBoiArchiveTableItem(BaseModel):
 class BorgBoiRepoTableItem(BaseModel):
     """DynamoDB table item for a Borg repository."""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     repo_path: str
     hostname: str
     backup_target_path: str
-    repo_name: str
+    repo_name: str = Field(..., alias="common_name")
     last_backup: str | None = None
     last_s3_sync: str | None = None
     os_platform: str | None = None
+
+    # DEPRECATED: Kept for backward compatibility
     passphrase: str | None = None
+
+    # NEW: File-based passphrase storage
+    passphrase_file_path: str | None = None
+    passphrase_migrated: bool | None = None
+
     retention_keep_daily: int | None = None
     retention_keep_weekly: int | None = None
     retention_keep_monthly: int | None = None
@@ -53,14 +64,19 @@ def _convert_repo_to_table_item(repo: BorgBoiRepo) -> BorgBoiRepoTableItem:
     Returns:
         BorgBoiRepoTableItem: Borg repository converted to a DynamoDB table item
     """
-    return BorgBoiRepoTableItem(
-        repo_path=repo.path,
-        hostname=repo.hostname,
-        backup_target_path=repo.backup_target,
-        repo_name=repo.name,
-        last_backup=repo.last_backup.isoformat() if repo.last_backup else None,
-        os_platform=repo.os_platform,
-    )
+    data = {
+        "repo_path": repo.path,
+        "hostname": repo.hostname,
+        "backup_target_path": repo.backup_target,
+        "common_name": repo.name,
+        "os_platform": repo.os_platform,
+        "passphrase": repo.passphrase,
+        "passphrase_file_path": repo.passphrase_file_path,
+        "passphrase_migrated": repo.passphrase_migrated,
+    }
+    if repo.last_backup:
+        data["last_backup"] = repo.last_backup.isoformat()
+    return BorgBoiRepoTableItem.model_validate(data)
 
 
 def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
@@ -74,7 +90,17 @@ def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
         BorgBoiRepo: Borg repository
     """
     last_backup = datetime.fromisoformat(item.last_backup) if item.last_backup else None
-    metadata = borg.info(item.repo_path) if validator.repo_is_local(item) else None
+
+    # Resolve passphrase for local repos before getting metadata
+    metadata = None
+    if validator.repo_is_local(item):
+        passphrase = resolve_passphrase(
+            repo_name=item.repo_name,
+            cli_passphrase=None,
+            db_passphrase=item.passphrase,
+            allow_env_fallback=True,
+        )
+        metadata = borg.info(item.repo_path, passphrase=passphrase)
 
     return BorgBoiRepo(
         path=item.repo_path,
@@ -84,6 +110,9 @@ def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
         os_platform=item.os_platform or "",
         last_backup=last_backup,
         metadata=metadata,
+        passphrase=item.passphrase,
+        passphrase_file_path=item.passphrase_file_path,
+        passphrase_migrated=item.passphrase_migrated or False,
     )
 
 
@@ -108,7 +137,15 @@ def get_all_repos() -> list[BorgBoiRepo]:
     """
     table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     response = table.scan()
-    return [_convert_table_item_to_repo(BorgBoiRepoTableItem(**repo)) for repo in response["Items"]]  # type: ignore
+    db_repo_items: list[BorgBoiRepoTableItem] = []
+    for repo in response["Items"]:
+        pprint(repo)
+        try:
+            db_repo_items.append(BorgBoiRepoTableItem.model_validate(repo))
+        except ValidationError as e:
+            pprint(e)
+            continue
+    return [_convert_table_item_to_repo(repo) for repo in db_repo_items]
 
 
 def get_repo_by_path(repo_path: str, hostname: str = socket.gethostname()) -> BorgBoiRepo:
@@ -124,7 +161,7 @@ def get_repo_by_path(repo_path: str, hostname: str = socket.gethostname()) -> Bo
     """
     table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     response = table.get_item(Key={"repo_path": repo_path, "hostname": hostname})
-    return _convert_table_item_to_repo(BorgBoiRepoTableItem(**response["Item"]))  # type: ignore
+    return _convert_table_item_to_repo(BorgBoiRepoTableItem.model_validate(response.get("Item")))
 
 
 def get_repo_by_name(repo_name: str) -> BorgBoiRepo:
@@ -144,7 +181,7 @@ def get_repo_by_name(repo_name: str) -> BorgBoiRepo:
         ExpressionAttributeValues={":name": repo_name},
         Limit=1,
     )
-    return _convert_table_item_to_repo(BorgBoiRepoTableItem(**response["Items"][0]))  # type: ignore
+    return _convert_table_item_to_repo(BorgBoiRepoTableItem.model_validate(response["Items"][0]))
 
 
 def delete_repo(repo: BorgBoiRepo) -> None:
