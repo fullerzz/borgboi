@@ -21,6 +21,14 @@ class BorgBoiRepo(BaseModel):
     last_backup: datetime | None = None
     metadata: RepoInfo | None
 
+    # DEPRECATED: Kept for backward compatibility
+    # Passphrases are now stored in files at ~/.borgboi/passphrases/{repo-name}.key
+    passphrase: str | None = None
+
+    # NEW: File-based passphrase storage
+    passphrase_file_path: str | None = None
+    passphrase_migrated: bool = False
+
     @field_validator("os_platform")
     @classmethod
     def validate_os_platform(cls, v: str) -> str:

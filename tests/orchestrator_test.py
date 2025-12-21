@@ -13,6 +13,7 @@ EXCLUDES_SRC = "tests/data/excludes.txt"
 @pytest.mark.usefixtures("create_dynamodb_table")
 @pytest.mark.parametrize("offline_mode", [True, False])
 def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, offline_mode: bool) -> None:
+    from borgboi.config import config
     from borgboi.orchestrator import create_borg_repo
 
     new_repo = create_borg_repo(
@@ -21,6 +22,18 @@ def test_create_borg_repo(repo_storage_dir: Path, backup_target_dir: Path, offli
     assert new_repo.path == repo_storage_dir.as_posix()
     assert new_repo.backup_target == backup_target_dir.as_posix()
     assert new_repo.name == "test-repo"
+
+    # Verify passphrase file was created
+    assert new_repo.passphrase_file_path is not None
+    passphrase_file = Path(new_repo.passphrase_file_path)
+    assert passphrase_file.exists()
+    assert passphrase_file.parent == config.passphrases_dir
+
+    # Verify migration flag is set for new repos
+    assert new_repo.passphrase_migrated is True
+
+    # Verify passphrase is NOT stored in the model
+    assert new_repo.passphrase is None
 
 
 def test_create_borg_repo_offline_metadata(tmp_path: Path, backup_target_dir: Path) -> None:
@@ -55,23 +68,39 @@ def test_lookup_repo(repo_path: str | None, repo_name: str | None, monkeypatch: 
     import borgboi.clients.dynamodb
     from borgboi.orchestrator import lookup_repo
 
-    def mock_get_repo_by_path(*args: Any, **kwargs: Any) -> str:
-        # Returns first arg passed into the function which is the repo path
-        return args[0]
+    def mock_get_repo_by_path(*args: Any, **kwargs: Any) -> BorgBoiRepo:
+        # Returns a BorgBoiRepo with the given path
+        return BorgBoiRepo(
+            path=args[0],
+            backup_target="/backup",
+            name="test-repo",
+            hostname="test-host",
+            os_platform="Linux",
+            metadata=None,
+            passphrase_migrated=True,
+        )
 
-    def mock_get_repo_by_name(*args: Any, **kwargs: Any) -> None:
-        # Returns first arg passed into the function which is the repo name
-        return args[0]
+    def mock_get_repo_by_name(*args: Any, **kwargs: Any) -> BorgBoiRepo:
+        # Returns a BorgBoiRepo with the given name
+        return BorgBoiRepo(
+            path="/path/to/repo",
+            backup_target="/backup",
+            name=args[0],
+            hostname="test-host",
+            os_platform="Linux",
+            metadata=None,
+            passphrase_migrated=True,
+        )
 
     monkeypatch.setattr(borgboi.clients.dynamodb, "get_repo_by_path", mock_get_repo_by_path)
     monkeypatch.setattr(borgboi.clients.dynamodb, "get_repo_by_name", mock_get_repo_by_name)
     resp = lookup_repo(repo_path, repo_name, False)
     if repo_path:
-        # If repo_path is provided, the mocked function should return the repo path
-        assert resp == repo_path
+        # If repo_path is provided, the mocked function should return the repo with that path
+        assert resp.path == repo_path
     elif repo_name:
-        # If repo_name is provided, the mocked function should return the repo name
-        assert resp == repo_name
+        # If repo_name is provided, the mocked function should return the repo with that name
+        assert resp.name == repo_name
     else:
         raise AssertionError("Either get_repo_by_path or get_repo_by_name should have been called")
 
@@ -193,3 +222,131 @@ def test_remove_from_excludes_file(borg_repo: BorgBoiRepo) -> None:
     assert new_line_count == original_line_count - 1
     updated_line_dict = {line_num: line for line_num, line in enumerate(excludes)}
     assert updated_line_dict[index_to_remove] != line_dict[index_to_remove]
+
+
+@pytest.mark.usefixtures("create_dynamodb_table")
+def test_migrate_repo_passphrase_to_file(repo_storage_dir: Path, backup_target_dir: Path) -> None:
+    """Test manual migration of repository passphrase from database to file."""
+    from borgboi.config import config
+    from borgboi.orchestrator import create_borg_repo, migrate_repo_passphrase_to_file
+
+    # Create a repo (which now creates a passphrase file)
+    repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "test-migration", False)
+
+    # Simulate an old repo by clearing migration fields and setting passphrase
+    repo.passphrase = "old-db-passphrase"  # noqa: S105
+    repo.passphrase_migrated = False
+    repo.passphrase_file_path = None
+
+    # Delete the passphrase file to simulate old state
+    if repo.passphrase_file_path:
+        Path(repo.passphrase_file_path).unlink(missing_ok=True)
+
+    # Migrate the repo
+    migrated_repo = migrate_repo_passphrase_to_file(repo, False)
+
+    # Verify migration occurred
+    assert migrated_repo.passphrase_migrated is True
+    assert migrated_repo.passphrase_file_path is not None
+
+    # Verify passphrase file was created
+    passphrase_file = Path(migrated_repo.passphrase_file_path)
+    assert passphrase_file.exists()
+    assert passphrase_file.parent == config.passphrases_dir
+
+    # Verify passphrase content is correct
+    assert passphrase_file.read_text(encoding="utf-8") == "old-db-passphrase"
+
+    # Verify database passphrase is kept for backward compatibility
+    assert migrated_repo.passphrase == "old-db-passphrase"  # noqa: S105
+
+
+@pytest.mark.usefixtures("create_dynamodb_table")
+def test_auto_migration_on_lookup(
+    repo_storage_dir: Path, backup_target_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test that repositories are auto-migrated when looked up."""
+    from borgboi.orchestrator import create_borg_repo, lookup_repo
+
+    # Create a repo
+    repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), "test-auto-migrate", False)
+
+    # Simulate an old repo by manipulating the database
+    import borgboi.clients.dynamodb as dynamodb_client
+
+    # Update the repo in the database to look like an old repo
+    def mock_get_repo_by_name(name: str) -> BorgBoiRepo:
+        # Return a repo that looks like it hasn't been migrated
+        old_repo = BorgBoiRepo(
+            path=repo.path,
+            backup_target=repo.backup_target,
+            name=name,
+            hostname=repo.hostname,
+            os_platform=repo.os_platform,
+            metadata=repo.metadata,
+            passphrase="old-unmigrated-passphrase",  # noqa: S106
+            passphrase_file_path=None,
+            passphrase_migrated=False,
+        )
+        return old_repo
+
+    monkeypatch.setattr(dynamodb_client, "get_repo_by_name", mock_get_repo_by_name)
+
+    # Lookup the repo - should trigger auto-migration
+    looked_up_repo = lookup_repo(None, "test-auto-migrate", False)
+
+    # Verify auto-migration occurred
+    assert looked_up_repo.passphrase_migrated is True
+    assert looked_up_repo.passphrase_file_path is not None
+
+    # Verify passphrase file was created
+    passphrase_file = Path(looked_up_repo.passphrase_file_path)
+    assert passphrase_file.exists()
+    assert passphrase_file.read_text(encoding="utf-8") == "old-unmigrated-passphrase"
+
+
+def test_passphrase_resolution_priority(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that passphrase resolution follows correct priority: CLI > File > Env > Config."""
+    import borgboi.config
+    from borgboi.config import config
+    from borgboi.lib.passphrase import resolve_passphrase, save_passphrase_to_file
+
+    # Setup test passphrases directory
+    monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
+
+    # Test 1: CLI parameter has highest priority
+    save_passphrase_to_file("test-repo", "file-passphrase")
+    monkeypatch.setenv("BORG_PASSPHRASE", "env-passphrase")
+    monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+
+    result = resolve_passphrase(
+        repo_name="test-repo",
+        cli_passphrase="cli-passphrase",  # noqa: S106
+        allow_env_fallback=True,
+    )
+    assert result == "cli-passphrase"
+
+    # Test 2: File has priority over env
+    result = resolve_passphrase(
+        repo_name="test-repo",
+        cli_passphrase=None,
+        allow_env_fallback=True,
+    )
+    assert result == "file-passphrase"
+
+    # Test 3: Env has priority over config (when file doesn't exist)
+    result = resolve_passphrase(
+        repo_name="nonexistent-repo",
+        cli_passphrase=None,
+        allow_env_fallback=True,
+    )
+    assert result == "env-passphrase"
+
+    # Test 4: Config is used as last resort
+    monkeypatch.delenv("BORG_PASSPHRASE", raising=False)
+    result = resolve_passphrase(
+        repo_name="nonexistent-repo",
+        cli_passphrase=None,
+        allow_env_fallback=True,
+    )
+    assert result == "config-passphrase"

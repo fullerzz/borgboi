@@ -39,6 +39,8 @@ class BorgConfig(BaseModel):
     storage_quota: str = "100G"
     additional_free_space: str = "2G"
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
+    borg_passphrase: str | None = None
+    borg_new_passphrase: str | None = None
 
 
 class UIConfig(BaseModel):
@@ -63,6 +65,11 @@ class Config(BaseModel):
     def borgboi_dir(self) -> Path:
         """Get the borgboi directory path."""
         return resolve_home_dir() / ".borgboi"
+
+    @property
+    def passphrases_dir(self) -> Path:
+        """Get the passphrases directory path."""
+        return self.borgboi_dir / "passphrases"
 
     @property
     def excludes_filename(self) -> str:
@@ -144,6 +151,8 @@ def get_config() -> Config:
                 keep_monthly=int(settings.get("borg.retention.keep_monthly", 6)),
                 keep_yearly=int(settings.get("borg.retention.keep_yearly", 0)),
             ),
+            borg_passphrase=settings.get("borg.borg_passphrase"),
+            borg_new_passphrase=settings.get("borg.borg_new_passphrase"),
         ),
         ui=UIConfig(
             theme=str(settings.get("ui.theme", "catppuccin")),

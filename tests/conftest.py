@@ -33,9 +33,9 @@ def _cleanup_borg_security_files(repo_id: str, security_dir: str) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _common_env_config(monkeypatch: pytest.MonkeyPatch) -> None:
+def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> None:
     """Set up test environment variables and reload config."""
-    # Keep secrets as environment variables
+    # Keep secrets as environment variables (for fallback)
     monkeypatch.setenv("BORG_PASSPHRASE", "test")
     monkeypatch.setenv("BORG_NEW_PASSPHRASE", "test")
 
@@ -50,6 +50,14 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch) -> None:
     # Update AWS config with test values
     config.aws.dynamodb_repos_table = DYNAMO_TABLE_NAME
     config.aws.s3_bucket = "test"
+
+    # Use a temporary directory for all borgboi files during tests
+    # Monkeypatch resolve_home_dir to use a temp directory
+    # This will cause borgboi_dir and passphrases_dir to be under the temp directory
+    test_home_dir = tmp_path_factory.mktemp("borgboi_home")
+    import borgboi.config
+
+    monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: test_home_dir)
 
 
 @pytest.fixture
