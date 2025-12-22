@@ -1,5 +1,4 @@
 import os
-import warnings
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
@@ -17,28 +16,16 @@ from tests.orchestrator_test import EXCLUDES_SRC
 DYNAMO_TABLE_NAME = "borg-repos-test"
 
 
-def _cleanup_borg_security_files(repo_id: str, security_dir: str) -> None:
-    """Clean up borg security files for a test repository."""
-    try:
-        # Clean up files in the security directory that match the repo id
-        security_path = Path(security_dir)
-        if security_path.exists():
-            # Look for files that contain the repo id
-            for file_path in security_path.iterdir():
-                if file_path.is_file() and repo_id in file_path.parts:
-                    file_path.unlink(missing_ok=True)
-            security_path.rmdir()
-    except Exception:
-        warnings.warn(f"Failed to cleanup borg security files for repo {repo_id} in {security_dir}", stacklevel=2)
-
-
 @pytest.fixture(autouse=True)
-def _common_env_config(monkeypatch: pytest.MonkeyPatch) -> None:
+def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("BORG_PASSPHRASE", "test")
     monkeypatch.setenv("BORG_NEW_PASSPHRASE", "test")
     monkeypatch.setenv("BORG_S3_BUCKET", "test")
     monkeypatch.setenv("BORG_DYNAMODB_TABLE", DYNAMO_TABLE_NAME)
     monkeypatch.setenv("BORGBOI_DIR_NAME", ".borgboi")
+    # Set BORG_BASE_DIR to a temporary directory so Borg's config, cache, and security
+    # files are isolated per test and automatically cleaned up when the test completes
+    monkeypatch.setenv("BORG_BASE_DIR", str(tmp_path / "borg"))
 
 
 @pytest.fixture
@@ -124,6 +111,9 @@ def backup_target_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None) -> Generator[BorgBoiRepo]:
     """
     Provides a BorgRepo with an excludes list already created.
+
+    Note: Borg security/cache files are automatically cleaned up via the BORG_BASE_DIR
+    environment variable set in the _common_env_config autouse fixture.
     """
     from borgboi.orchestrator import create_borg_repo, create_excludes_list
 
@@ -132,23 +122,20 @@ def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_t
     exclusion_list = create_excludes_list(repo_name, EXCLUDES_SRC)
     yield repo
     exclusion_list.unlink(missing_ok=True)
-    # Clean up borg security files
-    if repo.metadata and repo.metadata.repository and repo.metadata.repository.id:
-        _cleanup_borg_security_files(repo.metadata.repository.id, repo.metadata.security_dir)
 
 
 @pytest.fixture
 def borg_repo_without_excludes(
     repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None
-) -> Generator[BorgBoiRepo]:
+) -> BorgBoiRepo:
     """
     Provides a BorgRepo without an excludes list already created.
+
+    Note: Borg security/cache files are automatically cleaned up via the BORG_BASE_DIR
+    environment variable set in the _common_env_config autouse fixture.
     """
     from borgboi.orchestrator import create_borg_repo
 
     repo_name = uuid4().hex[0:5]
     repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, False)
-    yield repo
-    # Clean up borg security files
-    if repo.metadata and repo.metadata.repository and repo.metadata.repository.id:
-        _cleanup_borg_security_files(repo.metadata.repository.id, repo.metadata.security_dir)
+    return repo
