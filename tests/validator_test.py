@@ -65,6 +65,7 @@ class TestExcludeListCreated:
 
     def test_exclude_list_created_true(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that function returns True when exclude file exists."""
+        import borgboi.config
         from borgboi.config import config
 
         # Create the borgboi directory and exclude file
@@ -73,12 +74,14 @@ class TestExcludeListCreated:
         exclude_file = borgboi_dir / f"test-repo_{config.excludes_filename}"
         exclude_file.write_text("*.tmp\n")
 
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         assert exclude_list_created("test-repo") is True
 
     def test_exclude_list_created_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that function returns False when exclude file doesn't exist."""
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        import borgboi.config
+
+        monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         assert exclude_list_created("nonexistent-repo") is False
 
 

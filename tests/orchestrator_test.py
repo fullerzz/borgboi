@@ -307,7 +307,15 @@ def test_auto_migration_on_lookup(
 
 def test_passphrase_resolution_priority(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that passphrase resolution follows correct priority: CLI > File > Env > Config."""
+    import importlib
+
     import borgboi.config
+    import borgboi.lib.passphrase
+
+    # Reload modules to ensure we have fresh references after any previous test's module reloads
+    importlib.reload(borgboi.config)
+    importlib.reload(borgboi.lib.passphrase)
+
     from borgboi.config import config
     from borgboi.lib.passphrase import resolve_passphrase, save_passphrase_to_file
 

@@ -19,9 +19,18 @@ from borgboi.config import (
 
 @pytest.fixture(autouse=True)
 def _reset_config() -> None:
-    """Reset config module before each test to ensure clean state."""
+    """Reset config module before each test to ensure clean state.
+
+    Also reloads dependent modules (like passphrase) that import config,
+    so they get the fresh config reference.
+    """
+    import borgboi.lib.passphrase
+
     # Reload config module to get fresh instance
     importlib.reload(config_module)
+    # Also reload modules that import config at module level
+    # so they get the fresh config reference
+    importlib.reload(borgboi.lib.passphrase)
 
 
 def test_retention_config_defaults() -> None:

@@ -1,13 +1,26 @@
 """Tests for the passphrase management module."""
 
+import importlib
 import stat
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from borgboi.config import config
+import borgboi.config
+import borgboi.lib.passphrase
 from borgboi.lib import passphrase
+
+
+@pytest.fixture(autouse=True)
+def _ensure_fresh_modules() -> None:
+    """Ensure fresh module state for tests that depend on config.
+
+    This is needed because config_test.py reloads the config module,
+    which can leave the passphrase module with stale config references.
+    """
+    importlib.reload(borgboi.config)
+    importlib.reload(borgboi.lib.passphrase)
 
 
 class TestGenerateSecurePassphrase:
@@ -44,7 +57,7 @@ class TestGetPassphraseFilePath:
     def test_returns_path_in_passphrases_dir(self):
         """Verify path is under ~/.borgboi/passphrases/."""
         result = passphrase.get_passphrase_file_path("test-repo")
-        assert result.parent == config.passphrases_dir
+        assert result.parent == borgboi.config.config.passphrases_dir
 
     def test_uses_repo_name_with_key_extension(self):
         """Verify filename is {repo-name}.key."""
@@ -198,7 +211,7 @@ class TestResolvePassphrase:
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         passphrase.save_passphrase_to_file("test-repo", "file-passphrase")
         monkeypatch.setenv("BORG_PASSPHRASE", "env-passphrase")
-        monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", "config-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -215,7 +228,7 @@ class TestResolvePassphrase:
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         passphrase.save_passphrase_to_file("test-repo", "file-passphrase")
         monkeypatch.setenv("BORG_PASSPHRASE", "env-passphrase")
-        monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", "config-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -232,7 +245,7 @@ class TestResolvePassphrase:
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         passphrase.save_passphrase_to_file("test-repo", "file-passphrase")
         monkeypatch.setenv("BORG_PASSPHRASE", "env-passphrase")
-        monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", "config-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -249,7 +262,7 @@ class TestResolvePassphrase:
 
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         monkeypatch.setenv("BORG_PASSPHRASE", "env-passphrase")
-        monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", "config-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -266,7 +279,7 @@ class TestResolvePassphrase:
 
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         monkeypatch.delenv("BORG_PASSPHRASE", raising=False)
-        monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", "config-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -298,7 +311,7 @@ class TestResolvePassphrase:
 
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         monkeypatch.setenv("BORG_PASSPHRASE", "env-passphrase")
-        monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", "config-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -314,7 +327,7 @@ class TestResolvePassphrase:
 
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         monkeypatch.setenv("BORG_PASSPHRASE", "env-passphrase")
-        monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", "config-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -331,7 +344,7 @@ class TestResolvePassphrase:
 
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         monkeypatch.delenv("BORG_PASSPHRASE", raising=False)
-        monkeypatch.setattr(config.borg, "borg_passphrase", "config-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", "config-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -347,7 +360,7 @@ class TestResolvePassphrase:
 
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         monkeypatch.delenv("BORG_PASSPHRASE", raising=False)
-        monkeypatch.setattr(config.borg, "borg_passphrase", None)
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_passphrase", None)
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -363,7 +376,7 @@ class TestResolvePassphrase:
 
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         monkeypatch.setenv("BORG_NEW_PASSPHRASE", "new-passphrase")
-        monkeypatch.setattr(config.borg, "borg_new_passphrase", "config-new-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_new_passphrase", "config-new-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
@@ -380,7 +393,7 @@ class TestResolvePassphrase:
 
         monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         monkeypatch.delenv("BORG_NEW_PASSPHRASE", raising=False)
-        monkeypatch.setattr(config.borg, "borg_new_passphrase", "config-new-passphrase")
+        monkeypatch.setattr(borgboi.config.config.borg, "borg_new_passphrase", "config-new-passphrase")
 
         result = passphrase.resolve_passphrase(
             repo_name="test-repo",
