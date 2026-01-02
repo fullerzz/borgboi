@@ -84,6 +84,7 @@ warn_required_dynamic_aliases = true
 
 [tool.ruff]
 include = ["src/**", "tests/**"]
+exclude = ["tests/data/*.txt"]
 line-length = 120
 indent-width = 4
 
