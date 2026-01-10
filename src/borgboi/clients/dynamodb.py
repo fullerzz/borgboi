@@ -2,6 +2,7 @@ import socket
 from datetime import datetime
 
 import boto3
+from boto3.dynamodb.conditions import Key
 from botocore.config import Config
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from rich.pretty import pprint
@@ -177,8 +178,7 @@ def get_repo_by_name(repo_name: str) -> BorgBoiRepo:
     table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     response = table.query(
         IndexName="name_gsi",
-        KeyConditionExpression="repo_name = :name",
-        ExpressionAttributeValues={":name": repo_name},
+        KeyConditionExpression=Key("repo_name").eq(repo_name),
         Limit=1,
     )
     return _convert_table_item_to_repo(BorgBoiRepoTableItem.model_validate(response["Items"][0]))
@@ -206,3 +206,129 @@ def update_repo(repo: BorgBoiRepo) -> None:
     table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_repos_table)
     table.put_item(Item=_convert_repo_to_table_item(repo).model_dump(exclude_none=True))
     console.print(f"Updated repo in DynamoDB table: [bold cyan]{repo.path}[/]")
+
+
+# ============================================================================
+# Archive Table Operations
+# ============================================================================
+
+
+def add_archive_to_table(item: BorgBoiArchiveTableItem) -> None:
+    """
+    Add a Borg archive to the DynamoDB archives table.
+
+    Args:
+        item: Archive metadata to add to the table
+    """
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_archives_table)
+    table.put_item(Item=item.model_dump(exclude_none=True))
+    console.print(f"Added archive to DynamoDB table: [bold cyan]{item.archive_name}[/]")
+
+
+def get_archives_by_repo(repo_name: str) -> list[BorgBoiArchiveTableItem]:
+    """
+    Get all archives for a specific repository from the DynamoDB table.
+
+    Args:
+        repo_name: Name of the Borg repository
+
+    Returns:
+        List of archive metadata items
+    """
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_archives_table)
+    response = table.query(
+        KeyConditionExpression=Key("repo_name").eq(repo_name),
+    )
+    return [BorgBoiArchiveTableItem.model_validate(item) for item in response.get("Items", [])]
+
+
+def get_archive_by_id(archive_id: str) -> BorgBoiArchiveTableItem | None:
+    """
+    Get a specific archive by its ID from the DynamoDB table.
+
+    Args:
+        archive_id: The archive ID (from Borg)
+
+    Returns:
+        Archive metadata if found, None otherwise
+    """
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_archives_table)
+    response = table.query(
+        IndexName="archive_id_gsi",
+        KeyConditionExpression=Key("archive_id").eq(archive_id),
+        Limit=1,
+    )
+    items = response.get("Items", [])
+    if not items:
+        return None
+    return BorgBoiArchiveTableItem.model_validate(items[0])
+
+
+def get_archives_by_hostname(hostname: str) -> list[BorgBoiArchiveTableItem]:
+    """
+    Get all archives for a specific hostname from the DynamoDB table.
+
+    Args:
+        hostname: Hostname to filter by
+
+    Returns:
+        List of archive metadata items
+    """
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_archives_table)
+    response = table.query(
+        IndexName="hostname_gsi",
+        KeyConditionExpression=Key("hostname").eq(hostname),
+    )
+    return [BorgBoiArchiveTableItem.model_validate(item) for item in response.get("Items", [])]
+
+
+def delete_archive(repo_name: str, iso_timestamp: str) -> None:
+    """
+    Delete an archive from the DynamoDB archives table.
+
+    Args:
+        repo_name: Name of the Borg repository
+        iso_timestamp: ISO timestamp of the archive (sort key)
+    """
+    table = boto3.resource("dynamodb", config=boto_config).Table(config.aws.dynamodb_archives_table)
+    table.delete_item(Key={"repo_name": repo_name, "iso_timestamp": iso_timestamp})
+    console.print(f"Deleted archive from DynamoDB table: [bold cyan]{repo_name}::{iso_timestamp}[/]")
+
+
+def build_archive_table_item(
+    repo: BorgBoiRepo,
+    archive_name: str,
+    passphrase: str | None = None,
+) -> BorgBoiArchiveTableItem:
+    """
+    Build a BorgBoiArchiveTableItem from available borg data.
+
+    This function retrieves archive details using `borg info` and constructs
+    the table item with all required fields.
+
+    Args:
+        repo: The BorgBoiRepo containing repository information
+        archive_name: Name of the archive to get info for
+        passphrase: Optional passphrase for encrypted repositories
+
+    Returns:
+        Populated archive table item ready for DynamoDB
+    """
+    archive_info = borg.archive_info(repo.path, archive_name, passphrase)
+    archive_data = archive_info.archive
+
+    # Parse the timestamp from archive_name (format: YYYY-MM-DD_HH:MM:SS)
+    # Convert to ISO format for the sort key
+    iso_timestamp = datetime.strptime(archive_name, "%Y-%m-%d_%H:%M:%S").isoformat()
+
+    return BorgBoiArchiveTableItem(
+        repo_name=repo.name,
+        iso_timestamp=iso_timestamp,
+        archive_id=archive_data.get("id", ""),
+        archive_name=archive_name,
+        archive_path=f"{repo.path}::{archive_name}",
+        hostname=archive_data.get("hostname", socket.gethostname()),
+        original_size=archive_data.get("stats", {}).get("original_size", 0),
+        compressed_size=archive_data.get("stats", {}).get("compressed_size", 0),
+        deduped_size=archive_data.get("stats", {}).get("deduplicated_size", 0),
+    )

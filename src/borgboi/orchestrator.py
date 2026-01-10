@@ -368,6 +368,22 @@ def perform_daily_backup(repo_path: str, offline: bool, passphrase: str | None =
         ruler_color=COLOR_HEX.mauve,
     )
 
+    # Store archive metadata in DynamoDB (only in online mode)
+    if not offline:
+        try:
+            # Get the most recent archive (just created)
+            archives = borg.list_archives(repo.path, passphrase=resolved_passphrase)
+            if archives:
+                latest_archive = max(archives, key=lambda a: a.name)
+                archive_item = dynamodb.build_archive_table_item(
+                    repo=repo,
+                    archive_name=latest_archive.name,
+                    passphrase=resolved_passphrase,
+                )
+                dynamodb.add_archive_to_table(archive_item)
+        except Exception as e:
+            console.print(f"[bold yellow]Warning: Failed to store archive metadata: {e}[/]")
+
     # prune
     rich_utils.render_cmd_output_lines(
         "Pruning old backups",

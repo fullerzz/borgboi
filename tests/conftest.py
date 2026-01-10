@@ -15,6 +15,7 @@ from borgboi.models import BorgBoiRepo
 from tests.orchestrator_test import EXCLUDES_SRC
 
 DYNAMO_TABLE_NAME = "borg-repos-test"
+DYNAMO_ARCHIVES_TABLE_NAME = "borg-archives-test"
 
 
 def _cleanup_borg_security_files(repo_id: str, security_dir: str) -> None:
@@ -42,6 +43,7 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest
     # Use new BORGBOI_ prefix pattern for config
     monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "test")
     monkeypatch.setenv("BORGBOI_AWS__DYNAMODB_REPOS_TABLE", DYNAMO_TABLE_NAME)
+    monkeypatch.setenv("BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE", DYNAMO_ARCHIVES_TABLE_NAME)
 
     # Update the global config object with test values
     # This is necessary because config is a module-level singleton
@@ -49,6 +51,7 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest
 
     # Update AWS config with test values
     config.aws.dynamodb_repos_table = DYNAMO_TABLE_NAME
+    config.aws.dynamodb_archives_table = DYNAMO_ARCHIVES_TABLE_NAME
     config.aws.s3_bucket = "test"
 
     # Use a temporary directory for all borgboi files during tests
@@ -129,6 +132,46 @@ def create_dynamodb_table(dynamodb: DynamoDBClient) -> None:
     )
     waiter = dynamodb.get_waiter("table_exists")
     waiter.wait(TableName=DYNAMO_TABLE_NAME, WaiterConfig={"Delay": 2, "MaxAttempts": 10})
+
+
+@pytest.fixture
+def create_dynamodb_archives_table(dynamodb: DynamoDBClient) -> None:
+    """Create mock DynamoDB archives table for testing."""
+    dynamodb.create_table(
+        TableName=DYNAMO_ARCHIVES_TABLE_NAME,
+        KeySchema=[
+            {"AttributeName": "repo_name", "KeyType": "HASH"},
+            {"AttributeName": "iso_timestamp", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "repo_name", "AttributeType": "S"},
+            {"AttributeName": "iso_timestamp", "AttributeType": "S"},
+            {"AttributeName": "archive_id", "AttributeType": "S"},
+            {"AttributeName": "hostname", "AttributeType": "S"},
+        ],
+        ProvisionedThroughput={"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "hostname_gsi",
+                "KeySchema": [
+                    {"AttributeName": "hostname", "KeyType": "HASH"},
+                    {"AttributeName": "archive_id", "KeyType": "RANGE"},
+                ],
+                "Projection": {"ProjectionType": "ALL"},
+                "ProvisionedThroughput": {"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
+            },
+            {
+                "IndexName": "archive_id_gsi",
+                "KeySchema": [
+                    {"AttributeName": "archive_id", "KeyType": "HASH"},
+                ],
+                "Projection": {"ProjectionType": "ALL"},
+                "ProvisionedThroughput": {"ReadCapacityUnits": 10, "WriteCapacityUnits": 10},
+            },
+        ],
+    )
+    waiter = dynamodb.get_waiter("table_exists")
+    waiter.wait(TableName=DYNAMO_ARCHIVES_TABLE_NAME, WaiterConfig={"Delay": 2, "MaxAttempts": 10})
 
 
 @pytest.fixture
