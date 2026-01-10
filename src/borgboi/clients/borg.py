@@ -184,6 +184,20 @@ class RepoInfo(BaseModel):
     archives: list[dict[str, Any]] = []
 
 
+class ArchiveStats(BaseModel):
+    compressed_size: int
+    deduplicated_size: int
+    nfiles: int
+    original_size: int
+
+
+class ArchiveInfo(BaseModel):
+    archive: dict[str, Any]
+    cache: RepoCache
+    encryption: Encryption
+    repository: Repository
+
+
 def info(repo_path: str, passphrase: str | None = None) -> RepoInfo:
     """List a local Borg repository's info."""
     cmd = ["borg", "info", "--json", repo_path]
@@ -192,6 +206,28 @@ def info(repo_path: str, passphrase: str | None = None) -> RepoInfo:
     if result.returncode != 0 and result.returncode != 1:
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
     return RepoInfo.model_validate_json(result.stdout)
+
+
+def archive_info(repo_path: str, archive_name: str, passphrase: str | None = None) -> ArchiveInfo:
+    """
+    Get detailed information about a specific archive in a Borg repository.
+
+    https://borgbackup.readthedocs.io/en/stable/usage/info.html
+
+    Args:
+        repo_path: Path to the Borg repository
+        archive_name: Name of the archive to get info for
+        passphrase: Optional passphrase for encrypted repositories
+
+    Returns:
+        ArchiveInfo object containing archive details, cache stats, encryption, and repository info
+    """
+    cmd = ["borg", "info", "--json", f"{repo_path}::{archive_name}"]
+    env = _build_env_with_passphrase(passphrase)
+    result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
+    if result.returncode != 0 and result.returncode != 1:
+        raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
+    return ArchiveInfo.model_validate_json(result.stdout)
 
 
 def prune(
