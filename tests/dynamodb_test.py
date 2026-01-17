@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from pathlib import Path
 from platform import system
+from typing import TYPE_CHECKING
 
 import pytest
 from mypy_boto3_dynamodb import DynamoDBClient
@@ -7,6 +10,9 @@ from mypy_boto3_dynamodb import DynamoDBClient
 from borgboi.models import BorgBoiRepo
 
 from .conftest import DYNAMO_ARCHIVES_TABLE_NAME, DYNAMO_TABLE_NAME
+
+if TYPE_CHECKING:
+    from borgboi.clients.dynamodb import BorgBoiArchiveTableItem
 
 
 def get_mock_metadata(repo_path: Path) -> str:
@@ -97,7 +103,7 @@ def test_update_repo(dynamodb: DynamoDBClient, borgboi_repo: BorgBoiRepo) -> Non
 
 
 @pytest.fixture
-def sample_archive_item():
+def sample_archive_item() -> BorgBoiArchiveTableItem:
     """Return a sample BorgBoiArchiveTableItem for testing."""
     from borgboi.clients.dynamodb import BorgBoiArchiveTableItem
 
@@ -115,7 +121,10 @@ def sample_archive_item():
 
 
 @pytest.mark.usefixtures("create_dynamodb_archives_table")
-def test_add_archive_to_table(dynamodb: DynamoDBClient, sample_archive_item) -> None:
+def test_add_archive_to_table(
+    dynamodb: DynamoDBClient,
+    sample_archive_item: BorgBoiArchiveTableItem,
+) -> None:
     from borgboi.clients.dynamodb import add_archive_to_table
 
     add_archive_to_table(sample_archive_item)
@@ -128,11 +137,14 @@ def test_add_archive_to_table(dynamodb: DynamoDBClient, sample_archive_item) -> 
         },
     )
     assert "Item" in response
-    assert response["Item"]["archive_id"]["S"] == sample_archive_item.archive_id
+    assert response["Item"]["archive_id"].get("S") == sample_archive_item.archive_id
 
 
 @pytest.mark.usefixtures("create_dynamodb_archives_table")
-def test_get_archives_by_repo(dynamodb: DynamoDBClient, sample_archive_item) -> None:
+def test_get_archives_by_repo(
+    dynamodb: DynamoDBClient,
+    sample_archive_item: BorgBoiArchiveTableItem,
+) -> None:
     from borgboi.clients.dynamodb import add_archive_to_table, get_archives_by_repo
 
     add_archive_to_table(sample_archive_item)
@@ -152,7 +164,10 @@ def test_get_archives_by_repo_empty(dynamodb: DynamoDBClient) -> None:
 
 
 @pytest.mark.usefixtures("create_dynamodb_archives_table")
-def test_get_archive_by_id(dynamodb: DynamoDBClient, sample_archive_item) -> None:
+def test_get_archive_by_id(
+    dynamodb: DynamoDBClient,
+    sample_archive_item: BorgBoiArchiveTableItem,
+) -> None:
     from borgboi.clients.dynamodb import add_archive_to_table, get_archive_by_id
 
     add_archive_to_table(sample_archive_item)
@@ -172,7 +187,10 @@ def test_get_archive_by_id_not_found(dynamodb: DynamoDBClient) -> None:
 
 
 @pytest.mark.usefixtures("create_dynamodb_archives_table")
-def test_get_archives_by_hostname(dynamodb: DynamoDBClient, sample_archive_item) -> None:
+def test_get_archives_by_hostname(
+    dynamodb: DynamoDBClient,
+    sample_archive_item: BorgBoiArchiveTableItem,
+) -> None:
     from borgboi.clients.dynamodb import add_archive_to_table, get_archives_by_hostname
 
     add_archive_to_table(sample_archive_item)
@@ -183,7 +201,10 @@ def test_get_archives_by_hostname(dynamodb: DynamoDBClient, sample_archive_item)
 
 
 @pytest.mark.usefixtures("create_dynamodb_archives_table")
-def test_delete_archive(dynamodb: DynamoDBClient, sample_archive_item) -> None:
+def test_delete_archive(
+    dynamodb: DynamoDBClient,
+    sample_archive_item: BorgBoiArchiveTableItem,
+) -> None:
     from borgboi.clients.dynamodb import add_archive_to_table, delete_archive, get_archives_by_repo
 
     add_archive_to_table(sample_archive_item)
@@ -199,7 +220,10 @@ def test_delete_archive(dynamodb: DynamoDBClient, sample_archive_item) -> None:
 
 
 @pytest.mark.usefixtures("create_dynamodb_archives_table")
-def test_multiple_archives_same_repo(dynamodb: DynamoDBClient, sample_archive_item) -> None:
+def test_multiple_archives_same_repo(
+    dynamodb: DynamoDBClient,
+    sample_archive_item: BorgBoiArchiveTableItem,
+) -> None:
     from borgboi.clients.dynamodb import BorgBoiArchiveTableItem, add_archive_to_table, get_archives_by_repo
 
     # Add first archive
