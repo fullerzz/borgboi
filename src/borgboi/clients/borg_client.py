@@ -292,7 +292,7 @@ class BorgClient:
         if archive_name is None:
             archive_name = self._create_archive_name()
 
-        opts = options or BackupOptions()
+        opts = options or BackupOptions(compression=self.config.compression)
         cmd = [
             self.executable_path,
             "create",
