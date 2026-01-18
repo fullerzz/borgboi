@@ -1,3 +1,9 @@
+"""Models module for BorgBoi.
+
+This module provides backward-compatible re-exports from the new core.models module.
+The BorgBoiRepo class is now an alias for core.models.Repository.
+"""
+
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
@@ -7,11 +13,23 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 
 from borgboi.clients.borg import RepoInfo
 
+# Re-export from core.models for new usage
+from borgboi.core.models import (
+    BackupOptions,
+    Repository,
+    RestoreOptions,
+    RetentionPolicy,
+)
+
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
 
 
 class BorgBoiRepo(BaseModel):
-    """Contains information about a Borg repository."""
+    """Contains information about a Borg repository.
+
+    Note: This class is kept for backward compatibility.
+    New code should use borgboi.core.models.Repository instead.
+    """
 
     path: str
     backup_target: str
@@ -54,3 +72,14 @@ class BorgBoiRepo(BaseModel):
             return self.path.replace("Users/", "home/", 1)
         else:
             return Path(self.path).as_posix()
+
+
+# Re-export all models for convenience
+__all__ = [
+    "GIBIBYTES_IN_GIGABYTE",
+    "BackupOptions",
+    "BorgBoiRepo",
+    "Repository",
+    "RestoreOptions",
+    "RetentionPolicy",
+]
