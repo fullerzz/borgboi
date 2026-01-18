@@ -11,7 +11,7 @@ def test_create_defaults_to_config_compression(monkeypatch: pytest.MonkeyPatch) 
     client = BorgClient(config=config)
     captured_cmd: list[str] = []
 
-    def fake_run_streaming_command(cmd: list[str], passphrase: str | None = None) -> Generator[str, None, None]:
+    def fake_run_streaming_command(cmd: list[str], passphrase: str | None = None) -> Generator[str]:
         nonlocal captured_cmd
         captured_cmd = cmd
         if False:

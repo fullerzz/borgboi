@@ -10,6 +10,13 @@ import yaml
 from dynaconf import Dynaconf  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field
 
+DEFAULT_DYNAMODB_REPOS_TABLE = "bb-repos"
+DEFAULT_DYNAMODB_ARCHIVES_TABLE = "bb-archives"
+DEFAULT_S3_BUCKET = "bb-backups"
+DEFAULT_AWS_REGION = "us-west-1"
+DEFAULT_REPO_STORAGE_QUOTA = "100G"
+DEFAULT_REPO_COMPRESSION = "zstd,6"
+
 
 class RetentionConfig(BaseModel):
     """Borg backup retention policy configuration."""
@@ -23,10 +30,10 @@ class RetentionConfig(BaseModel):
 class AWSConfig(BaseModel):
     """AWS service configuration."""
 
-    dynamodb_repos_table: str = "borgboi-repos"
-    dynamodb_archives_table: str = "borgboi-archives"
-    s3_bucket: str = "borgboi-backup"
-    region: str = "us-west-1"
+    dynamodb_repos_table: str = DEFAULT_DYNAMODB_REPOS_TABLE
+    dynamodb_archives_table: str = DEFAULT_DYNAMODB_ARCHIVES_TABLE
+    s3_bucket: str = DEFAULT_S3_BUCKET
+    region: str = DEFAULT_AWS_REGION
     profile: str | None = None
 
 
@@ -35,9 +42,9 @@ class BorgConfig(BaseModel):
 
     executable_path: str = "borg"
     default_repo_path: Path = Field(default_factory=lambda: Path.home() / ".borgboi" / "repositories")
-    compression: str = "zstd,1"
+    compression: str = DEFAULT_REPO_COMPRESSION
     checkpoint_interval: int = 900  # seconds
-    storage_quota: str = "100G"
+    storage_quota: str = DEFAULT_REPO_STORAGE_QUOTA
     additional_free_space: str = "2G"
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     borg_passphrase: str | None = None
@@ -134,10 +141,10 @@ def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
     """
     cfg = Config(
         aws=AWSConfig(
-            dynamodb_repos_table=str(settings.get("aws.dynamodb_repos_table", "borgboi-repos")),
-            dynamodb_archives_table=str(settings.get("aws.dynamodb_archives_table", "borgboi-archives")),
-            s3_bucket=str(settings.get("aws.s3_bucket", "borgboi-backup")),
-            region=str(settings.get("aws.region", "us-west-1")),
+            dynamodb_repos_table=str(settings.get("aws.dynamodb_repos_table", DEFAULT_DYNAMODB_REPOS_TABLE)),
+            dynamodb_archives_table=str(settings.get("aws.dynamodb_archives_table", DEFAULT_DYNAMODB_ARCHIVES_TABLE)),
+            s3_bucket=str(settings.get("aws.s3_bucket", DEFAULT_S3_BUCKET)),
+            region=str(settings.get("aws.region", DEFAULT_AWS_REGION)),
             profile=settings.get("aws.profile") if settings.get("aws.profile") is not None else None,
         ),
         borg=BorgConfig(
@@ -145,9 +152,9 @@ def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
             default_repo_path=Path(
                 str(settings.get("borg.default_repo_path", str(resolve_home_dir() / ".borgboi" / "repositories")))
             ),
-            compression=str(settings.get("borg.compression", "zstd,1")),
+            compression=str(settings.get("borg.compression", DEFAULT_REPO_COMPRESSION)),
             checkpoint_interval=int(settings.get("borg.checkpoint_interval", 900)),
-            storage_quota=str(settings.get("borg.storage_quota", "100G")),
+            storage_quota=str(settings.get("borg.storage_quota", DEFAULT_REPO_STORAGE_QUOTA)),
             additional_free_space=str(settings.get("borg.additional_free_space", "2G")),
             retention=RetentionConfig(
                 keep_daily=int(settings.get("borg.retention.keep_daily", 7)),

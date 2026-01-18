@@ -54,9 +54,9 @@ def test_retention_config_custom_values() -> None:
 def test_aws_config_defaults() -> None:
     """Test that AWSConfig has correct defaults."""
     aws = AWSConfig()
-    assert aws.dynamodb_repos_table == "borgboi-repos"
-    assert aws.dynamodb_archives_table == "borgboi-archives"
-    assert aws.s3_bucket == "borgboi-backup"
+    assert aws.dynamodb_repos_table == "bb-repos"
+    assert aws.dynamodb_archives_table == "bb-archives"
+    assert aws.s3_bucket == "bb-backups"
     assert aws.region == "us-west-1"
     assert aws.profile is None
 
@@ -82,7 +82,7 @@ def test_borg_config_defaults() -> None:
     borg = BorgConfig()
     assert borg.executable_path == "borg"
     assert borg.default_repo_path == Path.home() / ".borgboi" / "repositories"
-    assert borg.compression == "zstd,1"
+    assert borg.compression == "zstd,6"
     assert borg.checkpoint_interval == 900
     assert borg.storage_quota == "100G"
     assert borg.additional_free_space == "2G"
@@ -130,8 +130,8 @@ def test_ui_config_custom_values() -> None:
 def test_config_defaults() -> None:
     """Test that Config has correct defaults."""
     cfg = Config()
-    assert cfg.aws.dynamodb_repos_table == "borgboi-repos"
-    assert cfg.borg.compression == "zstd,1"
+    assert cfg.aws.dynamodb_repos_table == "bb-repos"
+    assert cfg.borg.compression == "zstd,6"
     assert cfg.ui.theme == "catppuccin"
     assert cfg.offline is False
     assert cfg.debug is False
