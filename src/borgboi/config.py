@@ -199,7 +199,7 @@ def validate_config(cfg: Config) -> list[str]:  # noqa: C901
 
     # Check Borg executable
     borg_path = shutil.which(cfg.borg.executable_path)
-    if borg_path is None:
+    if not borg_path:
         warnings.append(f"Borg executable '{cfg.borg.executable_path}' not found in PATH. Backup operations will fail.")
 
     # Check AWS configuration if not offline

@@ -68,7 +68,7 @@ class OfflineStorage(RepositoryStorage):
                 try:
                     content = self._index_file.read_text()
                     return RepositoryIndex.model_validate_json(content)
-                except Exception as e:
+                except (OSError, ValueError, TypeError) as e:
                     raise StorageError(f"Failed to load repository index: {e}", operation="load_index", cause=e) from e
             return RepositoryIndex()
 
@@ -81,7 +81,7 @@ class OfflineStorage(RepositoryStorage):
         with self._lock:
             try:
                 self._index_file.write_text(index.model_dump_json(indent=2))
-            except Exception as e:
+            except (OSError, ValueError, TypeError) as e:
                 raise StorageError(f"Failed to save repository index: {e}", operation="save_index", cause=e) from e
 
     def _migrate_legacy_storage_if_needed(self) -> None:
@@ -122,7 +122,7 @@ class OfflineStorage(RepositoryStorage):
                     )
                     index.add(entry)
                     migrated += 1
-                except Exception:  # noqa: S112
+                except (OSError, ValueError, TypeError):
                     # Skip files that can't be migrated
                     continue
 
@@ -144,7 +144,7 @@ class OfflineStorage(RepositoryStorage):
                     try:
                         content = path.read_text()
                         return BorgBoiRepo.model_validate_json(content)
-                    except Exception as e:
+                    except (OSError, ValueError, TypeError) as e:
                         raise StorageError(f"Failed to load repository {name}: {e}", operation="get", cause=e) from e
                 raise RepositoryNotFoundError(f"Repository '{name}' not found", name=name)
 
@@ -157,7 +157,7 @@ class OfflineStorage(RepositoryStorage):
             try:
                 content = path.read_text()
                 return BorgBoiRepo.model_validate_json(content)
-            except Exception as e:
+            except (OSError, ValueError, TypeError) as e:
                 raise StorageError(f"Failed to load repository {name}: {e}", operation="get", cause=e) from e
 
     def get_by_path(self, path: str, hostname: str | None = None) -> BorgBoiRepo:
@@ -174,7 +174,7 @@ class OfflineStorage(RepositoryStorage):
                         repo = BorgBoiRepo.model_validate_json(content)
                         if repo.path == path and (hostname is None or repo.hostname == hostname):
                             return repo
-                    except Exception:  # noqa: S112
+                    except (OSError, ValueError, TypeError):
                         continue
                 raise RepositoryNotFoundError(f"Repository at path '{path}' not found", path=path)
 
@@ -203,7 +203,7 @@ class OfflineStorage(RepositoryStorage):
                         content = metadata_file.read_text()
                         repo = BorgBoiRepo.model_validate_json(content)
                         repos.append(repo)
-                    except Exception:  # noqa: S112
+                    except (OSError, ValueError, TypeError):
                         continue
 
             return repos
@@ -215,7 +215,7 @@ class OfflineStorage(RepositoryStorage):
 
             try:
                 path.write_text(repo.model_dump_json(indent=2))
-            except Exception as e:
+            except (OSError, ValueError, TypeError) as e:
                 raise StorageError(f"Failed to save repository {repo.name}: {e}", operation="save", cause=e) from e
 
             # Update index
@@ -243,7 +243,7 @@ class OfflineStorage(RepositoryStorage):
             try:
                 if path.exists():
                     path.unlink()
-            except Exception as e:
+            except OSError as e:
                 raise StorageError(f"Failed to delete repository {name}: {e}", operation="delete", cause=e) from e
 
             # Update index
@@ -297,7 +297,7 @@ class OfflineStorage(RepositoryStorage):
         try:
             content = path.read_text()
             return [line.strip() for line in content.splitlines() if line.strip()]
-        except Exception as e:
+        except OSError as e:
             raise StorageError(
                 f"Failed to load exclusions for {repo_name}: {e}", operation="get_exclusions", cause=e
             ) from e
@@ -315,7 +315,7 @@ class OfflineStorage(RepositoryStorage):
         path = self.get_exclusions_path(repo_name)
         try:
             path.write_text("\n".join(patterns) + "\n")
-        except Exception as e:
+        except OSError as e:
             raise StorageError(
                 f"Failed to save exclusions for {repo_name}: {e}", operation="save_exclusions", cause=e
             ) from e
@@ -357,16 +357,21 @@ class OfflineStorage(RepositoryStorage):
                 try:
                     content = self._s3_cache_file.read_text()
                     return S3StatsCache.model_validate_json(content)
-                except Exception:
+                except (OSError, ValueError, TypeError):
                     return S3StatsCache()
             return S3StatsCache()
 
     def _save_s3_cache(self, cache: S3StatsCache) -> None:
         """Save S3 stats cache to disk."""
-        import contextlib
+        import logging
 
-        with self._lock, contextlib.suppress(Exception):
-            self._s3_cache_file.write_text(cache.model_dump_json(indent=2))
+        logger = logging.getLogger(__name__)
+        with self._lock:
+            try:
+                self._s3_cache_file.write_text(cache.model_dump_json(indent=2))
+            except (OSError, ValueError, TypeError) as e:
+                # Log but don't raise - cache save failures shouldn't break operations
+                logger.warning("Failed to save S3 stats cache: %s", e)
 
     def get_s3_stats(self, repo_name: str) -> S3RepoStats | None:
         """Get cached S3 stats for a repository.
