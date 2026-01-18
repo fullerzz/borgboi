@@ -4,7 +4,7 @@ This module contains data models used by the storage layer,
 including the repository index format and S3 statistics cache.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -28,7 +28,7 @@ class RepositoryEntry(BaseModel):
     path: str
     hostname: str
     metadata_file: str | None = None
-    last_updated: datetime = Field(default_factory=datetime.now)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class RepositoryIndex(BaseModel):
@@ -45,7 +45,7 @@ class RepositoryIndex(BaseModel):
 
     version: int = 1
     repositories: dict[str, RepositoryEntry] = Field(default_factory=dict)
-    last_updated: datetime = Field(default_factory=datetime.now)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def add(self, entry: RepositoryEntry) -> None:
         """Add or update a repository entry.
@@ -120,7 +120,7 @@ class S3RepoStats(BaseModel):
     total_size_bytes: int = 0
     object_count: int = 0
     last_modified: datetime | None = None
-    cached_at: datetime = Field(default_factory=datetime.now)
+    cached_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def total_size_gb(self) -> float:
@@ -151,7 +151,7 @@ class S3StatsCache(BaseModel):
 
     version: int = 1
     repos: dict[str, S3RepoStats] = Field(default_factory=dict)
-    last_updated: datetime = Field(default_factory=datetime.now)
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def get(self, name: str) -> S3RepoStats | None:
         """Get S3 stats for a repository.
