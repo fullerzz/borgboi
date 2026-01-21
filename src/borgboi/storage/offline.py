@@ -4,14 +4,20 @@ This module provides local file-based storage for repository metadata,
 used when running without AWS connectivity.
 """
 
+import logging
+import tempfile
 import threading
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from borgboi.config import get_config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError
 from borgboi.models import BorgBoiRepo
 from borgboi.storage.base import RepositoryStorage
 from borgboi.storage.models import RepositoryEntry, RepositoryIndex, S3RepoStats, S3StatsCache
+
+logger = logging.getLogger(__name__)
 
 
 class OfflineStorage(RepositoryStorage):
@@ -73,14 +79,32 @@ class OfflineStorage(RepositoryStorage):
             return RepositoryIndex()
 
     def _save_index(self, index: RepositoryIndex) -> None:
-        """Save the repository index to disk.
+        """Save the repository index to disk atomically.
+
+        Uses a temporary file and atomic rename to prevent corruption
+        if the write fails mid-operation.
 
         Args:
             index: The index to save
         """
         with self._lock:
             try:
-                self._index_file.write_text(index.model_dump_json(indent=2))
+                # Write to temp file first, then atomically rename
+                fd, temp_path = tempfile.mkstemp(
+                    dir=self.base_dir, suffix=".tmp", prefix="index_"
+                )
+                temp_file = Path(temp_path)
+                try:
+                    temp_file.write_text(index.model_dump_json(indent=2))
+                    temp_file.replace(self._index_file)  # Atomic on POSIX
+                finally:
+                    # Clean up file descriptor
+                    import os
+
+                    os.close(fd)
+                    # Remove temp file if it still exists (replace failed)
+                    if temp_file.exists():
+                        temp_file.unlink()
             except (OSError, ValueError, TypeError) as e:
                 raise StorageError(f"Failed to save repository index: {e}", operation="save_index", cause=e) from e
 
@@ -89,6 +113,9 @@ class OfflineStorage(RepositoryStorage):
 
         Legacy storage kept individual JSON files in ~/.borgboi/.borgboi_metadata/
         This migrates them to the new indexed storage format.
+
+        Logs warnings for any files that cannot be migrated so users are aware
+        of potential issues with their repository metadata.
         """
         config = get_config()
         legacy_dir = config.borgboi_dir / ".borgboi_metadata"
@@ -99,6 +126,8 @@ class OfflineStorage(RepositoryStorage):
         with self._lock:
             index = self._load_index()
             migrated = 0
+            skipped = 0
+            errors: list[tuple[str, str]] = []
 
             for legacy_file in legacy_dir.glob("*.json"):
                 try:
@@ -107,6 +136,7 @@ class OfflineStorage(RepositoryStorage):
 
                     # Skip if already in index
                     if index.get(repo.name):
+                        skipped += 1
                         continue
 
                     # Save to new location
@@ -122,12 +152,38 @@ class OfflineStorage(RepositoryStorage):
                     )
                     index.add(entry)
                     migrated += 1
-                except (OSError, ValueError, TypeError):
-                    # Skip files that can't be migrated
-                    continue
+                except ValidationError as e:
+                    error_msg = f"Invalid repository data: {e}"
+                    errors.append((legacy_file.name, error_msg))
+                    logger.warning(
+                        "Failed to migrate legacy repository file '%s': %s",
+                        legacy_file.name,
+                        error_msg,
+                    )
+                except OSError as e:
+                    error_msg = f"File I/O error: {e}"
+                    errors.append((legacy_file.name, error_msg))
+                    logger.warning(
+                        "Failed to migrate legacy repository file '%s': %s",
+                        legacy_file.name,
+                        error_msg,
+                    )
 
             if migrated > 0:
                 self._save_index(index)
+                logger.info(
+                    "Migrated %d repositories from legacy storage (skipped %d already migrated)",
+                    migrated,
+                    skipped,
+                )
+
+            if errors:
+                logger.warning(
+                    "Failed to migrate %d legacy repository files. "
+                    "These repositories may need manual attention: %s",
+                    len(errors),
+                    ", ".join(f[0] for f in errors),
+                )
 
     # RepositoryStorage implementation
 
@@ -174,7 +230,13 @@ class OfflineStorage(RepositoryStorage):
                         repo = BorgBoiRepo.model_validate_json(content)
                         if repo.path == path and (hostname is None or repo.hostname == hostname):
                             return repo
-                    except (OSError, ValueError, TypeError):
+                    except ValidationError:
+                        # Skip files with invalid data structure
+                        logger.debug("Skipping invalid metadata file: %s", metadata_file.name)
+                        continue
+                    except OSError as e:
+                        # Log but continue - file may have been deleted or have permission issues
+                        logger.warning("Could not read metadata file '%s': %s", metadata_file.name, e)
                         continue
                 raise RepositoryNotFoundError(f"Repository at path '{path}' not found", path=path)
 
@@ -326,10 +388,22 @@ class OfflineStorage(RepositoryStorage):
         Args:
             repo_name: Repository name
             pattern: Exclusion pattern to add
+
+        Raises:
+            ValueError: If the pattern is empty or invalid
         """
+        # Validate pattern
+        stripped_pattern = pattern.strip()
+        if not stripped_pattern:
+            raise ValueError("Exclusion pattern cannot be empty")
+
+        # Check for obviously invalid patterns (newlines would corrupt the file)
+        if "\n" in stripped_pattern or "\r" in stripped_pattern:
+            raise ValueError("Exclusion pattern cannot contain newline characters")
+
         patterns = self.get_exclusions(repo_name)
-        if pattern not in patterns:
-            patterns.append(pattern)
+        if stripped_pattern not in patterns:
+            patterns.append(stripped_pattern)
             self.save_exclusions(repo_name, patterns)
 
     def remove_exclusion(self, repo_name: str, line_number: int) -> None:
@@ -362,13 +436,29 @@ class OfflineStorage(RepositoryStorage):
             return S3StatsCache()
 
     def _save_s3_cache(self, cache: S3StatsCache) -> None:
-        """Save S3 stats cache to disk."""
-        import logging
+        """Save S3 stats cache to disk atomically.
 
-        logger = logging.getLogger(__name__)
+        Uses a temporary file and atomic rename to prevent corruption.
+        Cache save failures are logged but not raised to avoid breaking operations.
+        """
         with self._lock:
             try:
-                self._s3_cache_file.write_text(cache.model_dump_json(indent=2))
+                # Write to temp file first, then atomically rename
+                fd, temp_path = tempfile.mkstemp(
+                    dir=self.base_dir, suffix=".tmp", prefix="s3cache_"
+                )
+                temp_file = Path(temp_path)
+                try:
+                    temp_file.write_text(cache.model_dump_json(indent=2))
+                    temp_file.replace(self._s3_cache_file)  # Atomic on POSIX
+                finally:
+                    # Clean up file descriptor
+                    import os
+
+                    os.close(fd)
+                    # Remove temp file if it still exists (replace failed)
+                    if temp_file.exists():
+                        temp_file.unlink()
             except (OSError, ValueError, TypeError) as e:
                 # Log but don't raise - cache save failures shouldn't break operations
                 logger.warning("Failed to save S3 stats cache: %s", e)

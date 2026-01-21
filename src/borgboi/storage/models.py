@@ -8,6 +8,11 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+# Size unit constants for human-readable formatting
+BYTES_PER_KB = 1024
+BYTES_PER_MB = BYTES_PER_KB * 1024
+BYTES_PER_GB = BYTES_PER_MB * 1024
+
 
 class RepositoryEntry(BaseModel):
     """Entry in the repository index.
@@ -54,7 +59,7 @@ class RepositoryIndex(BaseModel):
             entry: The repository entry to add
         """
         self.repositories[entry.name] = entry
-        self.last_updated = datetime.now()
+        self.last_updated = datetime.now(UTC)
 
     def remove(self, name: str) -> RepositoryEntry | None:
         """Remove a repository entry.
@@ -67,7 +72,7 @@ class RepositoryIndex(BaseModel):
         """
         entry = self.repositories.pop(name, None)
         if entry:
-            self.last_updated = datetime.now()
+            self.last_updated = datetime.now(UTC)
         return entry
 
     def get(self, name: str) -> RepositoryEntry | None:
@@ -86,15 +91,34 @@ class RepositoryIndex(BaseModel):
 
         Args:
             path: The repository path
-            hostname: Optional hostname to filter by
+            hostname: Optional hostname to filter by. If None and multiple
+                     repositories exist at the same path on different hosts,
+                     raises ValueError.
 
         Returns:
             The entry if found, None otherwise
+
+        Raises:
+            ValueError: If hostname is None and multiple repositories exist
+                       at the same path on different hosts
         """
-        for entry in self.repositories.values():
-            if entry.path == path and (hostname is None or entry.hostname == hostname):
-                return entry
-        return None
+        matches = [
+            entry
+            for entry in self.repositories.values()
+            if entry.path == path and (hostname is None or entry.hostname == hostname)
+        ]
+
+        if not matches:
+            return None
+
+        if len(matches) > 1 and hostname is None:
+            hostnames = [m.hostname for m in matches]
+            raise ValueError(
+                f"Multiple repositories found at path '{path}' on different hosts: {hostnames}. "
+                "Please specify a hostname to disambiguate."
+            )
+
+        return matches[0]
 
     def list_names(self) -> list[str]:
         """List all repository names.
@@ -125,17 +149,17 @@ class S3RepoStats(BaseModel):
     @property
     def total_size_gb(self) -> float:
         """Get total size in gigabytes."""
-        return self.total_size_bytes / (1024 * 1024 * 1024)
+        return self.total_size_bytes / BYTES_PER_GB
 
     @property
     def total_size_formatted(self) -> str:
         """Get human-readable total size."""
-        if self.total_size_bytes < 1024:
+        if self.total_size_bytes < BYTES_PER_KB:
             return f"{self.total_size_bytes} B"
-        elif self.total_size_bytes < 1024 * 1024:
-            return f"{self.total_size_bytes / 1024:.1f} KB"
-        elif self.total_size_bytes < 1024 * 1024 * 1024:
-            return f"{self.total_size_bytes / (1024 * 1024):.1f} MB"
+        elif self.total_size_bytes < BYTES_PER_MB:
+            return f"{self.total_size_bytes / BYTES_PER_KB:.1f} KB"
+        elif self.total_size_bytes < BYTES_PER_GB:
+            return f"{self.total_size_bytes / BYTES_PER_MB:.1f} MB"
         else:
             return f"{self.total_size_gb:.2f} GB"
 
@@ -172,7 +196,7 @@ class S3StatsCache(BaseModel):
             stats: The S3 stats to cache
         """
         self.repos[name] = stats
-        self.last_updated = datetime.now()
+        self.last_updated = datetime.now(UTC)
 
     def invalidate(self, name: str) -> None:
         """Invalidate cached stats for a repository.
@@ -182,9 +206,9 @@ class S3StatsCache(BaseModel):
         """
         if name in self.repos:
             del self.repos[name]
-            self.last_updated = datetime.now()
+            self.last_updated = datetime.now(UTC)
 
     def invalidate_all(self) -> None:
         """Invalidate all cached stats."""
         self.repos.clear()
-        self.last_updated = datetime.now()
+        self.last_updated = datetime.now(UTC)

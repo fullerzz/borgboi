@@ -11,6 +11,7 @@ from platform import system
 
 from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.clients.borg_client import BorgClient, create_borg_client
+from borgboi.clients.s3_client import S3ClientInterface
 from borgboi.config import Config, get_config
 from borgboi.core.errors import StorageError, ValidationError
 from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
@@ -41,7 +42,7 @@ class Orchestrator:
         self,
         borg_client: BorgClient | None = None,
         storage: RepositoryStorage | None = None,
-        s3_client: object | None = None,  # Will be S3Client in Phase 7
+        s3_client: S3ClientInterface | None = None,
         config: Config | None = None,
         output_handler: OutputHandler | None = None,
     ) -> None:
@@ -57,7 +58,7 @@ class Orchestrator:
         self.config = config or get_config()
         self.borg = borg_client or create_borg_client(config=self.config)
         self.storage = storage or self._create_default_storage()
-        self.s3 = s3_client
+        self.s3: S3ClientInterface | None = s3_client
         self.output = output_handler or DefaultOutputHandler()
 
     def _create_default_storage(self) -> RepositoryStorage:
