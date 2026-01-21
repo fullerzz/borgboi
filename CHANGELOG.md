@@ -1,3 +1,9 @@
+## v1.10.0 (2026-01-21)
+
+### Feat
+
+- Refactor Database Schema and Core Architecture (#144)
+
 ## v1.9.1 (2025-11-09)
 
 ### Fix
