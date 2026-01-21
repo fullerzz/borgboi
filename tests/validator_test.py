@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -61,22 +63,25 @@ class TestRepoIsLocal:
 class TestExcludeListCreated:
     """Test cases for exclude_list_created function."""
 
-    def test_exclude_list_created_true(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exclude_list_created_true(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that function returns True when exclude file exists."""
-        from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME
+        import borgboi.config
+        from borgboi.config import config
 
         # Create the borgboi directory and exclude file
-        borgboi_dir = tmp_path / BORGBOI_DIR_NAME
+        borgboi_dir = tmp_path / ".borgboi"
         borgboi_dir.mkdir()
-        exclude_file = borgboi_dir / f"test-repo_{EXCLUDE_FILENAME}"
+        exclude_file = borgboi_dir / f"test-repo_{config.excludes_filename}"
         exclude_file.write_text("*.tmp\n")
 
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         assert exclude_list_created("test-repo") is True
 
-    def test_exclude_list_created_false(self, tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_exclude_list_created_false(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that function returns False when exclude file doesn't exist."""
-        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        import borgboi.config
+
+        monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
         assert exclude_list_created("nonexistent-repo") is False
 
 

@@ -29,6 +29,18 @@ bb create-repo --repo-path /opt/borg-repos/docs --backup-target ~/Documents
 bb daily-backup --repo-path /opt/borg-repos/docs --offline
 ```
 
+## Configuration
+
+BorgBoi uses Dynaconf to load settings from YAML files, environment variables, and `.env` files, and Pydantic models for validation and defaults.
+
+- **Config file:** `~/.borgboi/config.yaml` (Dynaconf loads `config.yaml` from the settings directory).
+- **Environment variables:** Use the `BORGBOI` prefix. Nested keys use double underscores (for example: `BORGBOI_BORG__COMPRESSION="zstd,3"` or `BORGBOI_AWS__S3_BUCKET="my-bucket"`).
+- **Home dir override:** Set `BORGBOI_HOME` to change the base directory used for config and repo paths.
+- **Sudo behavior:** When running with `sudo`, the `SUDO_USER` environment variable is used to resolve the original user's home directory so config and repo paths point to the correct user.
+- **Accessing config in code:** Import the singleton `config` or call `get_config()` from `borgboi.config`.
+
+```
+
 ## To Do
 
 - [x] Wrap common borg operations for creating archive, pruning, and compacting

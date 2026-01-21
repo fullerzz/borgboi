@@ -17,7 +17,7 @@ test-cov:
     -open htmlcov/index.html
 
 # run all linters
-lint: mypy tflint tofu-validate
+lint: mypy ty tflint tofu-validate
     uv run ruff check --fix .
 
 # run ruff and tofu formatters
@@ -37,11 +37,15 @@ _start-dmypy:
 mypy: _start-dmypy
     uv run dmypy check src/borgboi
 
+# run ty type checker
+ty:
+    uv run ty check
+
 # run tofu validate
 tofu-validate:
     cd terraform && tofu validate
 
-# run tfline
+# run tflint
 tflint:
     cd terraform && tflint --init
     tflint --recursive --color

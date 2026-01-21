@@ -1,6 +1,11 @@
+"""Models module for BorgBoi.
+
+This module provides backward-compatible re-exports from the new core.models module.
+The BorgBoiRepo class is now an alias for core.models.Repository.
+"""
+
 from datetime import datetime
 from functools import cached_property
-from os import getenv
 from pathlib import Path
 from platform import system
 
@@ -8,13 +13,23 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 
 from borgboi.clients.borg import RepoInfo
 
-BORGBOI_DIR_NAME = getenv("BORGBOI_DIR_NAME", ".borgboi")
-EXCLUDE_FILENAME = "excludes.txt"
+# Re-export from core.models for new usage
+from borgboi.core.models import (
+    BackupOptions,
+    Repository,
+    RestoreOptions,
+    RetentionPolicy,
+)
+
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
 
 
 class BorgBoiRepo(BaseModel):
-    """Contains information about a Borg repository."""
+    """Contains information about a Borg repository.
+
+    Note: This class is kept for backward compatibility.
+    New code should use borgboi.core.models.Repository instead.
+    """
 
     path: str
     backup_target: str
@@ -23,6 +38,14 @@ class BorgBoiRepo(BaseModel):
     os_platform: str = Field(min_length=3)
     last_backup: datetime | None = None
     metadata: RepoInfo | None
+
+    # DEPRECATED: Kept for backward compatibility
+    # Passphrases are now stored in files at ~/.borgboi/passphrases/{repo-name}.key
+    passphrase: str | None = None
+
+    # NEW: File-based passphrase storage
+    passphrase_file_path: str | None = None
+    passphrase_migrated: bool = False
 
     @field_validator("os_platform")
     @classmethod
@@ -49,3 +72,14 @@ class BorgBoiRepo(BaseModel):
             return self.path.replace("Users/", "home/", 1)
         else:
             return Path(self.path).as_posix()
+
+
+# Re-export all models for convenience
+__all__ = [
+    "GIBIBYTES_IN_GIGABYTE",
+    "BackupOptions",
+    "BorgBoiRepo",
+    "Repository",
+    "RestoreOptions",
+    "RetentionPolicy",
+]

@@ -1,10 +1,9 @@
 import socket
 from collections.abc import Generator, Iterable
-from pathlib import Path
+from typing import Protocol
 
 from pydantic import ValidationError
 
-from borgboi.clients.dynamodb import BorgRepoTableItem
 from borgboi.clients.utils.borg_logs import (
     ArchiveProgress,
     FileStatus,
@@ -12,19 +11,26 @@ from borgboi.clients.utils.borg_logs import (
     ProgressMessage,
     ProgressPercent,
 )
-from borgboi.models import BORGBOI_DIR_NAME, EXCLUDE_FILENAME, BorgBoiRepo
+from borgboi.config import config
+from borgboi.models import BorgBoiRepo
+
+
+class HasHostname(Protocol):
+    """Protocol for objects with a hostname attribute."""
+
+    hostname: str
 
 
 def metadata_is_present(repo: BorgBoiRepo) -> bool:
     return repo.metadata is not None
 
 
-def repo_is_local(repo: BorgBoiRepo | BorgRepoTableItem) -> bool:
+def repo_is_local(repo: HasHostname) -> bool:
     return repo.hostname == socket.gethostname()
 
 
 def exclude_list_created(repo_name: str) -> bool:
-    exclude_file = Path.home() / BORGBOI_DIR_NAME / f"{repo_name}_{EXCLUDE_FILENAME}"
+    exclude_file = config.borgboi_dir / f"{repo_name}_{config.excludes_filename}"
     return exclude_file.exists()
 
 

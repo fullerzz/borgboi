@@ -4,15 +4,15 @@ version = "1.9.1"
 description = "Add your description here"
 license = "MIT"
 readme = "README.md"
-authors = [
-    { name = "Zach Fuller", email = "zach.fuller1222@gmail.com" }
-]
+authors = [{ name = "Zach Fuller", email = "zach.fuller1222@gmail.com" }]
 requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.35.92",
     "catppuccin[pygments]>=2.4.1",
     "click>=8.1.8",
+    "dynaconf>=3.2.12",
     "pydantic>=2.10.4",
+    "pyyaml>=6.0",
     "rich>=13.9.4",
 ]
 
@@ -41,11 +41,9 @@ dev = [
     "ruff>=0.8.6",
     "rust-just>=1.39.0",
     "ty>=0.0.1a12",
+    "types-pyyaml>=6.0.12",
 ]
-docs = [
-    "mkdocs-glightbox>=0.4.0",
-    "mkdocs-material>=9.6.6",
-]
+docs = ["mkdocs-glightbox>=0.4.0", "mkdocs-material>=9.6.6"]
 
 [tool.uv]
 default-groups = ["dev", "docs"]
@@ -56,7 +54,7 @@ addopts = [
     "--disable-socket",
     "--allow-unix-socket",
     "--cov=src/borgboi",
-    "--cov-report=term"
+    "--cov-report=term",
 ]
 filterwarnings = [
     "error",
@@ -66,23 +64,27 @@ filterwarnings = [
 ]
 
 
-[tool.basedpyright]
-include = [
-    "src/**",
-    "tests/**",
-]
-typeCheckingMode = "recommended"
+[tool.pyright]
+include = ["src/**", "tests/**"]
+typeCheckingMode = "standard"
 
 [tool.mypy]
-plugins = [
-    "pydantic.mypy"
-]
+plugins = ["pydantic.mypy"]
 warn_redundant_casts = true
 warn_unused_ignores = true
 disallow_any_generics = true
 check_untyped_defs = true
 no_implicit_reexport = true
 disallow_untyped_defs = true
+enable_error_code = [
+    "ignore-without-code",
+    "no-untyped-def",
+    "unreachable",
+    "unused-awaitable",
+    "explicit-override",
+    "mutable-override",
+    "exhaustive-match",
+]
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
@@ -90,13 +92,39 @@ init_typed = true
 warn_required_dynamic_aliases = true
 
 [tool.ruff]
+include = ["src/**", "tests/**"]
+exclude = ["tests/data/*.txt"]
 line-length = 120
 indent-width = 4
 
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "C90", "I", "N", "UP", "ASYNC", "S", "B", "ERA", "PLE", "PLW", "PLC", "PLW", "PERF", "RUF", "SIM", "PT", "T20", "PTH", "LOG", "G"]
+select = [
+    "E",
+    "F",
+    "W",
+    "C90",
+    "I",
+    "N",
+    "UP",
+    "ASYNC",
+    "S",
+    "B",
+    "ERA",
+    "PLE",
+    "PLW",
+    "PLC",
+    "PLW",
+    "PERF",
+    "RUF",
+    "SIM",
+    "PT",
+    "T20",
+    "PTH",
+    "LOG",
+    "G",
+]
 ignore = ["E501", "S101", "PLC0415"]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
@@ -111,6 +139,9 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+
+[tool.ty.rules]
+possibly-unresolved-reference = "warn"
 
 [tool.commitizen]
 name = "cz_conventional_commits"

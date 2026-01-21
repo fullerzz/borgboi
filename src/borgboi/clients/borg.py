@@ -2,19 +2,41 @@ import subprocess as sp
 from collections.abc import Generator
 from datetime import UTC, datetime
 from functools import cached_property
-from os import getenv
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
 
-BORGBOI_DIR_NAME = getenv("BORGBOI_DIR_NAME", ".borgboi")
-EXCLUDE_FILENAME = "excludes.txt"
+from borgboi.config import config
+
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
-STORAGE_QUOTA = "100G"
 
 
-def init_repository(repo_path: str, config_additional_free_space: bool = True, json_log: bool = True) -> None:
+def _build_env_with_passphrase(passphrase: str | None = None) -> dict[str, str] | None:
+    """
+    Build environment dict with BORG_PASSPHRASE if passphrase provided.
+
+    Args:
+        passphrase: Optional passphrase to set in environment
+
+    Returns:
+        Environment dict with BORG_PASSPHRASE set, or None if no passphrase
+    """
+    if passphrase is not None:
+        import os
+
+        env = os.environ.copy()
+        env["BORG_PASSPHRASE"] = passphrase
+        return env
+    return None
+
+
+def init_repository(
+    repo_path: str,
+    config_additional_free_space: bool = True,
+    json_log: bool = True,
+    passphrase: str | None = None,
+) -> None:
     """
     Initialize a new Borg repository at the specified path.
 
@@ -26,18 +48,27 @@ def init_repository(repo_path: str, config_additional_free_space: bool = True, j
         "--log-json",
         "--progress",
         "--encryption=repokey",
-        f"--storage-quota={STORAGE_QUOTA}",
+        f"--storage-quota={config.borg.storage_quota}",
         repo_path,
     ]
     if json_log is False:
         cmd.remove("--log-json")
-    result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
+    env = _build_env_with_passphrase(passphrase)
+    result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd)
 
     if config_additional_free_space:
-        config_cmd = ["borg", "config", "--log-json", "--progress", repo_path, "additional_free_space", "2G"]
-        result = sp.run(config_cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
+        config_cmd = [
+            "borg",
+            "config",
+            "--log-json",
+            "--progress",
+            repo_path,
+            "additional_free_space",
+            config.borg.additional_free_space,
+        ]
+        result = sp.run(config_cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
         if result.returncode != 0 and result.returncode != 1:
             raise sp.CalledProcessError(returncode=result.returncode, cmd=config_cmd)
 
@@ -48,7 +79,12 @@ def _create_archive_title() -> str:
 
 
 def create_archive(
-    repo_path: str, repo_name: str, backup_target_path: str, archive_name: str | None = None, log_json: bool = True
+    repo_path: str,
+    repo_name: str,
+    backup_target_path: str,
+    archive_name: str | None = None,
+    log_json: bool = True,
+    passphrase: str | None = None,
 ) -> Generator[str]:
     """
     Create a new Borg archive of the backup target directory while yielding the output line by line.
@@ -67,18 +103,19 @@ def create_archive(
         "--show-rc",
         "--list",
         "--stats",
-        "--compression=zstd,1",
+        f"--compression={config.borg.compression}",
         "--exclude-caches",
         "--exclude-nodump",
         "--exclude-from",
-        f"{(Path.home() / BORGBOI_DIR_NAME / f'{repo_name}_{EXCLUDE_FILENAME}').as_posix()}",
+        f"{(config.borgboi_dir / f'{repo_name}_{config.excludes_filename}').as_posix()}",
         f"{repo_path}::{archive_name}",
         backup_target_path,
     ]
     if log_json is False:
         cmd.remove("--log-json")
 
-    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    env = _build_env_with_passphrase(passphrase)
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
     while out_stream.readable():  # type: ignore
@@ -147,17 +184,60 @@ class RepoInfo(BaseModel):
     archives: list[dict[str, Any]] = []
 
 
-def info(repo_path: str) -> RepoInfo:
+class ArchiveStats(BaseModel):
+    compressed_size: int
+    deduplicated_size: int
+    nfiles: int
+    original_size: int
+
+
+class ArchiveInfo(BaseModel):
+    archive: dict[str, Any]
+    cache: RepoCache
+    encryption: Encryption
+    repository: Repository
+
+
+def info(repo_path: str, passphrase: str | None = None) -> RepoInfo:
     """List a local Borg repository's info."""
     cmd = ["borg", "info", "--json", repo_path]
-    result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
+    env = _build_env_with_passphrase(passphrase)
+    result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
     return RepoInfo.model_validate_json(result.stdout)
 
 
+def archive_info(repo_path: str, archive_name: str, passphrase: str | None = None) -> ArchiveInfo:
+    """
+    Get detailed information about a specific archive in a Borg repository.
+
+    https://borgbackup.readthedocs.io/en/stable/usage/info.html
+
+    Args:
+        repo_path: Path to the Borg repository
+        archive_name: Name of the archive to get info for
+        passphrase: Optional passphrase for encrypted repositories
+
+    Returns:
+        ArchiveInfo object containing archive details, cache stats, encryption, and repository info
+    """
+    cmd = ["borg", "info", "--json", f"{repo_path}::{archive_name}"]
+    env = _build_env_with_passphrase(passphrase)
+    result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
+    if result.returncode != 0 and result.returncode != 1:
+        raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
+    return ArchiveInfo.model_validate_json(result.stdout)
+
+
 def prune(
-    repo_path: str, keep_daily: int = 7, keep_weekly: int = 3, keep_monthly: int = 2, log_json: bool = True
+    repo_path: str,
+    keep_daily: int | None = None,
+    keep_weekly: int | None = None,
+    keep_monthly: int | None = None,
+    keep_yearly: int | None = None,
+    log_json: bool = True,
+    passphrase: str | None = None,
 ) -> Generator[str]:
     """
     Run a Borg prune command to remove old backups from the repository.
@@ -165,10 +245,17 @@ def prune(
     https://borgbackup.readthedocs.io/en/stable/usage/prune.html
 
     Args:
-        keep_daily (int, optional): Number of daily backups to retain. Defaults to 7.
-        keep_weekly (int, optional): Number of weekly backups to retain. Defaults to 3.
-        keep_monthly (int, optional): Number of monthly backups to retain. Defaults to 2.
+        keep_daily: Number of daily backups to retain. Defaults to config value (7).
+        keep_weekly: Number of weekly backups to retain. Defaults to config value (4).
+        keep_monthly: Number of monthly backups to retain. Defaults to config value (6).
+        keep_yearly: Number of yearly backups to retain. Defaults to config value (0).
     """
+    # Use config defaults if not provided
+    keep_daily = keep_daily if keep_daily is not None else config.borg.retention.keep_daily
+    keep_weekly = keep_weekly if keep_weekly is not None else config.borg.retention.keep_weekly
+    keep_monthly = keep_monthly if keep_monthly is not None else config.borg.retention.keep_monthly
+    keep_yearly = keep_yearly if keep_yearly is not None else config.borg.retention.keep_yearly
+
     cmd = [
         "borg",
         "prune",
@@ -178,11 +265,15 @@ def prune(
         f"--keep-daily={keep_daily}",
         f"--keep-weekly={keep_weekly}",
         f"--keep-monthly={keep_monthly}",
-        repo_path,
     ]
+    if keep_yearly > 0:
+        cmd.append(f"--keep-yearly={keep_yearly}")
+
+    cmd.append(repo_path)
     if log_json is False:
         cmd.remove("--log-json")
-    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    env = _build_env_with_passphrase(passphrase)
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
     while out_stream.readable():  # type: ignore
@@ -201,7 +292,7 @@ def prune(
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
-def compact(repo_path: str, log_json: bool = True) -> Generator[str]:
+def compact(repo_path: str, log_json: bool = True, passphrase: str | None = None) -> Generator[str]:
     """
     Run a Borg compact command to free repository space.
 
@@ -216,7 +307,8 @@ def compact(repo_path: str, log_json: bool = True) -> Generator[str]:
     ]
     if log_json is False:
         cmd.remove("--log-json")
-    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    env = _build_env_with_passphrase(passphrase)
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
     while out_stream.readable():  # type: ignore
@@ -235,23 +327,24 @@ def compact(repo_path: str, log_json: bool = True) -> Generator[str]:
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
-def export_repo_key(repo_path: str, repo_name: str) -> Path:
+def export_repo_key(repo_path: str, repo_name: str, passphrase: str | None = None) -> Path:
     """
     Exports the Borg repository key to a file in the user's home directory.
 
     https://borgbackup.readthedocs.io/en/stable/usage/key.html#borg-key-export
     """
-    borgboi_repo_keys_dir = Path.home() / BORGBOI_DIR_NAME
+    borgboi_repo_keys_dir = config.borgboi_dir
     borgboi_repo_keys_dir.mkdir(exist_ok=True)
     key_export_path = borgboi_repo_keys_dir / f"{repo_name}-encrypted-key-backup.txt"
     cmd = ["borg", "key", "export", "--paper", repo_path, key_export_path.as_posix()]
-    result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
+    env = _build_env_with_passphrase(passphrase)
+    result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0:
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd)
     return key_export_path
 
 
-def extract(repo_path: str, archive_name: str, log_json: bool = True) -> Generator[str]:
+def extract(repo_path: str, archive_name: str, log_json: bool = True, passphrase: str | None = None) -> Generator[str]:
     """
     Extract an archive from a Borg repository.
 
@@ -260,7 +353,8 @@ def extract(repo_path: str, archive_name: str, log_json: bool = True) -> Generat
     cmd = ["borg", "extract", "--log-json", "--progress", "--list", f"{repo_path}::{archive_name}"]
     if log_json is False:
         cmd.remove("--log-json")
-    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    env = _build_env_with_passphrase(passphrase)
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
     while out_stream.readable():  # type: ignore
@@ -279,7 +373,9 @@ def extract(repo_path: str, archive_name: str, log_json: bool = True) -> Generat
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
-def delete(repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True) -> Generator[str]:
+def delete(
+    repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True, passphrase: str | None = None
+) -> Generator[str]:
     """
     Delete the Borg repository.
 
@@ -295,7 +391,7 @@ def delete(repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True)
             "--list",
             "--force",
             "--checkpoint-interval",
-            "10",
+            str(config.borg.checkpoint_interval // 90),
             repo_path,
         ]
     else:
@@ -307,12 +403,13 @@ def delete(repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True)
             "--list",
             "--force",
             "--checkpoint-interval",
-            "10",
+            str(config.borg.checkpoint_interval // 90),
             repo_path,
         ]
     if log_json is False:
         cmd.remove("--log-json")
-    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    env = _build_env_with_passphrase(passphrase)
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
     while out_stream.readable():  # type: ignore
@@ -332,7 +429,12 @@ def delete(repo_path: str, repo_name: str, dry_run: bool, log_json: bool = True)
 
 
 def delete_archive(
-    repo_path: str, repo_name: str, archive_name: str, dry_run: bool, log_json: bool = True
+    repo_path: str,
+    repo_name: str,
+    archive_name: str,
+    dry_run: bool,
+    log_json: bool = True,
+    passphrase: str | None = None,
 ) -> Generator[str]:
     """
     Delete an archive from the Borg repository.
@@ -349,7 +451,7 @@ def delete_archive(
             "--list",
             "--force",
             "--checkpoint-interval",
-            "10",
+            str(config.borg.checkpoint_interval // 90),
             f"{repo_path}::{archive_name}",
         ]
     else:
@@ -361,12 +463,13 @@ def delete_archive(
             "--list",
             "--force",
             "--checkpoint-interval",
-            "10",
+            str(config.borg.checkpoint_interval // 90),
             f"{repo_path}::{archive_name}",
         ]
     if log_json is False:
         cmd.remove("--log-json")
-    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
+    env = _build_env_with_passphrase(passphrase)
+    proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
     while out_stream.readable():  # type: ignore
@@ -397,10 +500,11 @@ class ListArchivesOutput(BaseModel):
     archives: list[RepoArchive]
 
 
-def list_archives(repo_path: str) -> list[RepoArchive]:
+def list_archives(repo_path: str, passphrase: str | None = None) -> list[RepoArchive]:
     """List the archives in a Borg repository."""
     cmd = ["borg", "list", "--json", repo_path]
-    result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
+    env = _build_env_with_passphrase(passphrase)
+    result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
     list_archives_output = ListArchivesOutput.model_validate_json(result.stdout)
@@ -421,12 +525,15 @@ class ArchivedFile(BaseModel):
     mtime: datetime
 
 
-def list_archive_contents(repo_path: str, archive_name: str, json_log: bool = True) -> list[ArchivedFile]:
+def list_archive_contents(
+    repo_path: str, archive_name: str, json_log: bool = True, passphrase: str | None = None
+) -> list[ArchivedFile]:
     """List the contents of a Borg archive."""
     cmd = ["borg", "list", f"{repo_path}::{archive_name}", "--json-lines"]
     if json_log is False:
         cmd.remove("--json-lines")
-    result = sp.run(cmd, capture_output=True, text=True)  # noqa: PLW1510, S603
+    env = _build_env_with_passphrase(passphrase)
+    result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
     return [ArchivedFile.model_validate_json(item) for item in result.stdout.splitlines() if item]
