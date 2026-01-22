@@ -90,9 +90,7 @@ class OfflineStorage(RepositoryStorage):
         with self._lock:
             try:
                 # Write to temp file first, then atomically rename
-                fd, temp_path = tempfile.mkstemp(
-                    dir=self.base_dir, suffix=".tmp", prefix="index_"
-                )
+                fd, temp_path = tempfile.mkstemp(dir=self.base_dir, suffix=".tmp", prefix="index_")
                 temp_file = Path(temp_path)
                 try:
                     temp_file.write_text(index.model_dump_json(indent=2))
@@ -179,8 +177,7 @@ class OfflineStorage(RepositoryStorage):
 
             if errors:
                 logger.warning(
-                    "Failed to migrate %d legacy repository files. "
-                    "These repositories may need manual attention: %s",
+                    "Failed to migrate %d legacy repository files. These repositories may need manual attention: %s",
                     len(errors),
                     ", ".join(f[0] for f in errors),
                 )
@@ -444,9 +441,7 @@ class OfflineStorage(RepositoryStorage):
         with self._lock:
             try:
                 # Write to temp file first, then atomically rename
-                fd, temp_path = tempfile.mkstemp(
-                    dir=self.base_dir, suffix=".tmp", prefix="s3cache_"
-                )
+                fd, temp_path = tempfile.mkstemp(dir=self.base_dir, suffix=".tmp", prefix="s3cache_")
                 temp_file = Path(temp_path)
                 try:
                     temp_file.write_text(cache.model_dump_json(indent=2))
