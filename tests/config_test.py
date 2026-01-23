@@ -12,6 +12,7 @@ from borgboi.config import (
     Config,
     RetentionConfig,
     UIConfig,
+    load_config_from_path,
     resolve_home_dir,
     save_config,
 )
@@ -215,6 +216,15 @@ def test_save_config_custom_path(tmp_path: Path) -> None:
         saved_data = yaml.safe_load(f)
 
     assert saved_data["offline"] is True
+
+
+def test_load_config_from_path_rejects_directory(tmp_path: Path) -> None:
+    """Test load_config_from_path rejects directory paths."""
+    config_dir = tmp_path / "config-dir"
+    config_dir.mkdir()
+
+    with pytest.raises(FileNotFoundError, match="not a file"):
+        load_config_from_path(config_dir)
 
 
 def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -207,6 +207,8 @@ def load_config_from_path(config_path: Path, validate: bool = True, print_warnin
     resolved_path = config_path.expanduser()
     if not resolved_path.exists():
         raise FileNotFoundError(f"Config file not found at {resolved_path}")
+    if not resolved_path.is_file():
+        raise FileNotFoundError(f"Config path is not a file: {resolved_path}")
     local_settings = Dynaconf(
         envvar_prefix="BORGBOI",
         settings_files=[resolved_path.name],
