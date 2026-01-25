@@ -1,3 +1,9 @@
+## v1.11.0 (2026-01-25)
+
+### Feat
+
+- **config**: add 'borgboi config show' command (#147)
+
 ## v1.10.0 (2026-01-21)
 
 ### Feat
