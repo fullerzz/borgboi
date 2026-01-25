@@ -304,6 +304,56 @@ def validate_config(cfg: Config) -> list[str]:  # noqa: C901
     return warnings
 
 
+# Mapping of config paths to their corresponding environment variable names
+# The format follows dynaconf's convention: BORGBOI_ prefix, __ for nesting, _ for underscores
+CONFIG_ENV_VAR_MAP: dict[str, str] = {
+    # Top-level
+    "offline": "BORGBOI_OFFLINE",
+    "debug": "BORGBOI_DEBUG",
+    # AWS
+    "aws.dynamodb_repos_table": "BORGBOI_AWS__DYNAMODB_REPOS_TABLE",
+    "aws.dynamodb_archives_table": "BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE",
+    "aws.s3_bucket": "BORGBOI_AWS__S3_BUCKET",
+    "aws.region": "BORGBOI_AWS__REGION",
+    "aws.profile": "BORGBOI_AWS__PROFILE",
+    # Borg
+    "borg.executable_path": "BORGBOI_BORG__EXECUTABLE_PATH",
+    "borg.default_repo_path": "BORGBOI_BORG__DEFAULT_REPO_PATH",
+    "borg.compression": "BORGBOI_BORG__COMPRESSION",
+    "borg.checkpoint_interval": "BORGBOI_BORG__CHECKPOINT_INTERVAL",
+    "borg.storage_quota": "BORGBOI_BORG__STORAGE_QUOTA",
+    "borg.additional_free_space": "BORGBOI_BORG__ADDITIONAL_FREE_SPACE",
+    "borg.borg_passphrase": "BORGBOI_BORG__BORG_PASSPHRASE",
+    "borg.borg_new_passphrase": "BORGBOI_BORG__BORG_NEW_PASSPHRASE",
+    # Borg retention
+    "borg.retention.keep_daily": "BORGBOI_BORG__RETENTION__KEEP_DAILY",
+    "borg.retention.keep_weekly": "BORGBOI_BORG__RETENTION__KEEP_WEEKLY",
+    "borg.retention.keep_monthly": "BORGBOI_BORG__RETENTION__KEEP_MONTHLY",
+    "borg.retention.keep_yearly": "BORGBOI_BORG__RETENTION__KEEP_YEARLY",
+    # UI
+    "ui.theme": "BORGBOI_UI__THEME",
+    "ui.show_progress": "BORGBOI_UI__SHOW_PROGRESS",
+    "ui.color_output": "BORGBOI_UI__COLOR_OUTPUT",
+    "ui.table_style": "BORGBOI_UI__TABLE_STYLE",
+}
+
+
+def get_env_overrides() -> dict[str, str]:
+    """Return a mapping of config paths to env var names for all currently set env overrides.
+
+    This checks which BORGBOI_* environment variables are set and returns a dict
+    mapping the corresponding config path (e.g., 'aws.s3_bucket') to the env var
+    name (e.g., 'BORGBOI_AWS__S3_BUCKET').
+
+    Returns:
+        dict[str, str]: Config paths that are overridden by environment variables,
+                       mapped to their env var names.
+    """
+    return {
+        config_path: env_var for config_path, env_var in CONFIG_ENV_VAR_MAP.items() if os.getenv(env_var) is not None
+    }
+
+
 def save_config(cfg: Config, config_path: Path | None = None) -> None:
     """
     Save configuration to YAML file.

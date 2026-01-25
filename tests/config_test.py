@@ -7,11 +7,13 @@ import pytest
 
 from borgboi import config as config_module
 from borgboi.config import (
+    CONFIG_ENV_VAR_MAP,
     AWSConfig,
     BorgConfig,
     Config,
     RetentionConfig,
     UIConfig,
+    get_env_overrides,
     load_config_from_path,
     resolve_home_dir,
     save_config,
@@ -286,3 +288,82 @@ def test_env_var_overrides(
         assert value == expected_value
     else:
         assert value == expected_value
+
+
+def _clear_borgboi_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clear all BORGBOI_* environment variables to ensure clean test state."""
+    for env_var in CONFIG_ENV_VAR_MAP.values():
+        monkeypatch.delenv(env_var, raising=False)
+
+
+def test_get_env_overrides_empty_when_no_env_vars_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that get_env_overrides returns empty dict when no env vars are set."""
+    _clear_borgboi_env_vars(monkeypatch)
+
+    overrides = get_env_overrides()
+    assert overrides == {}
+
+
+def test_get_env_overrides_returns_set_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that get_env_overrides returns mapping for set env vars."""
+    _clear_borgboi_env_vars(monkeypatch)
+    monkeypatch.setenv("BORGBOI_OFFLINE", "true")
+    monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "test-bucket")
+
+    overrides = get_env_overrides()
+
+    assert "offline" in overrides
+    assert overrides["offline"] == "BORGBOI_OFFLINE"
+    assert "aws.s3_bucket" in overrides
+    assert overrides["aws.s3_bucket"] == "BORGBOI_AWS__S3_BUCKET"
+    # Other env vars should not be in the result
+    assert "debug" not in overrides
+
+
+def test_get_env_overrides_includes_nested_config_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that nested config paths like borg.retention.keep_daily are handled."""
+    _clear_borgboi_env_vars(monkeypatch)
+    monkeypatch.setenv("BORGBOI_BORG__RETENTION__KEEP_DAILY", "30")
+
+    overrides = get_env_overrides()
+
+    assert "borg.retention.keep_daily" in overrides
+    assert overrides["borg.retention.keep_daily"] == "BORGBOI_BORG__RETENTION__KEEP_DAILY"
+
+
+def test_config_env_var_map_completeness() -> None:
+    """Test that CONFIG_ENV_VAR_MAP covers all expected config paths."""
+    # Verify key configuration paths are mapped
+    expected_paths = [
+        "offline",
+        "debug",
+        "aws.s3_bucket",
+        "aws.region",
+        "aws.profile",
+        "borg.compression",
+        "borg.storage_quota",
+        "borg.retention.keep_daily",
+        "borg.retention.keep_weekly",
+        "borg.retention.keep_monthly",
+        "borg.retention.keep_yearly",
+        "ui.theme",
+        "ui.show_progress",
+    ]
+
+    for path in expected_paths:
+        assert path in CONFIG_ENV_VAR_MAP, f"Missing config path in CONFIG_ENV_VAR_MAP: {path}"
+
+
+def test_get_env_overrides_all_config_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that all mapped config paths can be detected as overridden."""
+    _clear_borgboi_env_vars(monkeypatch)
+
+    # Set all env vars
+    for env_var in CONFIG_ENV_VAR_MAP.values():
+        monkeypatch.setenv(env_var, "test-value")
+
+    overrides = get_env_overrides()
+
+    # All paths should be in the result
+    for config_path in CONFIG_ENV_VAR_MAP:
+        assert config_path in overrides, f"Missing config path in overrides: {config_path}"
