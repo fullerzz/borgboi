@@ -8,6 +8,7 @@ import logging
 import tempfile
 import threading
 from pathlib import Path
+from typing import override
 
 from pydantic import ValidationError
 
@@ -184,6 +185,7 @@ class OfflineStorage(RepositoryStorage):
 
     # RepositoryStorage implementation
 
+    @override
     def get(self, name: str) -> BorgBoiRepo:
         """Retrieve a repository by name."""
         with self._lock:
@@ -213,6 +215,7 @@ class OfflineStorage(RepositoryStorage):
             except (OSError, ValueError, TypeError) as e:
                 raise StorageError(f"Failed to load repository {name}: {e}", operation="get", cause=e) from e
 
+    @override
     def get_by_path(self, path: str, hostname: str | None = None) -> BorgBoiRepo:
         """Retrieve a repository by its path."""
         with self._lock:
@@ -239,6 +242,7 @@ class OfflineStorage(RepositoryStorage):
 
             return self.get(entry.name)
 
+    @override
     def list_all(self) -> list[BorgBoiRepo]:
         """List all repositories in storage."""
         with self._lock:
@@ -267,6 +271,7 @@ class OfflineStorage(RepositoryStorage):
 
             return repos
 
+    @override
     def save(self, repo: BorgBoiRepo) -> None:
         """Save or update repository metadata."""
         with self._lock:
@@ -288,6 +293,7 @@ class OfflineStorage(RepositoryStorage):
             index.add(entry)
             self._save_index(index)
 
+    @override
     def delete(self, name: str) -> None:
         """Delete a repository by name."""
         with self._lock:
@@ -313,6 +319,7 @@ class OfflineStorage(RepositoryStorage):
             # Also invalidate S3 cache
             self.invalidate_s3_cache(name)
 
+    @override
     def exists(self, name: str) -> bool:
         """Check if a repository exists."""
         with self._lock:

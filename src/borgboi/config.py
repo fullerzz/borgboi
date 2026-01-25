@@ -7,7 +7,7 @@ from pathlib import Path
 from platform import system
 
 import yaml
-from dynaconf import Dynaconf  # type: ignore[import-untyped]
+from dynaconf import Dynaconf  # type: ignore[import-untyped]  # ty: ignore[unused-ignore-comment]
 from pydantic import BaseModel, Field
 
 DEFAULT_DYNAMODB_REPOS_TABLE = "bb-repos"

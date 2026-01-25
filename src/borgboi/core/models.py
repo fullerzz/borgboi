@@ -153,19 +153,19 @@ class RepoCache(BaseModel):
     path: str
     stats: RepoStats
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field  # type: ignore[prop-decorator]  # ty: ignore[unused-ignore-comment]
     @cached_property
     def total_size_gb(self) -> str:
         """Original size in gigabytes."""
         return f"{(self.stats.total_size / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE):.2f}"
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field  # type: ignore[prop-decorator]  # ty: ignore[unused-ignore-comment]
     @cached_property
     def total_csize_gb(self) -> str:
         """Compressed size in gigabytes."""
         return f"{(self.stats.total_csize / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE):.2f}"
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field  # type: ignore[prop-decorator]  # ty: ignore[unused-ignore-comment]
     @cached_property
     def unique_csize_gb(self) -> str:
         """Deduplicated size in gigabytes."""
@@ -251,7 +251,7 @@ class Repository(BaseModel):
             return "Darwin"
         raise ValueError(f"os_platform must be either 'Linux' or 'Darwin'. '{v}' is not supported.")
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field  # type: ignore[prop-decorator]  # ty: ignore[unused-ignore-comment]
     @cached_property
     def safe_path(self) -> str:
         """Path to the Borg repository, with platform-specific home directory handling.

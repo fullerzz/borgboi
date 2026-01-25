@@ -89,9 +89,9 @@ from borgboi.cli.repo import repo as repo_group  # noqa: E402
 from borgboi.cli.s3 import s3 as s3_group  # noqa: E402
 
 cli.add_command(repo_group)
-cli.add_command(backup_group)  # type: ignore[has-type]
+cli.add_command(backup_group)
 cli.add_command(s3_group)
-cli.add_command(exclusions_group)  # type: ignore[has-type]
+cli.add_command(exclusions_group)
 cli.add_command(config_group)
 
 # Register legacy commands for backward compatibility
