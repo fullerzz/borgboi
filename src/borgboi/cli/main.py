@@ -72,6 +72,7 @@ def cli(ctx: click.Context, offline: bool, debug: bool) -> None:
       backup     - Backup operations (run, daily, list, restore, delete)
       s3         - S3 sync operations (sync, restore, delete)
       exclusions - Manage backup exclusions
+      config     - Show configuration values
 
     For backward compatibility, legacy commands (create-repo, daily-backup, etc.)
     are still available as top-level commands.
@@ -81,6 +82,7 @@ def cli(ctx: click.Context, offline: bool, debug: bool) -> None:
 
 # Import and register subcommand groups (must be after cli definition to avoid circular imports)
 from borgboi.cli.backup import backup as backup_group  # noqa: E402
+from borgboi.cli.config import config as config_group  # noqa: E402
 from borgboi.cli.exclusions import exclusions as exclusions_group  # noqa: E402
 from borgboi.cli.legacy import register_legacy_commands  # noqa: E402
 from borgboi.cli.repo import repo as repo_group  # noqa: E402
@@ -90,6 +92,7 @@ cli.add_command(repo_group)
 cli.add_command(backup_group)  # type: ignore[has-type]
 cli.add_command(s3_group)
 cli.add_command(exclusions_group)  # type: ignore[has-type]
+cli.add_command(config_group)
 
 # Register legacy commands for backward compatibility
 register_legacy_commands(cli)

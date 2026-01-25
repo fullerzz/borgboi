@@ -116,6 +116,11 @@ def _create_settings_dir() -> Path:
     return settings_dir
 
 
+def get_default_config_path() -> Path:
+    """Return the default borgboi config file path."""
+    return resolve_home_dir() / ".borgboi" / "config.yaml"
+
+
 # Initialize dynaconf settings
 _settings_dir = _create_settings_dir()
 settings = Dynaconf(
@@ -128,54 +133,50 @@ settings = Dynaconf(
 )
 
 
-@lru_cache(maxsize=1)
-def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
-    """Load and return validated configuration from dynaconf settings.
-
-    Args:
-        validate: Whether to run validation checks (default True)
-        print_warnings: Whether to print validation warnings to stderr (default True)
-
-    Returns:
-        Config: Validated configuration instance
-    """
+def _build_config(settings_source: Dynaconf, validate: bool = True, print_warnings: bool = True) -> Config:
     cfg = Config(
         aws=AWSConfig(
-            dynamodb_repos_table=str(settings.get("aws.dynamodb_repos_table", DEFAULT_DYNAMODB_REPOS_TABLE)),
-            dynamodb_archives_table=str(settings.get("aws.dynamodb_archives_table", DEFAULT_DYNAMODB_ARCHIVES_TABLE)),
-            s3_bucket=str(settings.get("aws.s3_bucket", DEFAULT_S3_BUCKET)),
-            region=str(settings.get("aws.region", DEFAULT_AWS_REGION)),
-            profile=settings.get("aws.profile") if settings.get("aws.profile") is not None else None,
+            dynamodb_repos_table=str(settings_source.get("aws.dynamodb_repos_table", DEFAULT_DYNAMODB_REPOS_TABLE)),
+            dynamodb_archives_table=str(
+                settings_source.get("aws.dynamodb_archives_table", DEFAULT_DYNAMODB_ARCHIVES_TABLE)
+            ),
+            s3_bucket=str(settings_source.get("aws.s3_bucket", DEFAULT_S3_BUCKET)),
+            region=str(settings_source.get("aws.region", DEFAULT_AWS_REGION)),
+            profile=settings_source.get("aws.profile") if settings_source.get("aws.profile") is not None else None,
         ),
         borg=BorgConfig(
-            executable_path=str(settings.get("borg.executable_path", "borg")),
+            executable_path=str(settings_source.get("borg.executable_path", "borg")),
             default_repo_path=Path(
-                str(settings.get("borg.default_repo_path", str(resolve_home_dir() / ".borgboi" / "repositories")))
+                str(
+                    settings_source.get(
+                        "borg.default_repo_path",
+                        str(resolve_home_dir() / ".borgboi" / "repositories"),
+                    )
+                )
             ),
-            compression=str(settings.get("borg.compression", DEFAULT_REPO_COMPRESSION)),
-            checkpoint_interval=int(settings.get("borg.checkpoint_interval", 900)),
-            storage_quota=str(settings.get("borg.storage_quota", DEFAULT_REPO_STORAGE_QUOTA)),
-            additional_free_space=str(settings.get("borg.additional_free_space", "2G")),
+            compression=str(settings_source.get("borg.compression", DEFAULT_REPO_COMPRESSION)),
+            checkpoint_interval=int(settings_source.get("borg.checkpoint_interval", 900)),
+            storage_quota=str(settings_source.get("borg.storage_quota", DEFAULT_REPO_STORAGE_QUOTA)),
+            additional_free_space=str(settings_source.get("borg.additional_free_space", "2G")),
             retention=RetentionConfig(
-                keep_daily=int(settings.get("borg.retention.keep_daily", 7)),
-                keep_weekly=int(settings.get("borg.retention.keep_weekly", 4)),
-                keep_monthly=int(settings.get("borg.retention.keep_monthly", 6)),
-                keep_yearly=int(settings.get("borg.retention.keep_yearly", 0)),
+                keep_daily=int(settings_source.get("borg.retention.keep_daily", 7)),
+                keep_weekly=int(settings_source.get("borg.retention.keep_weekly", 4)),
+                keep_monthly=int(settings_source.get("borg.retention.keep_monthly", 6)),
+                keep_yearly=int(settings_source.get("borg.retention.keep_yearly", 0)),
             ),
-            borg_passphrase=settings.get("borg.borg_passphrase"),
-            borg_new_passphrase=settings.get("borg.borg_new_passphrase"),
+            borg_passphrase=settings_source.get("borg.borg_passphrase"),
+            borg_new_passphrase=settings_source.get("borg.borg_new_passphrase"),
         ),
         ui=UIConfig(
-            theme=str(settings.get("ui.theme", "catppuccin")),
-            show_progress=bool(settings.get("ui.show_progress", True)),
-            color_output=bool(settings.get("ui.color_output", True)),
-            table_style=str(settings.get("ui.table_style", "rounded")),
+            theme=str(settings_source.get("ui.theme", "catppuccin")),
+            show_progress=bool(settings_source.get("ui.show_progress", True)),
+            color_output=bool(settings_source.get("ui.color_output", True)),
+            table_style=str(settings_source.get("ui.table_style", "rounded")),
         ),
-        offline=bool(settings.get("offline", False)),
-        debug=bool(settings.get("debug", False)),
+        offline=bool(settings_source.get("offline", False)),
+        debug=bool(settings_source.get("debug", False)),
     )
 
-    # Run validation and print warnings if enabled
     if validate:
         config_warnings = validate_config(cfg)
         if print_warnings and config_warnings:
@@ -185,6 +186,59 @@ def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
                 print(f"[CONFIG WARNING] {warning}", file=sys.stderr)  # noqa: T201
 
     return cfg
+
+
+@lru_cache(maxsize=1)
+def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
+    """Load and return validated configuration from dynaconf settings.
+
+    Note: This function uses lru_cache with maxsize=1, so the first call's
+    validate and print_warnings parameters determine the cached behavior.
+    Subsequent calls with different parameters will still return the same
+    cached result.
+
+    Args:
+        validate: Whether to run validation checks (default True)
+        print_warnings: Whether to print validation warnings to stderr (default True)
+
+    Returns:
+        Config: Validated configuration instance
+    """
+    return _build_config(settings, validate=validate, print_warnings=print_warnings)
+
+
+def load_config_from_path(config_path: Path, validate: bool = True, print_warnings: bool = True) -> Config:
+    """Load configuration from an explicit config file path.
+
+    Unlike get_config(), this function is intentionally not cached to allow
+    displaying potentially changed config files and to support loading from
+    different paths in the same session.
+
+    Args:
+        config_path: Path to the configuration file to load.
+        validate: Whether to run validation checks (default True).
+        print_warnings: Whether to print validation warnings to stderr (default True).
+
+    Returns:
+        Config: Validated configuration instance.
+
+    Raises:
+        FileNotFoundError: If the config file doesn't exist or is a directory.
+    """
+    resolved_path = config_path.expanduser()
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Config file not found at {resolved_path}")
+    if not resolved_path.is_file():
+        raise FileNotFoundError(f"Config path is not a file: {resolved_path}")
+    local_settings = Dynaconf(
+        envvar_prefix="BORGBOI",
+        settings_files=[resolved_path.name],
+        settings_dir=str(resolved_path.parent),
+        environments=False,
+        load_dotenv=True,
+        merge_enabled=True,
+    )
+    return _build_config(local_settings, validate=validate, print_warnings=print_warnings)
 
 
 def validate_config(cfg: Config) -> list[str]:  # noqa: C901
@@ -248,6 +302,56 @@ def validate_config(cfg: Config) -> list[str]:  # noqa: C901
         warnings.append(f"Invalid checkpoint_interval: {cfg.borg.checkpoint_interval} (must be >= 0)")
 
     return warnings
+
+
+# Mapping of config paths to their corresponding environment variable names
+# The format follows dynaconf's convention: BORGBOI_ prefix, __ for nesting, _ for underscores
+CONFIG_ENV_VAR_MAP: dict[str, str] = {
+    # Top-level
+    "offline": "BORGBOI_OFFLINE",
+    "debug": "BORGBOI_DEBUG",
+    # AWS
+    "aws.dynamodb_repos_table": "BORGBOI_AWS__DYNAMODB_REPOS_TABLE",
+    "aws.dynamodb_archives_table": "BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE",
+    "aws.s3_bucket": "BORGBOI_AWS__S3_BUCKET",
+    "aws.region": "BORGBOI_AWS__REGION",
+    "aws.profile": "BORGBOI_AWS__PROFILE",
+    # Borg
+    "borg.executable_path": "BORGBOI_BORG__EXECUTABLE_PATH",
+    "borg.default_repo_path": "BORGBOI_BORG__DEFAULT_REPO_PATH",
+    "borg.compression": "BORGBOI_BORG__COMPRESSION",
+    "borg.checkpoint_interval": "BORGBOI_BORG__CHECKPOINT_INTERVAL",
+    "borg.storage_quota": "BORGBOI_BORG__STORAGE_QUOTA",
+    "borg.additional_free_space": "BORGBOI_BORG__ADDITIONAL_FREE_SPACE",
+    "borg.borg_passphrase": "BORGBOI_BORG__BORG_PASSPHRASE",
+    "borg.borg_new_passphrase": "BORGBOI_BORG__BORG_NEW_PASSPHRASE",
+    # Borg retention
+    "borg.retention.keep_daily": "BORGBOI_BORG__RETENTION__KEEP_DAILY",
+    "borg.retention.keep_weekly": "BORGBOI_BORG__RETENTION__KEEP_WEEKLY",
+    "borg.retention.keep_monthly": "BORGBOI_BORG__RETENTION__KEEP_MONTHLY",
+    "borg.retention.keep_yearly": "BORGBOI_BORG__RETENTION__KEEP_YEARLY",
+    # UI
+    "ui.theme": "BORGBOI_UI__THEME",
+    "ui.show_progress": "BORGBOI_UI__SHOW_PROGRESS",
+    "ui.color_output": "BORGBOI_UI__COLOR_OUTPUT",
+    "ui.table_style": "BORGBOI_UI__TABLE_STYLE",
+}
+
+
+def get_env_overrides() -> dict[str, str]:
+    """Return a mapping of config paths to env var names for all currently set env overrides.
+
+    This checks which BORGBOI_* environment variables are set and returns a dict
+    mapping the corresponding config path (e.g., 'aws.s3_bucket') to the env var
+    name (e.g., 'BORGBOI_AWS__S3_BUCKET').
+
+    Returns:
+        dict[str, str]: Config paths that are overridden by environment variables,
+                       mapped to their env var names.
+    """
+    return {
+        config_path: env_var for config_path, env_var in CONFIG_ENV_VAR_MAP.items() if os.getenv(env_var) is not None
+    }
 
 
 def save_config(cfg: Config, config_path: Path | None = None) -> None:
