@@ -21,6 +21,7 @@ from borgboi.clients.dynamodb import (
 from borgboi.config import Config, get_config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError
 from borgboi.models import BorgBoiRepo
+from borgboi.rich_utils import console
 from borgboi.storage.base import RepositoryStorage
 
 boto_config = BotoConfig(retries={"mode": "standard"})
@@ -102,8 +103,16 @@ class DynamoDBStorage(RepositoryStorage):
                 try:
                     table_item = BorgBoiRepoTableItem.model_validate(item)
                     repos.append(_convert_table_item_to_repo(table_item))
-                except (ValidationError, Exception):  # noqa: S112
-                    # Skip items that can't be validated
+                except ValidationError as e:
+                    repo_identifier = str(item.get("common_name") or item.get("repo_path") or "unknown")
+                    error_count = e.error_count()
+                    console.print(
+                        f"[dim]Skipping repo '{repo_identifier}': invalid data in DynamoDB ({error_count} validation error(s))[/dim]"
+                    )
+                    continue
+                except Exception:
+                    repo_identifier = str(item.get("common_name") or item.get("repo_path") or "unknown")
+                    console.print(f"[dim]Skipping repo '{repo_identifier}': failed to load from DynamoDB[/dim]")
                     continue
             return repos
         except Exception as e:
