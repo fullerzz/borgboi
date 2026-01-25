@@ -26,8 +26,14 @@ def config() -> None:
 def _config_to_dict(cfg: Config) -> dict[str, Any]:
     config_dict = cfg.model_dump(exclude_none=True, mode="json")
     borg_config = config_dict.get("borg")
-    if isinstance(borg_config, dict) and "default_repo_path" in borg_config:
-        borg_config["default_repo_path"] = str(borg_config["default_repo_path"])
+    if isinstance(borg_config, dict):
+        # Normalize path fields for display
+        if "default_repo_path" in borg_config:
+            borg_config["default_repo_path"] = str(borg_config["default_repo_path"])
+        # Redact sensitive fields to avoid exposing secrets in output
+        for sensitive_key in ("borg_passphrase", "borg_new_passphrase"):
+            if sensitive_key in borg_config and borg_config[sensitive_key] is not None:
+                borg_config[sensitive_key] = "***REDACTED***"
     return config_dict
 
 
@@ -45,7 +51,7 @@ def _config_to_dict(cfg: Config) -> dict[str, Any]:
     type=click.Choice(["yaml", "json"], case_sensitive=False),
     default="yaml",
     show_default=True,
-    help="Output format when --no-pretty-print is set",
+    help="Output format for configuration (affects syntax highlighting when pretty-print is enabled)",
 )
 @click.option(
     "--pretty-print/--no-pretty-print",
@@ -70,12 +76,28 @@ def config_show(ctx: BorgBoiContext, path: str | None, output_format: str, prett
             )
         else:
             cfg = ctx.config
+    except FileNotFoundError as e:
+        console.print(f"[bold red]Error:[/] Configuration file not found: {config_path}")
+        raise SystemExit(1) from e
+    except PermissionError as e:
+        console.print(f"[bold red]Error:[/] Permission denied when reading configuration file: {config_path}")
+        raise SystemExit(1) from e
+    except yaml.YAMLError as e:
+        console.print(f"[bold red]Error:[/] Invalid YAML configuration in {config_path}: {e}")
+        raise SystemExit(1) from e
     except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
+        console.print(f"[bold red]Error:[/] Unexpected error while loading configuration: {e}")
         raise SystemExit(1) from e
 
     config_dict = _config_to_dict(cfg)
-    click.echo(f"Configuration from: {config_path}")
+    if path:
+        source_message = f"Configuration from: {config_path}"
+    else:
+        if config_path.exists():
+            source_message = f"Configuration from: {config_path}"
+        else:
+            source_message = f"Configuration from: {config_path} (file not found, using defaults)"
+    click.echo(source_message)
     click.echo("")
 
     normalized_format = output_format.lower()

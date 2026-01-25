@@ -192,6 +192,11 @@ def _build_config(settings_source: Dynaconf, validate: bool = True, print_warnin
 def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
     """Load and return validated configuration from dynaconf settings.
 
+    Note: This function uses lru_cache with maxsize=1, so the first call's
+    validate and print_warnings parameters determine the cached behavior.
+    Subsequent calls with different parameters will still return the same
+    cached result.
+
     Args:
         validate: Whether to run validation checks (default True)
         print_warnings: Whether to print validation warnings to stderr (default True)
@@ -203,7 +208,23 @@ def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
 
 
 def load_config_from_path(config_path: Path, validate: bool = True, print_warnings: bool = True) -> Config:
-    """Load configuration from an explicit config file path."""
+    """Load configuration from an explicit config file path.
+
+    Unlike get_config(), this function is intentionally not cached to allow
+    displaying potentially changed config files and to support loading from
+    different paths in the same session.
+
+    Args:
+        config_path: Path to the configuration file to load.
+        validate: Whether to run validation checks (default True).
+        print_warnings: Whether to print validation warnings to stderr (default True).
+
+    Returns:
+        Config: Validated configuration instance.
+
+    Raises:
+        FileNotFoundError: If the config file doesn't exist or is a directory.
+    """
     resolved_path = config_path.expanduser()
     if not resolved_path.exists():
         raise FileNotFoundError(f"Config file not found at {resolved_path}")
