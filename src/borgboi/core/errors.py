@@ -5,6 +5,7 @@ to provide clear, actionable error information.
 """
 
 from enum import IntEnum
+from typing import override
 
 
 class BorgExitCode(IntEnum):
@@ -83,6 +84,7 @@ class BorgError(BorgBoiError):
         """Check if the exit code indicates success."""
         return self._exit_code == BorgExitCode.SUCCESS
 
+    @override
     def __str__(self) -> str:
         parts = [self.message]
         if self.command:
@@ -103,6 +105,7 @@ class StorageError(BorgBoiError):
         self.operation = operation
         self.cause = cause
 
+    @override
     def __str__(self) -> str:
         parts = [self.message]
         if self.operation:
@@ -125,6 +128,7 @@ class ValidationError(BorgBoiError):
         self.field = field
         self.value = value
 
+    @override
     def __str__(self) -> str:
         parts = [self.message]
         if self.field:
@@ -155,6 +159,7 @@ class RepositoryNotFoundError(BorgBoiError):
         self.name = name
         self.path = path
 
+    @override
     def __str__(self) -> str:
         parts = [self.message]
         if self.name:

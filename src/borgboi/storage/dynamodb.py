@@ -5,7 +5,7 @@ used when running in cloud mode with AWS connectivity.
 """
 
 import socket
-from typing import Any
+from typing import Any, override
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -55,6 +55,7 @@ class DynamoDBStorage(RepositoryStorage):
 
     # RepositoryStorage implementation
 
+    @override
     def get(self, name: str) -> BorgBoiRepo:
         """Retrieve a repository by name."""
         try:
@@ -76,6 +77,7 @@ class DynamoDBStorage(RepositoryStorage):
         except Exception as e:
             raise StorageError(f"Failed to get repository {name}: {e}", operation="get", cause=e) from e
 
+    @override
     def get_by_path(self, path: str, hostname: str | None = None) -> BorgBoiRepo:
         """Retrieve a repository by its path."""
         host = hostname or socket.gethostname()
@@ -94,6 +96,7 @@ class DynamoDBStorage(RepositoryStorage):
         except Exception as e:
             raise StorageError(f"Failed to get repository at {path}: {e}", operation="get_by_path", cause=e) from e
 
+    @override
     def list_all(self) -> list[BorgBoiRepo]:
         """List all repositories in storage."""
         try:
@@ -118,6 +121,7 @@ class DynamoDBStorage(RepositoryStorage):
         except Exception as e:
             raise StorageError(f"Failed to list repositories: {e}", operation="list_all", cause=e) from e
 
+    @override
     def save(self, repo: BorgBoiRepo) -> None:
         """Save or update repository metadata."""
         try:
@@ -126,6 +130,7 @@ class DynamoDBStorage(RepositoryStorage):
         except Exception as e:
             raise StorageError(f"Failed to save repository {repo.name}: {e}", operation="save", cause=e) from e
 
+    @override
     def delete(self, name: str) -> None:
         """Delete a repository by name."""
         try:
@@ -137,6 +142,7 @@ class DynamoDBStorage(RepositoryStorage):
         except Exception as e:
             raise StorageError(f"Failed to delete repository {name}: {e}", operation="delete", cause=e) from e
 
+    @override
     def exists(self, name: str) -> bool:
         """Check if a repository exists."""
         try:

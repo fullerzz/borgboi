@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Generator
 from datetime import datetime
 from pathlib import Path
+from typing import override
 
 from borgboi.config import AWSConfig, get_config
 from borgboi.core.errors import StorageError
@@ -188,6 +189,7 @@ class S3Client(S3ClientInterface):
             stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
             raise StorageError(f"{error_msg} (exit code {returncode}): {stderr}", operation="s3_sync")
 
+    @override
     def sync_to_bucket(self, local_path: str | Path, repo_name: str) -> Generator[str]:
         """Sync a local repository to S3.
 
@@ -209,6 +211,7 @@ class S3Client(S3ClientInterface):
         ]
         yield from self._run_streaming_command(cmd, f"Failed to sync {repo_name} to S3")
 
+    @override
     def sync_from_bucket(self, local_path: str | Path, repo_name: str, dry_run: bool = False) -> Generator[str]:
         """Sync a repository from S3 to local storage.
 
@@ -226,6 +229,7 @@ class S3Client(S3ClientInterface):
         cmd.extend(["sync", self._s3_uri(repo_name), str(local_path)])
         yield from self._run_streaming_command(cmd, f"Failed to restore {repo_name} from S3")
 
+    @override
     def delete_from_bucket(self, repo_name: str, dry_run: bool = False) -> Generator[str]:
         """Delete a repository from S3.
 
@@ -241,6 +245,7 @@ class S3Client(S3ClientInterface):
             cmd.append("--dryrun")
         yield from self._run_streaming_command(cmd, f"Failed to delete {repo_name} from S3")
 
+    @override
     def get_stats(self, repo_name: str) -> S3RepoStats:
         """Get S3 usage statistics for a repository.
 
@@ -290,6 +295,7 @@ class S3Client(S3ClientInterface):
         except json.JSONDecodeError as e:
             raise StorageError(f"Failed to parse S3 stats response: {e}") from e
 
+    @override
     def exists(self, repo_name: str) -> bool:
         """Check if a repository exists in S3.
 
@@ -313,6 +319,7 @@ class S3Client(S3ClientInterface):
         except Exception:
             return False
 
+    @override
     def list_repos(self) -> list[str]:
         """List all repository prefixes in the S3 bucket.
 
@@ -380,6 +387,7 @@ class MockS3Client(S3ClientInterface):
                 last_modified=datetime.now(),
             )
 
+    @override
     def sync_to_bucket(self, local_path: str | Path, repo_name: str) -> Generator[str]:
         """Mock sync to bucket.
 
@@ -394,6 +402,7 @@ class MockS3Client(S3ClientInterface):
         self.repos[repo_name] = {}
         yield f"upload: {local_path} to s3://mock-bucket/{repo_name}/"
 
+    @override
     def sync_from_bucket(self, local_path: str | Path, repo_name: str, dry_run: bool = False) -> Generator[str]:
         """Mock sync from bucket.
 
@@ -411,6 +420,7 @@ class MockS3Client(S3ClientInterface):
         action = "(dryrun) download:" if dry_run else "download:"
         yield f"{action} s3://mock-bucket/{repo_name}/ to {local_path}"
 
+    @override
     def delete_from_bucket(self, repo_name: str, dry_run: bool = False) -> Generator[str]:
         """Mock delete from bucket.
 
@@ -427,6 +437,7 @@ class MockS3Client(S3ClientInterface):
         action = "(dryrun) delete:" if dry_run else "delete:"
         yield f"{action} s3://mock-bucket/{repo_name}/"
 
+    @override
     def get_stats(self, repo_name: str) -> S3RepoStats:
         """Get mock stats.
 
@@ -440,6 +451,7 @@ class MockS3Client(S3ClientInterface):
             raise StorageError(f"Repository {repo_name} not found in S3")
         return self.stats.get(repo_name, S3RepoStats())
 
+    @override
     def exists(self, repo_name: str) -> bool:
         """Check if mock repo exists.
 
@@ -451,6 +463,7 @@ class MockS3Client(S3ClientInterface):
         """
         return repo_name in self.repos
 
+    @override
     def list_repos(self) -> list[str]:
         """List mock repos.
 

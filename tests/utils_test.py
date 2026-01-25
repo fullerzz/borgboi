@@ -48,7 +48,7 @@ class TestCalculateArchiveAge:
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format) -> datetime:  # type: ignore
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]  # type: ignore
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -66,11 +66,11 @@ class TestCalculateArchiveAge:
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -88,11 +88,11 @@ class TestCalculateArchiveAge:
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -110,11 +110,11 @@ class TestCalculateArchiveAge:
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -132,11 +132,11 @@ class TestCalculateArchiveAge:
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
@@ -159,11 +159,11 @@ class TestCalculateArchiveAge:
 
         class MockDateTime:
             @staticmethod
-            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]
+            def now(tz=None) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return mock_datetime_now()
 
             @staticmethod
-            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]
+            def strptime(date_string, format) -> datetime:  # type: ignore[no-untyped-def]  # ty: ignore[unused-ignore-comment]
                 return datetime.strptime(date_string, format)
 
         monkeypatch.setattr("borgboi.lib.utils.datetime", MockDateTime)
