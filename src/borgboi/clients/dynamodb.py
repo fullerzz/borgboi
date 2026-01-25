@@ -144,7 +144,11 @@ def get_all_repos() -> list[BorgBoiRepo]:
         try:
             db_repo_items.append(BorgBoiRepoTableItem.model_validate(repo))
         except ValidationError as e:
-            pprint(e)
+            repo_identifier = str(repo.get("common_name") or repo.get("repo_path") or "unknown")
+            error_count = e.error_count()
+            console.print(
+                f"[dim]Skipping repo '{repo_identifier}': invalid data in DynamoDB ({error_count} validation error(s))[/dim]"
+            )
             continue
     return [_convert_table_item_to_repo(repo) for repo in db_repo_items]
 
