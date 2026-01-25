@@ -1,3 +1,9 @@
+## v1.11.1 (2026-01-25)
+
+### Fix
+
+- Normalize OS Hostname before Validation (#150)
+
 ## v1.11.0 (2026-01-25)
 
 ### Feat
