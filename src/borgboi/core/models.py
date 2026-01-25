@@ -243,9 +243,13 @@ class Repository(BaseModel):
     @field_validator("os_platform")
     @classmethod
     def validate_os_platform(cls, v: str) -> str:
-        if v not in {"Linux", "Darwin"}:
-            raise ValueError(f"os_platform must be either 'Linux' or 'Darwin'. '{v}' is not supported.")
-        return v
+        normalized = v.strip()
+        normalized_lower = normalized.lower()
+        if normalized_lower == "linux":
+            return "Linux"
+        if normalized_lower == "darwin":
+            return "Darwin"
+        raise ValueError(f"os_platform must be either 'Linux' or 'Darwin'. '{v}' is not supported.")
 
     @computed_field  # type: ignore[prop-decorator]
     @cached_property

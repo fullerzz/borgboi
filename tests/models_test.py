@@ -2,6 +2,7 @@ from platform import system
 
 import pytest
 
+from borgboi.core.models import Repository
 from borgboi.models import BorgBoiRepo
 
 
@@ -51,3 +52,40 @@ def test_safe_path_convert_mac_repo(borg_repo_mac: BorgBoiRepo) -> None:
         if expected_path_parts[part] == "$USER":
             continue
         assert safe_path_parts[part] == expected_path_parts[part]
+
+
+@pytest.mark.parametrize(
+    ("input_value", "expected"),
+    [
+        ("linux", "Linux"),
+        ("darwin", "Darwin"),
+    ],
+)
+def test_borgboi_repo_os_platform_normalizes_case(input_value: str, expected: str) -> None:
+    repo = BorgBoiRepo(
+        path="/home/testuser/repo",
+        backup_target="/home/testuser",
+        name="test-repo",
+        hostname="test-host",
+        os_platform=input_value,
+        metadata=None,
+    )
+    assert repo.os_platform == expected
+
+
+@pytest.mark.parametrize(
+    ("input_value", "expected"),
+    [
+        ("linux", "Linux"),
+        ("darwin", "Darwin"),
+    ],
+)
+def test_repository_os_platform_normalizes_case(input_value: str, expected: str) -> None:
+    repo = Repository(
+        path="/home/testuser/repo",
+        backup_target="/home/testuser",
+        name="test-repo",
+        hostname="test-host",
+        os_platform=input_value,
+    )
+    assert repo.os_platform == expected
