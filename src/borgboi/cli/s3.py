@@ -35,7 +35,7 @@ def s3_sync(ctx: BorgBoiContext, path: str | None, name: str | None) -> None:
         rich_utils.render_cmd_output_lines(
             "Syncing repo with S3 bucket",
             "S3 sync completed successfully",
-            s3.sync_with_s3(repo.path, repo.name),
+            s3.sync_with_s3(repo.path, repo.name, cfg=ctx.config),
             spinner="arrow",
             ruler_color=COLOR_HEX.green,
         )

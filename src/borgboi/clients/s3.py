@@ -1,16 +1,18 @@
 import subprocess as sp
 from collections.abc import Generator
 
-from borgboi.config import config
+from borgboi.config import Config, get_config
 
 
-def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
+def sync_with_s3(repo_path: str, repo_name: str, cfg: Config | None = None) -> Generator[str]:
     """
     Sync a Borg repository with an S3 bucket while yielding the output line by line.
 
     Args:
         repo_path (str): posix path to the Borg repository
         repo_name (str): name of the Borg repository
+        dry_run (bool): whether to simulate the restore without changes
+        cfg (Config | None): borgboi configuration (defaults to global config)
 
     Raises:
         sp.CalledProcessError: If the command returns a non-zero exit code
@@ -19,7 +21,8 @@ def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
         Generator[str]: stdout of S3 sync command line by line
     """
     sync_source = repo_path
-    s3_destination_uri = f"s3://{config.aws.s3_bucket}/{repo_name}"
+    cfg = cfg or get_config()
+    s3_destination_uri = f"s3://{cfg.aws.s3_bucket}/{repo_name}"
     cmd = [
         "aws",
         "s3",
@@ -52,13 +55,14 @@ def sync_with_s3(repo_path: str, repo_name: str) -> Generator[str]:
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
 
 
-def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool) -> Generator[str]:
+def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool, cfg: Config | None = None) -> Generator[str]:
     """
     Restore a Borg repository from an S3 bucket while yielding the output line by line.
 
     Args:
         repo_path (str): posix path to the Borg repository
         repo_name (str): name of the Borg repository
+        cfg (Config | None): borgboi configuration (defaults to global config)
 
     Raises:
         sp.CalledProcessError: If the command returns a non-zero exit code
@@ -66,7 +70,8 @@ def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool) -> Generator[
     Yields:
         Generator[str]: stdout of S3 sync command line by line
     """
-    sync_source = f"s3://{config.aws.s3_bucket}/{repo_name}"
+    cfg = cfg or get_config()
+    sync_source = f"s3://{cfg.aws.s3_bucket}/{repo_name}"
     s3_destination_uri = repo_path
     if dry_run:
         cmd = [

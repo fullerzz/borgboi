@@ -4,11 +4,16 @@ from typing import Literal
 import pytest
 
 from borgboi.clients import s3
+from borgboi.config import AWSConfig, Config
+
+
+def _make_config(bucket: str) -> Config:
+    return Config(aws=AWSConfig(s3_bucket=bucket))
 
 
 def test_sync_with_s3_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test successful S3 sync operation."""
-    monkeypatch.setenv("BORG_S3_BUCKET", "test-bucket")
+    cfg = _make_config("test-bucket")
 
     # Mock subprocess.Popen
     class MockProc:
@@ -38,7 +43,7 @@ def test_sync_with_s3_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)  # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
-    output_lines = list(s3.sync_with_s3("/path/to/repo", "test-repo"))
+    output_lines = list(s3.sync_with_s3("/path/to/repo", "test-repo", cfg=cfg))
 
     assert len(output_lines) == 2
     assert "upload: ./file1.txt to s3://test-bucket/test-repo/file1.txt" in output_lines[0]
@@ -49,6 +54,7 @@ def test_sync_with_s3_missing_bucket_env(monkeypatch: pytest.MonkeyPatch) -> Non
     """Test S3 sync uses default bucket from config when env var is not set."""
     # Config now provides default value, so no KeyError should be raised
     # The test verifies that the function works with config defaults
+    cfg = Config()
 
     class MockProc:
         def __init__(self) -> None:
@@ -65,13 +71,13 @@ def test_sync_with_s3_missing_bucket_env(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)  # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
 
     # This should not raise an error - config provides a default bucket
-    output = list(s3.sync_with_s3("/path/to/repo", "test-repo"))
+    output = list(s3.sync_with_s3("/path/to/repo", "test-repo", cfg=cfg))
     assert output is not None  # Just verify it returns something
 
 
 def test_sync_with_s3_command_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test S3 sync handles command failure."""
-    monkeypatch.setenv("BORG_S3_BUCKET", "test-bucket")
+    cfg = _make_config("test-bucket")
 
     class MockProc:
         def __init__(self) -> None:
@@ -88,12 +94,12 @@ def test_sync_with_s3_command_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)  # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
     with pytest.raises(sp.CalledProcessError):
-        _ = list(s3.sync_with_s3("/path/to/repo", "test-repo"))
+        _ = list(s3.sync_with_s3("/path/to/repo", "test-repo", cfg=cfg))
 
 
 def test_sync_with_s3_stdout_none(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test S3 sync handles None stdout."""
-    monkeypatch.setenv("BORG_S3_BUCKET", "test-bucket")
+    cfg = _make_config("test-bucket")
 
     class MockProc:
         def __init__(self) -> None:
@@ -102,12 +108,12 @@ def test_sync_with_s3_stdout_none(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)  # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
     with pytest.raises(ValueError, match="stdout is None"):
-        _ = list(s3.sync_with_s3("/path/to/repo", "test-repo"))
+        _ = list(s3.sync_with_s3("/path/to/repo", "test-repo", cfg=cfg))
 
 
 def test_sync_with_s3_correct_command(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that S3 sync uses correct AWS CLI command."""
-    monkeypatch.setenv("BORG_S3_BUCKET", "my-backup-bucket")
+    cfg = _make_config("my-backup-bucket")
 
     class MockProc:
         def __init__(self) -> None:
@@ -122,7 +128,7 @@ def test_sync_with_s3_correct_command(monkeypatch: pytest.MonkeyPatch) -> None:
 
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)  # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
-    _ = list(s3.sync_with_s3("/home/user/repos/my-repo", "my-repo"))
+    _ = list(s3.sync_with_s3("/home/user/repos/my-repo", "my-repo", cfg=cfg))
 
     # The test ensures the function runs without error with the mocked Popen
     # Command verification would require capturing the call arguments, which is
