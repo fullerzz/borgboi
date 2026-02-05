@@ -122,11 +122,10 @@ def get_default_config_path() -> Path:
 
 
 # Initialize dynaconf settings
-_settings_dir = _create_settings_dir()
+_create_settings_dir()
 settings = Dynaconf(
     envvar_prefix="BORGBOI",
-    settings_files=["config.yaml"],
-    settings_dir=str(_settings_dir),
+    settings_files=[str(get_default_config_path())],
     environments=False,
     load_dotenv=True,
     merge_enabled=True,
@@ -232,8 +231,7 @@ def load_config_from_path(config_path: Path, validate: bool = True, print_warnin
         raise FileNotFoundError(f"Config path is not a file: {resolved_path}")
     local_settings = Dynaconf(
         envvar_prefix="BORGBOI",
-        settings_files=[resolved_path.name],
-        settings_dir=str(resolved_path.parent),
+        settings_files=[str(resolved_path)],
         environments=False,
         load_dotenv=True,
         merge_enabled=True,

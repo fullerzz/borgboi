@@ -21,13 +21,16 @@ from borgboi.config import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_config() -> None:
+def _reset_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Reset config module before each test to ensure clean state.
 
     Also reloads dependent modules (like passphrase) that import config,
     so they get the fresh config reference.
     """
     import borgboi.lib.passphrase
+
+    _clear_borgboi_env_vars(monkeypatch)
+    monkeypatch.setenv("BORGBOI_HOME", str(tmp_path))
 
     # Reload config module to get fresh instance
     importlib.reload(config_module)
