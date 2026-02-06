@@ -171,8 +171,9 @@ def test_config_excludes_filename_property() -> None:
     assert cfg.excludes_filename == "excludes.txt"
 
 
-def test_resolve_home_dir_default() -> None:
+def test_resolve_home_dir_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that resolve_home_dir returns user home by default."""
+    monkeypatch.delenv("BORGBOI_HOME", raising=False)
     home = resolve_home_dir()
     assert home == Path.home()
 
