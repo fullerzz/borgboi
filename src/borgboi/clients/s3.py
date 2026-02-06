@@ -11,7 +11,6 @@ def sync_with_s3(repo_path: str, repo_name: str, cfg: Config | None = None) -> G
     Args:
         repo_path (str): posix path to the Borg repository
         repo_name (str): name of the Borg repository
-        dry_run (bool): whether to simulate the restore without changes
         cfg (Config | None): borgboi configuration (defaults to global config)
 
     Raises:
@@ -62,6 +61,7 @@ def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool, cfg: Config |
     Args:
         repo_path (str): posix path to the Borg repository
         repo_name (str): name of the Borg repository
+        dry_run (bool): whether to simulate the restore without making changes
         cfg (Config | None): borgboi configuration (defaults to global config)
 
     Raises:

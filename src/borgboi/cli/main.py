@@ -85,12 +85,14 @@ from borgboi.cli.backup import backup as _backup_group  # noqa: E402
 from borgboi.cli.config import config as _config_group  # noqa: E402
 from borgboi.cli.exclusions import exclusions as _exclusions_group  # noqa: E402
 from borgboi.cli.legacy import register_legacy_commands  # noqa: E402
-from borgboi.cli.repo import repo as repo_group  # noqa: E402
-from borgboi.cli.s3 import s3 as s3_group  # noqa: E402
+from borgboi.cli.repo import repo as _repo_group  # noqa: E402
+from borgboi.cli.s3 import s3 as _s3_group  # noqa: E402
 
 backup_group: click.Group = _backup_group
 exclusions_group: click.Group = _exclusions_group
 config_group: click.Group = _config_group
+repo_group: click.Group = _repo_group
+s3_group: click.Group = _s3_group
 
 cli.add_command(repo_group)
 cli.add_command(backup_group)
