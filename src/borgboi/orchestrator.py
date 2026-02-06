@@ -406,7 +406,7 @@ def perform_daily_backup(repo_path: str, offline: bool, passphrase: str | None =
         rich_utils.render_cmd_output_lines(
             "Syncing repo with S3 bucket",
             "S3 sync completed successfully",
-            s3.sync_with_s3(repo.path, repo.name),
+            s3.sync_with_s3(repo.path, repo.name, cfg=config),
             spinner="arrow",
             ruler_color=COLOR_HEX.green,
         )
@@ -432,7 +432,7 @@ def restore_repo(repo: BorgBoiRepo, dry_run: bool, force: bool = False, offline:
         rich_utils.render_cmd_output_lines(
             status,
             "S3 sync completed successfully",
-            s3.restore_from_s3(repo.safe_path, repo.name, dry_run),
+            s3.restore_from_s3(repo.safe_path, repo.name, dry_run, cfg=config),
             spinner="arrow",
             ruler_color=COLOR_HEX.blue,
         )

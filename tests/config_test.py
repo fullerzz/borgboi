@@ -21,13 +21,16 @@ from borgboi.config import (
 
 
 @pytest.fixture(autouse=True)
-def _reset_config() -> None:
+def _reset_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Reset config module before each test to ensure clean state.
 
     Also reloads dependent modules (like passphrase) that import config,
     so they get the fresh config reference.
     """
     import borgboi.lib.passphrase
+
+    _clear_borgboi_env_vars(monkeypatch)
+    monkeypatch.setenv("BORGBOI_HOME", str(tmp_path))
 
     # Reload config module to get fresh instance
     importlib.reload(config_module)
@@ -168,8 +171,9 @@ def test_config_excludes_filename_property() -> None:
     assert cfg.excludes_filename == "excludes.txt"
 
 
-def test_resolve_home_dir_default() -> None:
+def test_resolve_home_dir_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that resolve_home_dir returns user home by default."""
+    monkeypatch.delenv("BORGBOI_HOME", raising=False)
     home = resolve_home_dir()
     assert home == Path.home()
 
