@@ -11,6 +11,8 @@ nav:
   - Overview: index.md
   - Getting Started: pages/getting-started.md
   - Commands: pages/commands.md
+  - User Configuration: pages/user-configuration.md
+  - SQLite Database: pages/sqlite-database.md
 
 theme:
   name: material
@@ -53,7 +55,11 @@ plugins:
       auto_caption: true
 
 markdown_extensions:
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.details
   - pymdownx.blocks.caption
   - admonition

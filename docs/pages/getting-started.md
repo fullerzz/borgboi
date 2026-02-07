@@ -34,6 +34,8 @@ BorgBoi uses a configuration file located at `~/.borgboi/config.yaml`. You can v
 bb config show
 ```
 
+For a complete reference of every field, environment variable, and allowed value, see [User Configuration](user-configuration.md).
+
 ### Configuration File
 
 Create or edit `~/.borgboi/config.yaml`:
