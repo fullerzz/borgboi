@@ -45,15 +45,6 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest
     monkeypatch.setenv("BORGBOI_AWS__DYNAMODB_REPOS_TABLE", DYNAMO_TABLE_NAME)
     monkeypatch.setenv("BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE", DYNAMO_ARCHIVES_TABLE_NAME)
 
-    # Update the global config object with test values
-    # This is necessary because config is a module-level singleton
-    from borgboi.config import config
-
-    # Update AWS config with test values
-    config.aws.dynamodb_repos_table = DYNAMO_TABLE_NAME
-    config.aws.dynamodb_archives_table = DYNAMO_ARCHIVES_TABLE_NAME
-    config.aws.s3_bucket = "test"
-
     # Use a temporary directory for all borgboi files during tests
     # Monkeypatch resolve_home_dir to use a temp directory
     # This will cause borgboi_dir and passphrases_dir to be under the temp directory
@@ -61,6 +52,21 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest
     import borgboi.config
 
     monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: test_home_dir)
+
+    # Clear the lru_cache so get_config() will create a fresh SQLite DB
+    # in the temp directory on next call
+    borgboi.config.get_config.cache_clear()
+
+    # Ensure the temp SQLite DB is created (populates the lru_cache)
+    borgboi.config.get_config()
+
+    # Mutate the existing config singleton directly (in-place).
+    # Many modules (dynamodb, orchestrator, borg, etc.) import config at the
+    # top level via "from borgboi.config import config" and hold a direct
+    # reference to this object. We must mutate it rather than replace it.
+    borgboi.config.config.aws.dynamodb_repos_table = DYNAMO_TABLE_NAME
+    borgboi.config.config.aws.dynamodb_archives_table = DYNAMO_ARCHIVES_TABLE_NAME
+    borgboi.config.config.aws.s3_bucket = "test"
 
 
 @pytest.fixture

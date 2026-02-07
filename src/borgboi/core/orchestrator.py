@@ -65,12 +65,12 @@ class Orchestrator:
         """Create the default storage backend based on configuration.
 
         Returns:
-            RepositoryStorage instance (offline or DynamoDB)
+            RepositoryStorage instance (SQLite for offline, DynamoDB for cloud)
         """
         if self.config.offline:
-            from borgboi.storage.offline import OfflineStorage
+            from borgboi.storage.sqlite import SQLiteStorage
 
-            return OfflineStorage()
+            return SQLiteStorage()
         else:
             from borgboi.storage.dynamodb import DynamoDBStorage
 

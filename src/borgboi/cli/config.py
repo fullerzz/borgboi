@@ -176,7 +176,7 @@ def _get_source_message(path: str | None, config_path: Path) -> str:
     "--path",
     "-p",
     type=click.Path(exists=False, dir_okay=False),
-    help="Custom path for the configuration file to show (default: ~/.borgboi/config.yaml)",
+    help="Custom path for the configuration file to show (default: ~/.borgboi/borgboi.db)",
 )
 @click.option(
     "--format",

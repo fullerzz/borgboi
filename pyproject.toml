@@ -10,10 +10,10 @@ dependencies = [
     "boto3>=1.35.92",
     "catppuccin[pygments]>=2.4.1",
     "click>=8.1.8",
-    "dynaconf>=3.2.12",
     "pydantic>=2.10.4",
     "pyyaml>=6.0",
     "rich>=13.9.4",
+    "sqlalchemy>=2.0",
 ]
 
 [project.scripts]
@@ -61,6 +61,7 @@ filterwarnings = [
     "ignore::DeprecationWarning:botocore.auth:422", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
     "ignore::DeprecationWarning:botocore.auth:424", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
     "ignore::DeprecationWarning:botocore.auth:425", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
+    "ignore::ResourceWarning",                       # handles: SQLite/SQLAlchemy unclosed database warnings during tests
 ]
 
 
