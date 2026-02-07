@@ -192,7 +192,7 @@ def test_borg_config_default_repo_path_uses_resolved_home(monkeypatch: pytest.Mo
 
 
 def test_save_config_default_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test saving config to default SQLite database."""
+    """Test saving config to default YAML file."""
     import borgboi.config
 
     monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
@@ -200,8 +200,16 @@ def test_save_config_default_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     cfg = Config(offline=True, debug=True)
     save_config(cfg)
 
-    db_file = tmp_path / ".borgboi" / "borgboi.db"
-    assert db_file.exists()
+    config_file = tmp_path / ".borgboi" / "config.yaml"
+    assert config_file.exists()
+
+    import yaml
+
+    with config_file.open() as f:
+        saved_data = yaml.safe_load(f)
+
+    assert saved_data["offline"] is True
+    assert saved_data["debug"] is True
 
 
 def test_save_config_yaml_path(tmp_path: Path) -> None:
@@ -228,6 +236,20 @@ def test_load_config_from_path_rejects_directory(tmp_path: Path) -> None:
 
     with pytest.raises(FileNotFoundError, match="not a file"):
         load_config_from_path(config_dir)
+
+
+def test_load_config_from_path_env_override_handles_non_dict_intermediate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test env overrides when a nested section exists but is not a mapping."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("aws: bad\n")
+
+    monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "env-bucket")
+
+    cfg = load_config_from_path(config_file, validate=False)
+
+    assert cfg.aws.s3_bucket == "env-bucket"
 
 
 def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:

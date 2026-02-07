@@ -22,17 +22,6 @@ class Base(DeclarativeBase):
     pass
 
 
-class ConfigRow(Base):
-    __tablename__ = "config"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    section: Mapped[str] = mapped_column(String(50), nullable=False)
-    key: Mapped[str] = mapped_column(String(100), nullable=False)
-    value: Mapped[str] = mapped_column(Text, nullable=False)
-
-    __table_args__ = (UniqueConstraint("section", "key", name="uq_config_section_key"),)
-
-
 class RepositoryRow(Base):
     __tablename__ = "repositories"
 

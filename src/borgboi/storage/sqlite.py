@@ -29,6 +29,9 @@ class SQLiteStorage(RepositoryStorage):
             self._engine = engine
         else:
             resolved_path = db_path or get_db_path()
+            from borgboi.storage.sqlite_migration import auto_migrate_if_needed
+
+            auto_migrate_if_needed(resolved_path)
             self._engine = init_db(resolved_path)
         self._session_factory = get_session_factory(self._engine)
 

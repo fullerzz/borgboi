@@ -1,10 +1,11 @@
-"""Configuration management for borgboi using SQLite and Pydantic."""
+"""Configuration management for borgboi using YAML and Pydantic."""
 
 import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
 from platform import system
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -116,16 +117,72 @@ def _create_settings_dir() -> Path:
 
 
 def get_default_config_path() -> Path:
-    """Return the default borgboi database path."""
-    return resolve_home_dir() / ".borgboi" / "borgboi.db"
+    """Return the default borgboi config file path."""
+    return resolve_home_dir() / ".borgboi" / "config.yaml"
+
+
+def _apply_env_overrides(raw: dict[str, Any]) -> dict[str, Any]:
+    """Apply BORGBOI_* environment variable overrides to the raw config dict."""
+    for config_path, env_var in CONFIG_ENV_VAR_MAP.items():
+        env_value = os.getenv(env_var)
+        if env_value is None:
+            continue
+
+        coerced: object = _coerce_env_value(env_value, config_path)
+
+        parts = config_path.split(".")
+        target: dict[str, Any] = raw
+        for part in parts[:-1]:
+            existing = target.get(part)
+            if not isinstance(existing, dict):
+                target[part] = {}
+            target = target[part]
+        target[parts[-1]] = coerced
+
+    return raw
+
+
+def _coerce_env_value(value: str, config_path: str) -> object:
+    """Coerce a string env var value to the appropriate Python type."""
+    lower = value.lower()
+
+    if lower in ("true", "1", "yes"):
+        return True
+    if lower in ("false", "0", "no"):
+        return False
+
+    int_fields = {
+        "borg.checkpoint_interval",
+        "borg.retention.keep_daily",
+        "borg.retention.keep_weekly",
+        "borg.retention.keep_monthly",
+        "borg.retention.keep_yearly",
+    }
+    if config_path in int_fields:
+        try:
+            return int(value)
+        except ValueError:
+            pass
+
+    return value
+
+
+def _write_default_config(config_path: Path) -> None:
+    """Write a default config.yaml file."""
+    cfg = Config()
+    config_dict = cfg.model_dump(exclude_none=True, mode="json")
+    if "borg" in config_dict and "default_repo_path" in config_dict["borg"]:
+        config_dict["borg"]["default_repo_path"] = str(config_dict["borg"]["default_repo_path"])
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w") as f:
+        yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
 
 @lru_cache(maxsize=1)
 def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
-    """Load and return validated configuration from SQLite database.
+    """Load and return validated configuration from YAML file.
 
-    On first call, runs auto-migration from legacy formats if needed,
-    then loads config from the SQLite database with env var overrides.
+    On first call, loads config from config.yaml with env var overrides.
 
     Note: This function uses lru_cache with maxsize=1, so the first call's
     validate and print_warnings parameters determine the cached behavior.
@@ -137,21 +194,34 @@ def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
     Returns:
         Config: Validated configuration instance
     """
-    from borgboi.storage.sqlite_config import SQLiteConfigBackend
-    from borgboi.storage.sqlite_migration import auto_migrate_if_needed
-
     _create_settings_dir()
-    db_path = resolve_home_dir() / ".borgboi" / "borgboi.db"
-    auto_migrate_if_needed(db_path)
+    config_path = get_default_config_path()
 
-    backend = SQLiteConfigBackend(db_path)
-    return backend.load_config(validate=validate, print_warnings=print_warnings)
+    if not config_path.exists():
+        _write_default_config(config_path)
+
+    with config_path.open() as f:
+        data = yaml.safe_load(f) or {}
+
+    if not isinstance(data, dict):
+        data = {}
+
+    data = _apply_env_overrides(data)
+    cfg = Config.model_validate(data)
+
+    if validate:
+        config_warnings = validate_config(cfg)
+        if print_warnings and config_warnings:
+            import sys
+
+            for warning in config_warnings:
+                print(f"[CONFIG WARNING] {warning}", file=sys.stderr)  # noqa: T201
+
+    return cfg
 
 
 def load_config_from_path(config_path: Path, validate: bool = True, print_warnings: bool = True) -> Config:
-    """Load configuration from an explicit file path.
-
-    Supports both YAML files (legacy) and SQLite databases.
+    """Load configuration from an explicit YAML file path.
 
     Args:
         config_path: Path to the configuration file to load.
@@ -170,33 +240,23 @@ def load_config_from_path(config_path: Path, validate: bool = True, print_warnin
     if not resolved_path.is_file():
         raise FileNotFoundError(f"Config path is not a file: {resolved_path}")
 
-    suffix = resolved_path.suffix.lower()
-    if suffix in (".yaml", ".yml"):
-        # Load from YAML file directly
-        with resolved_path.open() as f:
-            data = yaml.safe_load(f) or {}
-        if not isinstance(data, dict):
-            data = {}
-        # Apply env overrides
-        from borgboi.storage.sqlite_config import SQLiteConfigBackend
+    with resolved_path.open() as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        data = {}
 
-        backend = SQLiteConfigBackend.__new__(SQLiteConfigBackend)
-        data = backend._apply_env_overrides(data)
-        cfg = Config.model_validate(data)
-        if validate:
-            config_warnings = validate_config(cfg)
-            if print_warnings and config_warnings:
-                import sys
+    data = _apply_env_overrides(data)
+    cfg = Config.model_validate(data)
 
-                for warning in config_warnings:
-                    print(f"[CONFIG WARNING] {warning}", file=sys.stderr)  # noqa: T201
-        return cfg
-    else:
-        # Assume SQLite database
-        from borgboi.storage.sqlite_config import SQLiteConfigBackend
+    if validate:
+        config_warnings = validate_config(cfg)
+        if print_warnings and config_warnings:
+            import sys
 
-        backend = SQLiteConfigBackend(resolved_path)
-        return backend.load_config(validate=validate, print_warnings=print_warnings)
+            for warning in config_warnings:
+                print(f"[CONFIG WARNING] {warning}", file=sys.stderr)  # noqa: T201
+
+    return cfg
 
 
 def validate_config(cfg: Config) -> list[str]:  # noqa: C901
@@ -312,31 +372,19 @@ def get_env_overrides() -> dict[str, str]:
 
 
 def save_config(cfg: Config, config_path: Path | None = None) -> None:
-    """Save configuration to the SQLite database (or YAML if path specified).
+    """Save configuration to a YAML file.
 
     Args:
         cfg: Config instance to save
-        config_path: Optional custom path. If a .yaml/.yml path, saves as YAML.
-                     Otherwise saves to the default SQLite database.
+        config_path: Optional custom path. Defaults to ~/.borgboi/config.yaml.
     """
-    if config_path is not None:
-        suffix = config_path.suffix.lower()
-        if suffix in (".yaml", ".yml"):
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            config_dict = cfg.model_dump(exclude_none=True, mode="json")
-            if "borg" in config_dict and "default_repo_path" in config_dict["borg"]:
-                config_dict["borg"]["default_repo_path"] = str(config_dict["borg"]["default_repo_path"])
-            with config_path.open("w") as f:
-                yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
-            return
-
-    # Save to SQLite
-    from borgboi.storage.db import get_db_path
-    from borgboi.storage.sqlite_config import SQLiteConfigBackend
-
-    db_path = config_path if config_path is not None else get_db_path()
-    backend = SQLiteConfigBackend(db_path)
-    backend.save_config(cfg)
+    resolved_path = config_path if config_path is not None else get_default_config_path()
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    config_dict = cfg.model_dump(exclude_none=True, mode="json")
+    if "borg" in config_dict and "default_repo_path" in config_dict["borg"]:
+        config_dict["borg"]["default_repo_path"] = str(config_dict["borg"]["default_repo_path"])
+    with resolved_path.open("w") as f:
+        yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
 
 # Global config instance (singleton)
