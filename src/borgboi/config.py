@@ -128,7 +128,7 @@ def _apply_env_overrides(raw: dict[str, Any]) -> dict[str, Any]:
         if env_value is None:
             continue
 
-        coerced: object = _coerce_env_value(env_value, config_path)
+        coerced: str | bool | int = _coerce_env_value(env_value, config_path)
 
         parts = config_path.split(".")
         target: dict[str, Any] = raw
@@ -142,15 +142,8 @@ def _apply_env_overrides(raw: dict[str, Any]) -> dict[str, Any]:
     return raw
 
 
-def _coerce_env_value(value: str, config_path: str) -> object:
+def _coerce_env_value(value: str, config_path: str) -> str | bool | int:
     """Coerce a string env var value to the appropriate Python type."""
-    lower = value.lower()
-
-    if lower in ("true", "1", "yes"):
-        return True
-    if lower in ("false", "0", "no"):
-        return False
-
     int_fields = {
         "borg.checkpoint_interval",
         "borg.retention.keep_daily",
@@ -164,6 +157,19 @@ def _coerce_env_value(value: str, config_path: str) -> object:
         except ValueError:
             pass
 
+    bool_fields = {
+        "offline",
+        "debug",
+        "ui.show_progress",
+        "ui.color_output",
+    }
+    if config_path in bool_fields:
+        lower = value.lower()
+        if lower in ("true", "1", "yes"):
+            return True
+        if lower in ("false", "0", "no"):
+            return False
+
     return value
 
 
@@ -176,6 +182,22 @@ def _write_default_config(config_path: Path) -> None:
     config_path.parent.mkdir(parents=True, exist_ok=True)
     with config_path.open("w") as f:
         yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
+
+
+def _load_and_validate(data: dict[str, Any], validate: bool, print_warnings: bool) -> Config:
+    """Apply env overrides, build Config, and optionally validate with warnings."""
+    data = _apply_env_overrides(data)
+    cfg = Config.model_validate(data)
+
+    if validate:
+        config_warnings = validate_config(cfg)
+        if print_warnings and config_warnings:
+            import sys
+
+            for warning in config_warnings:
+                print(f"[CONFIG WARNING] {warning}", file=sys.stderr)  # noqa: T201
+
+    return cfg
 
 
 @lru_cache(maxsize=1)
@@ -206,18 +228,7 @@ def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
     if not isinstance(data, dict):
         data = {}
 
-    data = _apply_env_overrides(data)
-    cfg = Config.model_validate(data)
-
-    if validate:
-        config_warnings = validate_config(cfg)
-        if print_warnings and config_warnings:
-            import sys
-
-            for warning in config_warnings:
-                print(f"[CONFIG WARNING] {warning}", file=sys.stderr)  # noqa: T201
-
-    return cfg
+    return _load_and_validate(data, validate, print_warnings)
 
 
 def load_config_from_path(config_path: Path, validate: bool = True, print_warnings: bool = True) -> Config:
@@ -245,18 +256,7 @@ def load_config_from_path(config_path: Path, validate: bool = True, print_warnin
     if not isinstance(data, dict):
         data = {}
 
-    data = _apply_env_overrides(data)
-    cfg = Config.model_validate(data)
-
-    if validate:
-        config_warnings = validate_config(cfg)
-        if print_warnings and config_warnings:
-            import sys
-
-            for warning in config_warnings:
-                print(f"[CONFIG WARNING] {warning}", file=sys.stderr)  # noqa: T201
-
-    return cfg
+    return _load_and_validate(data, validate, print_warnings)
 
 
 def validate_config(cfg: Config) -> list[str]:  # noqa: C901

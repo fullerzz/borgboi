@@ -61,7 +61,6 @@ filterwarnings = [
     "ignore::DeprecationWarning:botocore.auth:422", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
     "ignore::DeprecationWarning:botocore.auth:424", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
     "ignore::DeprecationWarning:botocore.auth:425", # handles: 'DeprecationWarning: datetime.datetime.utcnow()'
-    "ignore::ResourceWarning",                       # handles: SQLite/SQLAlchemy unclosed database warnings during tests
 ]
 
 
