@@ -52,14 +52,17 @@ class TestMigrateJsonRepositories:
 
         db_path = borgboi_dir / "borgboi.db"
         engine = init_db(db_path)
-        count = migrate_json_repositories(borgboi_dir / "data", engine)
+        try:
+            count = migrate_json_repositories(borgboi_dir / "data", engine)
 
-        assert count == 2
-        session_factory = get_session_factory(engine)
-        with session_factory() as session:
-            rows = session.query(RepositoryRow).all()
-            names = {r.name for r in rows}
-        assert names == {"repo1", "repo2"}
+            assert count == 2
+            session_factory = get_session_factory(engine)
+            with session_factory() as session:
+                rows = session.query(RepositoryRow).all()
+                names = {r.name for r in rows}
+            assert names == {"repo1", "repo2"}
+        finally:
+            engine.dispose()
 
 
 class TestMigrateS3Cache:
@@ -77,14 +80,17 @@ class TestMigrateS3Cache:
 
         db_path = borgboi_dir / "borgboi.db"
         engine = init_db(db_path)
-        migrate_s3_cache(cache_path, engine)
+        try:
+            migrate_s3_cache(cache_path, engine)
 
-        session_factory = get_session_factory(engine)
-        with session_factory() as session:
-            rows = session.query(S3StatsCacheRow).all()
-            stats = {r.repo_name: r for r in rows}
-        assert stats["repo1"].total_size_bytes == 1024
-        assert stats["repo2"].object_count == 10
+            session_factory = get_session_factory(engine)
+            with session_factory() as session:
+                rows = session.query(S3StatsCacheRow).all()
+                stats = {r.repo_name: r for r in rows}
+            assert stats["repo1"].total_size_bytes == 1024
+            assert stats["repo2"].object_count == 10
+        finally:
+            engine.dispose()
 
 
 class TestAutoMigration:
@@ -95,7 +101,8 @@ class TestAutoMigration:
         assert db_path.exists()
 
     def test_skips_if_db_exists(self, borgboi_dir: Path, db_path: Path) -> None:
-        init_db(db_path)
+        engine = init_db(db_path)
+        engine.dispose()
         result = auto_migrate_if_needed(db_path)
         assert result is False
 
@@ -110,5 +117,8 @@ class TestAutoMigration:
         from borgboi.storage.sqlite import SQLiteStorage
 
         storage = SQLiteStorage(db_path=db_path)
-        repo = storage.get("repo1")
-        assert repo.path == "/repos/1"
+        try:
+            repo = storage.get("repo1")
+            assert repo.path == "/repos/1"
+        finally:
+            storage.close()

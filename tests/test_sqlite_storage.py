@@ -1,5 +1,6 @@
 """Tests for SQLiteStorage implementation."""
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -17,9 +18,11 @@ def db_path(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def storage(db_path: Path) -> SQLiteStorage:
+def storage(db_path: Path) -> Iterator[SQLiteStorage]:
     engine = init_db(db_path)
-    return SQLiteStorage(engine=engine)
+    s = SQLiteStorage(engine=engine)
+    yield s
+    s.close()
 
 
 def _make_repo(name: str = "test-repo", path: str = "/repos/test", hostname: str = "localhost") -> BorgBoiRepo:

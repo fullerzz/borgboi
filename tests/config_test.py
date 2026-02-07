@@ -252,6 +252,20 @@ def test_load_config_from_path_env_override_handles_non_dict_intermediate(
     assert cfg.aws.s3_bucket == "env-bucket"
 
 
+def test_coerce_env_value_integer_field_not_treated_as_bool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that integer env var values like '1' and '0' are coerced to int, not bool."""
+    monkeypatch.setenv("BORGBOI_BORG__CHECKPOINT_INTERVAL", "1")
+    monkeypatch.setenv("BORGBOI_BORG__RETENTION__KEEP_DAILY", "0")
+
+    config_module.get_config.cache_clear()
+    cfg = config_module.get_config()
+
+    assert cfg.borg.checkpoint_interval == 1
+    assert isinstance(cfg.borg.checkpoint_interval, int)
+    assert cfg.borg.retention.keep_daily == 0
+    assert isinstance(cfg.borg.retention.keep_daily, int)
+
+
 def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that environment variables override defaults."""
     monkeypatch.setenv("BORGBOI_OFFLINE", "true")

@@ -35,6 +35,10 @@ class SQLiteStorage(RepositoryStorage):
             self._engine = init_db(resolved_path)
         self._session_factory = get_session_factory(self._engine)
 
+    def close(self) -> None:
+        """Dispose of the SQLAlchemy engine, releasing all connection resources."""
+        self._engine.dispose()
+
     def _row_to_repo(self, row: RepositoryRow) -> BorgBoiRepo:
         """Convert a RepositoryRow to a BorgBoiRepo model."""
         metadata: RepoInfo | None = None

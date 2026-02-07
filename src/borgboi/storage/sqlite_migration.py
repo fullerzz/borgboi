@@ -44,13 +44,17 @@ def auto_migrate_if_needed(db_path: Path) -> bool:
 
     if not has_legacy:
         # Fresh install: just create empty DB
-        init_db(db_path)
+        engine = init_db(db_path)
+        engine.dispose()
         return False
 
     # Perform migration
     logger.info("Migrating legacy data to SQLite database at %s", db_path)
     engine = init_db(db_path)
-    migrated_anything = _run_legacy_migrations(engine, data_dir, legacy_metadata_dir)
+    try:
+        migrated_anything = _run_legacy_migrations(engine, data_dir, legacy_metadata_dir)
+    finally:
+        engine.dispose()
 
     return migrated_anything
 
