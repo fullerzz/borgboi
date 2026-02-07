@@ -46,18 +46,16 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest
     monkeypatch.setenv("BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE", DYNAMO_ARCHIVES_TABLE_NAME)
 
     # Use a temporary directory for all borgboi files during tests
-    # Monkeypatch resolve_home_dir to use a temp directory
-    # This will cause borgboi_dir and passphrases_dir to be under the temp directory
     test_home_dir = tmp_path_factory.mktemp("borgboi_home")
     import borgboi.config
 
     monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: test_home_dir)
 
-    # Clear the lru_cache so get_config() will create a fresh SQLite DB
+    # Clear the lru_cache so get_config() will create a fresh config.yaml
     # in the temp directory on next call
     borgboi.config.get_config.cache_clear()
 
-    # Ensure the temp SQLite DB is created (populates the lru_cache)
+    # Ensure the config.yaml is created (populates the lru_cache)
     borgboi.config.get_config()
 
     # Mutate the existing config singleton directly (in-place).

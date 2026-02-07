@@ -4,14 +4,12 @@ import json
 from pathlib import Path
 
 import pytest
-import yaml
 
-from borgboi.storage.db import ConfigRow, RepositoryRow, S3StatsCacheRow, get_session_factory, init_db
+from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_session_factory, init_db
 from borgboi.storage.sqlite_migration import (
     auto_migrate_if_needed,
     migrate_json_repositories,
     migrate_s3_cache,
-    migrate_yaml_config,
 )
 
 
@@ -43,35 +41,6 @@ def _make_repo_json(name: str = "test-repo", path: str = "/repos/test") -> str:
         },
         indent=2,
     )
-
-
-class TestMigrateYamlConfig:
-    def test_basic_yaml_migration(self, borgboi_dir: Path) -> None:
-        config_yaml = borgboi_dir / "config.yaml"
-        config_yaml.write_text(
-            yaml.safe_dump(
-                {
-                    "offline": True,
-                    "aws": {"s3_bucket": "my-bucket", "region": "us-east-1"},
-                    "borg": {"compression": "lz4", "retention": {"keep_daily": 14}},
-                }
-            )
-        )
-
-        db_path = borgboi_dir / "borgboi.db"
-        engine = init_db(db_path)
-        migrate_yaml_config(config_yaml, engine)
-
-        session_factory = get_session_factory(engine)
-        with session_factory() as session:
-            rows = session.query(ConfigRow).all()
-            row_map = {(r.section, r.key): json.loads(r.value) for r in rows}
-
-        assert row_map[("top", "offline")] is True
-        assert row_map[("aws", "s3_bucket")] == "my-bucket"
-        assert row_map[("aws", "region")] == "us-east-1"
-        assert row_map[("borg", "compression")] == "lz4"
-        assert row_map[("borg.retention", "keep_daily")] == 14
 
 
 class TestMigrateJsonRepositories:
@@ -129,16 +98,6 @@ class TestAutoMigration:
         init_db(db_path)
         result = auto_migrate_if_needed(db_path)
         assert result is False
-
-    def test_migrates_yaml_and_renames(self, borgboi_dir: Path, db_path: Path) -> None:
-        config_yaml = borgboi_dir / "config.yaml"
-        config_yaml.write_text(yaml.safe_dump({"offline": True}))
-
-        result = auto_migrate_if_needed(db_path)
-        assert result is True
-        assert db_path.exists()
-        assert not config_yaml.exists()
-        assert (borgboi_dir / "config.yaml.bak").exists()
 
     def test_migrates_repositories(self, borgboi_dir: Path, db_path: Path) -> None:
         repos_dir = borgboi_dir / "data" / "repositories"

@@ -1,9 +1,10 @@
-"""Auto-migration from legacy YAML/JSON formats to SQLite.
+"""Auto-migration from legacy JSON formats to SQLite.
 
-IMPORTANT: This module is imported during get_config() before borgboi.config.config
-is assigned. Therefore it MUST NOT import from borgboi.models, borgboi.clients, or
-any module that imports borgboi.config at the top level. Repository JSON files are
-parsed with raw json.loads() instead of Pydantic models to avoid circular imports.
+IMPORTANT: This module is imported during SQLiteStorage initialization before
+borgboi.config.config is assigned. Therefore it MUST NOT import from borgboi.models,
+borgboi.clients, or any module that imports borgboi.config at the top level.
+Repository JSON files are parsed with raw json.loads() instead of Pydantic models
+to avoid circular imports.
 """
 
 from __future__ import annotations
@@ -16,10 +17,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import yaml
 from sqlalchemy import Engine
 
-from borgboi.storage.db import ConfigRow, RepositoryRow, S3StatsCacheRow, get_session_factory, init_db
+from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_session_factory, init_db
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def auto_migrate_if_needed(db_path: Path) -> bool:
     """Check for legacy data and migrate to SQLite if needed.
 
-    Called from get_config() before loading config.
+    Called from SQLiteStorage.__init__ before accessing the database.
 
     Returns True if migration was performed, False otherwise.
     """
@@ -36,12 +36,11 @@ def auto_migrate_if_needed(db_path: Path) -> bool:
 
     borgboi_dir = db_path.parent
 
-    # Check for any legacy data
-    config_yaml = borgboi_dir / "config.yaml"
+    # Check for any legacy data (repos and S3 cache only, not config)
     data_dir = borgboi_dir / "data"
     legacy_metadata_dir = borgboi_dir / ".borgboi_metadata"
 
-    has_legacy = config_yaml.exists() or data_dir.exists() or legacy_metadata_dir.exists()
+    has_legacy = data_dir.exists() or legacy_metadata_dir.exists()
 
     if not has_legacy:
         # Fresh install: just create empty DB
@@ -51,31 +50,14 @@ def auto_migrate_if_needed(db_path: Path) -> bool:
     # Perform migration
     logger.info("Migrating legacy data to SQLite database at %s", db_path)
     engine = init_db(db_path)
-    migrated_anything = _run_legacy_migrations(engine, config_yaml, data_dir, legacy_metadata_dir)
-
-    # Rename config.yaml to config.yaml.bak as safety net
-    if config_yaml.exists():
-        backup_path = config_yaml.with_suffix(".yaml.bak")
-        try:
-            config_yaml.rename(backup_path)
-            logger.info("Renamed config.yaml to config.yaml.bak")
-        except OSError:
-            logger.warning("Could not rename config.yaml to config.yaml.bak")
+    migrated_anything = _run_legacy_migrations(engine, data_dir, legacy_metadata_dir)
 
     return migrated_anything
 
 
-def _run_legacy_migrations(engine: Engine, config_yaml: Path, data_dir: Path, legacy_metadata_dir: Path) -> bool:
+def _run_legacy_migrations(engine: Engine, data_dir: Path, legacy_metadata_dir: Path) -> bool:
     """Execute all legacy format migrations and return True if anything was migrated."""
     migrated_anything = False
-
-    if config_yaml.exists():
-        try:
-            migrate_yaml_config(config_yaml, engine)
-            migrated_anything = True
-            logger.info("Migrated config.yaml to SQLite")
-        except Exception:
-            logger.exception("Failed to migrate config.yaml")
 
     if data_dir.exists():
         repos_dir = data_dir / "repositories"
@@ -105,23 +87,6 @@ def _run_legacy_migrations(engine: Engine, config_yaml: Path, data_dir: Path, le
             logger.exception("Failed to migrate legacy repositories")
 
     return migrated_anything
-
-
-def migrate_yaml_config(yaml_path: Path, engine: Engine) -> None:
-    """Parse a YAML config file and insert rows into the config table."""
-    with yaml_path.open() as f:
-        data = yaml.safe_load(f) or {}
-
-    if not isinstance(data, dict):
-        logger.warning("config.yaml does not contain a mapping, skipping")
-        return
-
-    rows = _flatten_config_dict(data)
-    session_factory = get_session_factory(engine)
-    with session_factory() as session:
-        for section, key, value in rows:
-            session.add(ConfigRow(section=section, key=key, value=json.dumps(value)))
-        session.commit()
 
 
 def migrate_json_repositories(data_dir: Path, engine: Engine) -> int:
@@ -239,15 +204,3 @@ def _insert_repo_from_dict(session_factory: Callable[[], Any], data: dict[str, A
         if existing is None:
             session.add(row)
             session.commit()
-
-
-def _flatten_config_dict(data: dict[str, Any], section: str = "top") -> list[tuple[str, str, Any]]:
-    """Flatten a nested config dict into (section, key, value) tuples."""
-    rows: list[tuple[str, str, Any]] = []
-    for key, value in data.items():
-        if isinstance(value, dict):
-            child_section = key if section == "top" else f"{section}.{key}"
-            rows.extend(_flatten_config_dict(value, child_section))
-        else:
-            rows.append((section, key, value))
-    return rows
