@@ -1,6 +1,5 @@
 """Tests for borgboi configuration module."""
 
-import importlib
 from pathlib import Path
 
 import pytest
@@ -27,16 +26,11 @@ def _reset_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     Also reloads dependent modules (like passphrase) that import config,
     so they get the fresh config reference.
     """
-    import borgboi.lib.passphrase
-
     _clear_borgboi_env_vars(monkeypatch)
     monkeypatch.setenv("BORGBOI_HOME", str(tmp_path))
 
-    # Reload config module to get fresh instance
-    importlib.reload(config_module)
-    # Also reload modules that import config at module level
-    # so they get the fresh config reference
-    importlib.reload(borgboi.lib.passphrase)
+    # Clear the cached config so next get_config() will re-read from fresh DB
+    config_module.get_config.cache_clear()
 
 
 def test_retention_config_defaults() -> None:
@@ -87,7 +81,7 @@ def test_borg_config_defaults() -> None:
     """Test that BorgConfig has correct defaults."""
     borg = BorgConfig()
     assert borg.executable_path == "borg"
-    assert borg.default_repo_path == Path.home() / ".borgboi" / "repositories"
+    assert borg.default_repo_path == config_module.resolve_home_dir() / ".borgboi" / "repositories"
     assert borg.compression == "zstd,6"
     assert borg.checkpoint_interval == 900
     assert borg.storage_quota == "100G"
@@ -161,8 +155,11 @@ def test_config_custom_values() -> None:
 
 def test_config_borgboi_dir_property() -> None:
     """Test that borgboi_dir property returns correct path."""
+    import borgboi.config
+
     cfg = Config()
-    assert cfg.borgboi_dir == resolve_home_dir() / ".borgboi"
+    # Use the module attribute (which may be monkeypatched) rather than the locally imported function
+    assert cfg.borgboi_dir == borgboi.config.resolve_home_dir() / ".borgboi"
 
 
 def test_config_excludes_filename_property() -> None:
@@ -185,10 +182,20 @@ def test_resolve_home_dir_with_borgboi_home(monkeypatch: pytest.MonkeyPatch) -> 
     assert home == Path("/custom/home")
 
 
+def test_borg_config_default_repo_path_uses_resolved_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test BorgConfig default repo path follows resolved home directory."""
+    monkeypatch.setattr(config_module, "resolve_home_dir", lambda: Path("/custom/home"))
+
+    borg = BorgConfig()
+
+    assert borg.default_repo_path == Path("/custom/home") / ".borgboi" / "repositories"
+
+
 def test_save_config_default_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test saving config to default path."""
-    # Use tmp_path as home directory
-    monkeypatch.setenv("BORGBOI_HOME", str(tmp_path))
+    """Test saving config to default YAML file."""
+    import borgboi.config
+
+    monkeypatch.setattr(borgboi.config, "resolve_home_dir", lambda: tmp_path)
 
     cfg = Config(offline=True, debug=True)
     save_config(cfg)
@@ -196,7 +203,6 @@ def test_save_config_default_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     config_file = tmp_path / ".borgboi" / "config.yaml"
     assert config_file.exists()
 
-    # Read and verify content
     import yaml
 
     with config_file.open() as f:
@@ -206,8 +212,8 @@ def test_save_config_default_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     assert saved_data["debug"] is True
 
 
-def test_save_config_custom_path(tmp_path: Path) -> None:
-    """Test saving config to custom path."""
+def test_save_config_yaml_path(tmp_path: Path) -> None:
+    """Test saving config to a YAML path."""
     config_file = tmp_path / "custom_config.yaml"
 
     cfg = Config(offline=True)
@@ -215,7 +221,6 @@ def test_save_config_custom_path(tmp_path: Path) -> None:
 
     assert config_file.exists()
 
-    # Read and verify content
     import yaml
 
     with config_file.open() as f:
@@ -233,6 +238,34 @@ def test_load_config_from_path_rejects_directory(tmp_path: Path) -> None:
         load_config_from_path(config_dir)
 
 
+def test_load_config_from_path_env_override_handles_non_dict_intermediate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Test env overrides when a nested section exists but is not a mapping."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("aws: bad\n")
+
+    monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "env-bucket")
+
+    cfg = load_config_from_path(config_file, validate=False)
+
+    assert cfg.aws.s3_bucket == "env-bucket"
+
+
+def test_coerce_env_value_integer_field_not_treated_as_bool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that integer env var values like '1' and '0' are coerced to int, not bool."""
+    monkeypatch.setenv("BORGBOI_BORG__CHECKPOINT_INTERVAL", "1")
+    monkeypatch.setenv("BORGBOI_BORG__RETENTION__KEEP_DAILY", "0")
+
+    config_module.get_config.cache_clear()
+    cfg = config_module.get_config()
+
+    assert cfg.borg.checkpoint_interval == 1
+    assert isinstance(cfg.borg.checkpoint_interval, int)
+    assert cfg.borg.retention.keep_daily == 0
+    assert isinstance(cfg.borg.retention.keep_daily, int)
+
+
 def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that environment variables override defaults."""
     monkeypatch.setenv("BORGBOI_OFFLINE", "true")
@@ -242,16 +275,15 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BORGBOI_BORG__COMPRESSION", "lz4")
     monkeypatch.setenv("BORGBOI_BORG__RETENTION__KEEP_DAILY", "14")
 
-    # Reload config to pick up env vars
-    importlib.reload(config_module)
-    from borgboi.config import config
+    config_module.get_config.cache_clear()
+    cfg = config_module.get_config()
 
-    assert config.offline is True
-    assert config.debug is True
-    assert config.aws.s3_bucket == "env-bucket"
-    assert config.aws.region == "us-east-1"
-    assert config.borg.compression == "lz4"
-    assert config.borg.retention.keep_daily == 14
+    assert cfg.offline is True
+    assert cfg.debug is True
+    assert cfg.aws.s3_bucket == "env-bucket"
+    assert cfg.aws.region == "us-east-1"
+    assert cfg.borg.compression == "lz4"
+    assert cfg.borg.retention.keep_daily == 14
 
 
 @pytest.mark.parametrize(
@@ -275,19 +307,16 @@ def test_env_var_overrides(
     monkeypatch: pytest.MonkeyPatch, env_var: str, config_path: str, expected_value: object
 ) -> None:
     """Test that individual environment variables override config."""
-    # Set the environment variable
     monkeypatch.setenv(env_var, str(expected_value))
 
-    # Reload config to pick up env var
-    importlib.reload(config_module)
-    from borgboi.config import config
+    config_module.get_config.cache_clear()
+    cfg = config_module.get_config()
 
     # Navigate to the config value using the path
-    value = config
+    value = cfg
     for part in config_path.split("."):
         value = getattr(value, part)
 
-    # For boolean and int values, assert directly; for strings, assert as-is
     if isinstance(expected_value, (bool, int)):
         assert value == expected_value
     else:
@@ -369,5 +398,5 @@ def test_get_env_overrides_all_config_paths(monkeypatch: pytest.MonkeyPatch) -> 
     overrides = get_env_overrides()
 
     # All paths should be in the result
-    for config_path in CONFIG_ENV_VAR_MAP:
-        assert config_path in overrides, f"Missing config path in overrides: {config_path}"
+    for config_path_key in CONFIG_ENV_VAR_MAP:
+        assert config_path_key in overrides, f"Missing config path in overrides: {config_path_key}"
