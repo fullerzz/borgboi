@@ -5,7 +5,7 @@ import shutil
 from functools import lru_cache
 from pathlib import Path
 from platform import system
-from typing import Any
+from typing import Any, override
 
 import yaml
 from pydantic import BaseModel, Field
@@ -77,6 +77,7 @@ class Config(BaseSettings):
     debug: bool = False
 
     @classmethod
+    @override
     def settings_customise_sources(
         cls,
         settings_cls: type[BaseSettings],
