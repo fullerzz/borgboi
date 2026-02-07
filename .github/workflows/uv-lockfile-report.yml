@@ -1,0 +1,23 @@
+name: uv Lockfile Report
+
+on:
+  pull_request:
+    paths:
+      - "uv.lock"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Report
+        uses: mw-root/uv-lock-report@7edd90a7b89651eed0d3cca7049474fee1834e1d # v0.13.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
