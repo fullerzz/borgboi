@@ -9,6 +9,7 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 DEFAULT_DYNAMODB_REPOS_TABLE = "bb-repos"
 DEFAULT_DYNAMODB_ARCHIVES_TABLE = "bb-archives"
@@ -60,14 +61,32 @@ class UIConfig(BaseModel):
     table_style: str = "rounded"
 
 
-class Config(BaseModel):
+class Config(BaseSettings):
     """Main configuration container."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="BORGBOI_",
+        env_nested_delimiter="__",
+        extra="ignore",
+    )
 
     aws: AWSConfig = Field(default_factory=AWSConfig)
     borg: BorgConfig = Field(default_factory=BorgConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     offline: bool = False
     debug: bool = False
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Load env vars before init kwargs so env always has override priority."""
+        return env_settings, init_settings, dotenv_settings, file_secret_settings
 
     @property
     def borgboi_dir(self) -> Path:
@@ -121,58 +140,6 @@ def get_default_config_path() -> Path:
     return resolve_home_dir() / ".borgboi" / "config.yaml"
 
 
-def _apply_env_overrides(raw: dict[str, Any]) -> dict[str, Any]:
-    """Apply BORGBOI_* environment variable overrides to the raw config dict."""
-    for config_path, env_var in CONFIG_ENV_VAR_MAP.items():
-        env_value = os.getenv(env_var)
-        if env_value is None:
-            continue
-
-        coerced: str | bool | int = _coerce_env_value(env_value, config_path)
-
-        parts = config_path.split(".")
-        target: dict[str, Any] = raw
-        for part in parts[:-1]:
-            existing = target.get(part)
-            if not isinstance(existing, dict):
-                target[part] = {}
-            target = target[part]
-        target[parts[-1]] = coerced
-
-    return raw
-
-
-def _coerce_env_value(value: str, config_path: str) -> str | bool | int:
-    """Coerce a string env var value to the appropriate Python type."""
-    int_fields = {
-        "borg.checkpoint_interval",
-        "borg.retention.keep_daily",
-        "borg.retention.keep_weekly",
-        "borg.retention.keep_monthly",
-        "borg.retention.keep_yearly",
-    }
-    if config_path in int_fields:
-        try:
-            return int(value)
-        except ValueError:
-            pass
-
-    bool_fields = {
-        "offline",
-        "debug",
-        "ui.show_progress",
-        "ui.color_output",
-    }
-    if config_path in bool_fields:
-        lower = value.lower()
-        if lower in ("true", "1", "yes"):
-            return True
-        if lower in ("false", "0", "no"):
-            return False
-
-    return value
-
-
 def _write_default_config(config_path: Path) -> None:
     """Write a default config.yaml file."""
     cfg = Config()
@@ -185,9 +152,8 @@ def _write_default_config(config_path: Path) -> None:
 
 
 def _load_and_validate(data: dict[str, Any], validate: bool, print_warnings: bool) -> Config:
-    """Apply env overrides, build Config, and optionally validate with warnings."""
-    data = _apply_env_overrides(data)
-    cfg = Config.model_validate(data)
+    """Build Config and optionally validate with warnings."""
+    cfg = Config(**data)
 
     if validate:
         config_warnings = validate_config(cfg)
