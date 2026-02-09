@@ -24,15 +24,16 @@ from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_session_facto
 logger = logging.getLogger(__name__)
 
 
-def auto_migrate_if_needed(db_path: Path) -> bool:
+def auto_migrate_if_needed(db_path: Path) -> Engine:
     """Check for legacy data and migrate to SQLite if needed.
 
     Called from SQLiteStorage.__init__ before accessing the database.
 
-    Returns True if migration was performed, False otherwise.
+    Returns a ready-to-use SQLAlchemy Engine for the given *db_path*.
+    The caller owns the engine and is responsible for disposing it.
     """
     if db_path.exists():
-        return False
+        return init_db(db_path)
 
     borgboi_dir = db_path.parent
 
@@ -44,19 +45,14 @@ def auto_migrate_if_needed(db_path: Path) -> bool:
 
     if not has_legacy:
         # Fresh install: just create empty DB
-        engine = init_db(db_path)
-        engine.dispose()
-        return False
+        return init_db(db_path)
 
     # Perform migration
     logger.info("Migrating legacy data to SQLite database at %s", db_path)
     engine = init_db(db_path)
-    try:
-        migrated_anything = _run_legacy_migrations(engine, data_dir, legacy_metadata_dir)
-    finally:
-        engine.dispose()
+    _run_legacy_migrations(engine, data_dir, legacy_metadata_dir)
 
-    return migrated_anything
+    return engine
 
 
 def _run_legacy_migrations(engine: Engine, data_dir: Path, legacy_metadata_dir: Path) -> bool:

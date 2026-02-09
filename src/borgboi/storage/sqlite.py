@@ -11,7 +11,7 @@ from borgboi.clients.borg import RepoInfo
 from borgboi.core.errors import RepositoryNotFoundError, StorageError
 from borgboi.models import BorgBoiRepo
 from borgboi.storage.base import RepositoryStorage
-from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_db_path, get_session_factory, init_db
+from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_db_path, get_session_factory
 from borgboi.storage.models import S3RepoStats
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,7 @@ class SQLiteStorage(RepositoryStorage):
             resolved_path = db_path or get_db_path()
             from borgboi.storage.sqlite_migration import auto_migrate_if_needed
 
-            auto_migrate_if_needed(resolved_path)
-            self._engine = init_db(resolved_path)
+            self._engine = auto_migrate_if_needed(resolved_path)
         self._session_factory = get_session_factory(self._engine)
 
     def close(self) -> None:

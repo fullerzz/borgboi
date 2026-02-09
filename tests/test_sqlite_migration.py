@@ -95,30 +95,36 @@ class TestMigrateS3Cache:
 
 class TestAutoMigration:
     def test_fresh_install_creates_empty_db(self, borgboi_dir: Path, db_path: Path) -> None:
-        """No legacy data, should create empty DB."""
-        result = auto_migrate_if_needed(db_path)
-        assert result is False
-        assert db_path.exists()
+        """No legacy data, should create empty DB and return an engine."""
+        engine = auto_migrate_if_needed(db_path)
+        try:
+            assert db_path.exists()
+            assert hasattr(engine, "dispose")
+        finally:
+            engine.dispose()
 
     def test_skips_if_db_exists(self, borgboi_dir: Path, db_path: Path) -> None:
         engine = init_db(db_path)
         engine.dispose()
-        result = auto_migrate_if_needed(db_path)
-        assert result is False
+        engine = auto_migrate_if_needed(db_path)
+        try:
+            assert hasattr(engine, "dispose")
+        finally:
+            engine.dispose()
 
     def test_migrates_repositories(self, borgboi_dir: Path, db_path: Path) -> None:
         repos_dir = borgboi_dir / "data" / "repositories"
         repos_dir.mkdir(parents=True)
         (repos_dir / "repo1.json").write_text(_make_repo_json("repo1", "/repos/1"))
 
-        result = auto_migrate_if_needed(db_path)
-        assert result is True
-
-        from borgboi.storage.sqlite import SQLiteStorage
-
-        storage = SQLiteStorage(db_path=db_path)
+        engine = auto_migrate_if_needed(db_path)
         try:
+            assert hasattr(engine, "dispose")
+
+            from borgboi.storage.sqlite import SQLiteStorage
+
+            storage = SQLiteStorage(engine=engine)
             repo = storage.get("repo1")
             assert repo.path == "/repos/1"
         finally:
-            storage.close()
+            engine.dispose()

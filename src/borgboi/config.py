@@ -86,7 +86,13 @@ class Config(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """Load env vars before init kwargs so env always has override priority."""
+        """Env vars take priority over init kwargs (YAML data).
+
+        Source order (highest priority first): env_settings > init_settings > dotenv > file_secret.
+        CLI flags (--offline, --debug) are handled separately via BorgBoiContext
+        in cli.py, not through Config init kwargs, so this ordering does not
+        affect CLI flag behavior.
+        """
         return env_settings, init_settings, dotenv_settings, file_secret_settings
 
     @property

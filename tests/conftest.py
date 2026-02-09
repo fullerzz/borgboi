@@ -55,16 +55,19 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest
     # in the temp directory on next call
     borgboi.config.get_config.cache_clear()
 
-    # Ensure the config.yaml is created (populates the lru_cache)
-    borgboi.config.get_config()
+    # Ensure the config.yaml is created and capture the fresh config.
+    fresh_config = borgboi.config.get_config()
 
-    # Mutate the existing config singleton directly (in-place).
-    # Many modules (dynamodb, orchestrator, borg, etc.) import config at the
-    # top level via "from borgboi.config import config" and hold a direct
-    # reference to this object. We must mutate it rather than replace it.
-    borgboi.config.config.aws.dynamodb_repos_table = DYNAMO_TABLE_NAME
-    borgboi.config.config.aws.dynamodb_archives_table = DYNAMO_ARCHIVES_TABLE_NAME
-    borgboi.config.config.aws.s3_bucket = "test"
+    # Refresh the existing config singleton in-place so modules that imported
+    # "from borgboi.config import config" see the updated values.
+    existing_config = borgboi.config.config
+    for attr, value in vars(fresh_config).items():
+        setattr(existing_config, attr, value)
+
+    # Explicitly set AWS-related values expected by tests.
+    existing_config.aws.dynamodb_repos_table = DYNAMO_TABLE_NAME
+    existing_config.aws.dynamodb_archives_table = DYNAMO_ARCHIVES_TABLE_NAME
+    existing_config.aws.s3_bucket = "test"
 
 
 @pytest.fixture
