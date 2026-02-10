@@ -1,14 +1,15 @@
-"""Configuration management for borgboi using dynaconf and Pydantic."""
+"""Configuration management for borgboi using YAML and Pydantic."""
 
 import os
 import shutil
 from functools import lru_cache
 from pathlib import Path
 from platform import system
+from typing import Any, override
 
 import yaml
-from dynaconf import Dynaconf  # type: ignore[import-untyped]  # ty: ignore[unused-ignore-comment]
 from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 DEFAULT_DYNAMODB_REPOS_TABLE = "bb-repos"
 DEFAULT_DYNAMODB_ARCHIVES_TABLE = "bb-archives"
@@ -41,7 +42,7 @@ class BorgConfig(BaseModel):
     """Borg-specific configuration."""
 
     executable_path: str = "borg"
-    default_repo_path: Path = Field(default_factory=lambda: Path.home() / ".borgboi" / "repositories")
+    default_repo_path: Path = Field(default_factory=lambda: resolve_home_dir() / ".borgboi" / "repositories")
     compression: str = DEFAULT_REPO_COMPRESSION
     checkpoint_interval: int = 900  # seconds
     storage_quota: str = DEFAULT_REPO_STORAGE_QUOTA
@@ -60,14 +61,39 @@ class UIConfig(BaseModel):
     table_style: str = "rounded"
 
 
-class Config(BaseModel):
+class Config(BaseSettings):
     """Main configuration container."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="BORGBOI_",
+        env_nested_delimiter="__",
+        extra="ignore",
+    )
 
     aws: AWSConfig = Field(default_factory=AWSConfig)
     borg: BorgConfig = Field(default_factory=BorgConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     offline: bool = False
     debug: bool = False
+
+    @classmethod
+    @override
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Env vars take priority over init kwargs (YAML data).
+
+        Source order (highest priority first): env_settings > init_settings > dotenv > file_secret.
+        CLI flags (--offline, --debug) are handled separately via BorgBoiContext
+        in cli.py, not through Config init kwargs, so this ordering does not
+        affect CLI flag behavior.
+        """
+        return env_settings, init_settings, dotenv_settings, file_secret_settings
 
     @property
     def borgboi_dir(self) -> Path:
@@ -121,60 +147,20 @@ def get_default_config_path() -> Path:
     return resolve_home_dir() / ".borgboi" / "config.yaml"
 
 
-# Initialize dynaconf settings
-_create_settings_dir()
-settings = Dynaconf(
-    envvar_prefix="BORGBOI",
-    settings_files=[str(get_default_config_path())],
-    environments=False,
-    load_dotenv=True,
-    merge_enabled=True,
-)
+def _write_default_config(config_path: Path) -> None:
+    """Write a default config.yaml file."""
+    cfg = Config()
+    config_dict = cfg.model_dump(exclude_none=True, mode="json")
+    if "borg" in config_dict and "default_repo_path" in config_dict["borg"]:
+        config_dict["borg"]["default_repo_path"] = str(config_dict["borg"]["default_repo_path"])
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    with config_path.open("w") as f:
+        yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
 
-def _build_config(settings_source: Dynaconf, validate: bool = True, print_warnings: bool = True) -> Config:
-    cfg = Config(
-        aws=AWSConfig(
-            dynamodb_repos_table=str(settings_source.get("aws.dynamodb_repos_table", DEFAULT_DYNAMODB_REPOS_TABLE)),
-            dynamodb_archives_table=str(
-                settings_source.get("aws.dynamodb_archives_table", DEFAULT_DYNAMODB_ARCHIVES_TABLE)
-            ),
-            s3_bucket=str(settings_source.get("aws.s3_bucket", DEFAULT_S3_BUCKET)),
-            region=str(settings_source.get("aws.region", DEFAULT_AWS_REGION)),
-            profile=settings_source.get("aws.profile") if settings_source.get("aws.profile") is not None else None,
-        ),
-        borg=BorgConfig(
-            executable_path=str(settings_source.get("borg.executable_path", "borg")),
-            default_repo_path=Path(
-                str(
-                    settings_source.get(
-                        "borg.default_repo_path",
-                        str(resolve_home_dir() / ".borgboi" / "repositories"),
-                    )
-                )
-            ),
-            compression=str(settings_source.get("borg.compression", DEFAULT_REPO_COMPRESSION)),
-            checkpoint_interval=int(settings_source.get("borg.checkpoint_interval", 900)),
-            storage_quota=str(settings_source.get("borg.storage_quota", DEFAULT_REPO_STORAGE_QUOTA)),
-            additional_free_space=str(settings_source.get("borg.additional_free_space", "2G")),
-            retention=RetentionConfig(
-                keep_daily=int(settings_source.get("borg.retention.keep_daily", 7)),
-                keep_weekly=int(settings_source.get("borg.retention.keep_weekly", 4)),
-                keep_monthly=int(settings_source.get("borg.retention.keep_monthly", 6)),
-                keep_yearly=int(settings_source.get("borg.retention.keep_yearly", 0)),
-            ),
-            borg_passphrase=settings_source.get("borg.borg_passphrase"),
-            borg_new_passphrase=settings_source.get("borg.borg_new_passphrase"),
-        ),
-        ui=UIConfig(
-            theme=str(settings_source.get("ui.theme", "catppuccin")),
-            show_progress=bool(settings_source.get("ui.show_progress", True)),
-            color_output=bool(settings_source.get("ui.color_output", True)),
-            table_style=str(settings_source.get("ui.table_style", "rounded")),
-        ),
-        offline=bool(settings_source.get("offline", False)),
-        debug=bool(settings_source.get("debug", False)),
-    )
+def _load_and_validate(data: dict[str, Any], validate: bool, print_warnings: bool) -> Config:
+    """Build Config and optionally validate with warnings."""
+    cfg = Config(**data)
 
     if validate:
         config_warnings = validate_config(cfg)
@@ -189,12 +175,12 @@ def _build_config(settings_source: Dynaconf, validate: bool = True, print_warnin
 
 @lru_cache(maxsize=1)
 def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
-    """Load and return validated configuration from dynaconf settings.
+    """Load and return validated configuration from YAML file.
+
+    On first call, loads config from config.yaml with env var overrides.
 
     Note: This function uses lru_cache with maxsize=1, so the first call's
     validate and print_warnings parameters determine the cached behavior.
-    Subsequent calls with different parameters will still return the same
-    cached result.
 
     Args:
         validate: Whether to run validation checks (default True)
@@ -203,15 +189,23 @@ def get_config(validate: bool = True, print_warnings: bool = True) -> Config:
     Returns:
         Config: Validated configuration instance
     """
-    return _build_config(settings, validate=validate, print_warnings=print_warnings)
+    _create_settings_dir()
+    config_path = get_default_config_path()
+
+    if not config_path.exists():
+        _write_default_config(config_path)
+
+    with config_path.open() as f:
+        data = yaml.safe_load(f) or {}
+
+    if not isinstance(data, dict):
+        data = {}
+
+    return _load_and_validate(data, validate, print_warnings)
 
 
 def load_config_from_path(config_path: Path, validate: bool = True, print_warnings: bool = True) -> Config:
-    """Load configuration from an explicit config file path.
-
-    Unlike get_config(), this function is intentionally not cached to allow
-    displaying potentially changed config files and to support loading from
-    different paths in the same session.
+    """Load configuration from an explicit YAML file path.
 
     Args:
         config_path: Path to the configuration file to load.
@@ -229,14 +223,13 @@ def load_config_from_path(config_path: Path, validate: bool = True, print_warnin
         raise FileNotFoundError(f"Config file not found at {resolved_path}")
     if not resolved_path.is_file():
         raise FileNotFoundError(f"Config path is not a file: {resolved_path}")
-    local_settings = Dynaconf(
-        envvar_prefix="BORGBOI",
-        settings_files=[str(resolved_path)],
-        environments=False,
-        load_dotenv=True,
-        merge_enabled=True,
-    )
-    return _build_config(local_settings, validate=validate, print_warnings=print_warnings)
+
+    with resolved_path.open() as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        data = {}
+
+    return _load_and_validate(data, validate, print_warnings)
 
 
 def validate_config(cfg: Config) -> list[str]:  # noqa: C901
@@ -303,7 +296,6 @@ def validate_config(cfg: Config) -> list[str]:  # noqa: C901
 
 
 # Mapping of config paths to their corresponding environment variable names
-# The format follows dynaconf's convention: BORGBOI_ prefix, __ for nesting, _ for underscores
 CONFIG_ENV_VAR_MAP: dict[str, str] = {
     # Top-level
     "offline": "BORGBOI_OFFLINE",
@@ -353,26 +345,18 @@ def get_env_overrides() -> dict[str, str]:
 
 
 def save_config(cfg: Config, config_path: Path | None = None) -> None:
-    """
-    Save configuration to YAML file.
+    """Save configuration to a YAML file.
 
     Args:
         cfg: Config instance to save
-        config_path: Optional custom path (defaults to ~/.borgboi/config.yaml)
+        config_path: Optional custom path. Defaults to ~/.borgboi/config.yaml.
     """
-    if config_path is None:
-        config_path = resolve_home_dir() / ".borgboi" / "config.yaml"
-
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Convert config to dict and write to YAML
+    resolved_path = config_path if config_path is not None else get_default_config_path()
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
     config_dict = cfg.model_dump(exclude_none=True, mode="json")
-
-    # Convert Path objects to strings
     if "borg" in config_dict and "default_repo_path" in config_dict["borg"]:
         config_dict["borg"]["default_repo_path"] = str(config_dict["borg"]["default_repo_path"])
-
-    with config_path.open("w") as f:
+    with resolved_path.open("w") as f:
         yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
 

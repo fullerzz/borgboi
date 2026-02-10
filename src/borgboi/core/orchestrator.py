@@ -56,25 +56,54 @@ class Orchestrator:
             output_handler: Handler for output messages (default: DefaultOutputHandler)
         """
         self.config = config or get_config()
+        self.output = output_handler or DefaultOutputHandler()
         self.borg = borg_client or create_borg_client(config=self.config)
         self.storage = storage or self._create_default_storage()
         self.s3: S3ClientInterface | None = s3_client
-        self.output = output_handler or DefaultOutputHandler()
 
     def _create_default_storage(self) -> RepositoryStorage:
         """Create the default storage backend based on configuration.
 
         Returns:
-            RepositoryStorage instance (offline or DynamoDB)
+            RepositoryStorage instance (SQLite for offline, DynamoDB for cloud)
         """
         if self.config.offline:
-            from borgboi.storage.offline import OfflineStorage
+            from borgboi.storage.sqlite import SQLiteStorage
 
-            return OfflineStorage()
+            return SQLiteStorage()
         else:
+            self._ensure_local_sqlite_initialized()
             from borgboi.storage.dynamodb import DynamoDBStorage
 
             return DynamoDBStorage(config=self.config)
+
+    def _ensure_local_sqlite_initialized(self) -> None:
+        """Initialize local SQLite storage and run migrations.
+
+        This keeps local metadata storage aligned even when cloud storage
+        (DynamoDB) is the active backend.
+        """
+        from borgboi.storage.db import get_db_path
+        from borgboi.storage.sqlite_migration import auto_migrate_if_needed
+
+        db_path = get_db_path()
+        if self._should_log_sqlite_migration(db_path):
+            self.output.on_log("info", f"Migrating local metadata database to {db_path}")
+
+        engine = auto_migrate_if_needed(db_path)
+        engine.dispose()
+
+    def _should_log_sqlite_migration(self, db_path: Path) -> bool:
+        """Return True when a legacy storage migration is expected."""
+        if db_path.exists():
+            return False
+
+        borgboi_dir = db_path.parent.parent if db_path.parent.name == ".database" else db_path.parent
+
+        legacy_db_path = borgboi_dir / "borgboi.db"
+        legacy_data_path = borgboi_dir / "data"
+        legacy_metadata_path = borgboi_dir / ".borgboi_metadata"
+        return legacy_db_path.exists() or legacy_data_path.exists() or legacy_metadata_path.exists()
 
     # Repository Workflows
 

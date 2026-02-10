@@ -80,28 +80,24 @@ def cli(ctx: click.Context, offline: bool, debug: bool) -> None:
     ctx.obj = BorgBoiContext(offline=offline, debug=debug)
 
 
-# Import and register subcommand groups (must be after cli definition to avoid circular imports)
-from borgboi.cli.backup import backup as _backup_group  # noqa: E402
-from borgboi.cli.config import config as _config_group  # noqa: E402
-from borgboi.cli.exclusions import exclusions as _exclusions_group  # noqa: E402
-from borgboi.cli.legacy import register_legacy_commands  # noqa: E402
-from borgboi.cli.repo import repo as _repo_group  # noqa: E402
-from borgboi.cli.s3 import s3 as _s3_group  # noqa: E402
+def _register_commands() -> None:
+    """Import and register subcommands after cli definition to avoid circular imports."""
+    from borgboi.cli.backup import backup
+    from borgboi.cli.config import config
+    from borgboi.cli.exclusions import exclusions
+    from borgboi.cli.legacy import register_legacy_commands
+    from borgboi.cli.repo import repo
+    from borgboi.cli.s3 import s3
 
-backup_group: click.Group = _backup_group
-exclusions_group: click.Group = _exclusions_group
-config_group: click.Group = _config_group
-repo_group: click.Group = _repo_group
-s3_group: click.Group = _s3_group
+    cli.add_command(repo)
+    cli.add_command(backup)
+    cli.add_command(s3)
+    cli.add_command(exclusions)
+    cli.add_command(config)
+    register_legacy_commands(cli)
 
-cli.add_command(repo_group)
-cli.add_command(backup_group)
-cli.add_command(s3_group)
-cli.add_command(exclusions_group)
-cli.add_command(config_group)
 
-# Register legacy commands for backward compatibility
-register_legacy_commands(cli)
+_register_commands()
 
 
 def main() -> None:

@@ -101,7 +101,7 @@ class Validator:
             raise ValidationError("Compression cannot be empty", field="compression")
 
         # Allow base algorithm names with any level
-        base_algorithm = compression.split(",")[0]
+        base_algorithm = compression.split(",", maxsplit=1)[0]
         if base_algorithm not in {"none", "lz4", "zstd", "zlib", "lzma"}:
             raise ValidationError(
                 f"Invalid compression algorithm: {base_algorithm}. Valid options: none, lz4, zstd, zlib, lzma",
