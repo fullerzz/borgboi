@@ -53,3 +53,8 @@ tflint:
 # run mkdocs local server
 serve-docs:
     uv run mkdocs serve
+
+# generate unreleased changelog with git-cliff
+changelog-unreleased:
+    uv run git-cliff --unreleased -c cliff.toml --github-repo fullerzz/borgboi -o PREVIEW_CHANGELOG.md
+    @echo "Unreleased changelog written to PREVIEW_CHANGELOG.md"
