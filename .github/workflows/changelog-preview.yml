@@ -42,11 +42,22 @@ jobs:
         run: |
           uv run just changelog-unreleased
           cat PREVIEW_CHANGELOG.md >> "$GITHUB_STEP_SUMMARY"
+          # Prepend hidden marker for find-comment to locate on subsequent runs
+          printf '<!-- changelog-preview -->\n' | cat - PREVIEW_CHANGELOG.md > PREVIEW_CHANGELOG_WITH_MARKER.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Comment changelog on PR
-        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5
+      - name: Find existing changelog comment
+        uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4
+        id: find-comment
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          body-path: PREVIEW_CHANGELOG.md
+          body-includes: "<!-- changelog-preview -->"
+
+      - name: Create or update changelog comment
+        uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: PREVIEW_CHANGELOG_WITH_MARKER.md
+          edit-mode: replace
