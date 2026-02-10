@@ -1,3 +1,9 @@
+## v1.12.0 (2026-02-10)
+
+### Feat
+
+- SQLite DB for Local Storage (#160)
+
 ## v1.11.2 (2026-02-06)
 
 ### Fix
