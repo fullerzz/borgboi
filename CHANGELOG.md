@@ -1,10 +1,3 @@
-## Unreleased
-
-### ⚙️ Miscellaneous Tasks
-
-- Add precommit hooks with prek
-
-
 ## v1.12.0 (2026-02-10)
 
 ### 🚀 Features
