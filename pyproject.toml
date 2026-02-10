@@ -34,6 +34,7 @@ dev = [
     "boto3-stubs[essential]>=1.35.92",
     "moto[dynamodb,iam,s3]>=5.0.26",
     "mypy[faster-cache]>=1.14.1",
+    "prek>=0.3.2",
     "pytest>=8.3.4",
     "pytest-clarity>=1.0.1",
     "pytest-cov>=6.0.0",
