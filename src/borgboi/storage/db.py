@@ -71,10 +71,10 @@ class SchemaVersionRow(Base):
 def get_db_path(borgboi_dir: Path | None = None) -> Path:
     """Return the path to the borgboi SQLite database."""
     if borgboi_dir is not None:
-        return borgboi_dir / "borgboi.db"
+        return borgboi_dir / ".database" / "borgboi.db"
     from borgboi.config import resolve_home_dir
 
-    return resolve_home_dir() / ".borgboi" / "borgboi.db"
+    return resolve_home_dir() / ".borgboi" / ".database" / "borgboi.db"
 
 
 def _set_sqlite_wal_mode(dbapi_connection: object, _connection_record: object) -> None:

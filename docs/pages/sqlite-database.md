@@ -2,11 +2,11 @@
 
 BorgBoi uses SQLite for local metadata and cache storage. The database file is:
 
-- `~/.borgboi/borgboi.db`
+- `~/.borgboi/.database/borgboi.db`
 
 If `BORGBOI_HOME` is set, the path becomes:
 
-- `$BORGBOI_HOME/.borgboi/borgboi.db`
+- `$BORGBOI_HOME/.borgboi/.database/borgboi.db`
 
 ## What SQLite Stores
 

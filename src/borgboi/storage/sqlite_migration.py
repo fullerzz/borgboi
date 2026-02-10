@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import shutil
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -35,7 +36,12 @@ def auto_migrate_if_needed(db_path: Path) -> Engine:
     if db_path.exists():
         return init_db(db_path)
 
-    borgboi_dir = db_path.parent
+    borgboi_dir = _resolve_borgboi_dir(db_path)
+
+    legacy_db_path = borgboi_dir / "borgboi.db"
+    if legacy_db_path.exists():
+        _migrate_legacy_sqlite_path(legacy_db_path, db_path)
+        return init_db(db_path)
 
     # Check for any legacy data (repos and S3 cache only, not config)
     data_dir = borgboi_dir / "data"
@@ -53,6 +59,29 @@ def auto_migrate_if_needed(db_path: Path) -> Engine:
     _run_legacy_migrations(engine, data_dir, legacy_metadata_dir)
 
     return engine
+
+
+def _resolve_borgboi_dir(db_path: Path) -> Path:
+    """Resolve the borgboi base dir used for legacy migration discovery."""
+    if db_path.parent.name == ".database":
+        return db_path.parent.parent
+    return db_path.parent
+
+
+def _migrate_legacy_sqlite_path(legacy_db_path: Path, db_path: Path) -> None:
+    """Move legacy SQLite files to the new DB path."""
+    logger.info("Migrating legacy SQLite database from %s to %s", legacy_db_path, db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    path_pairs = [
+        (legacy_db_path, db_path),
+        (Path(f"{legacy_db_path}-wal"), Path(f"{db_path}-wal")),
+        (Path(f"{legacy_db_path}-shm"), Path(f"{db_path}-shm")),
+    ]
+
+    for source, target in path_pairs:
+        if source.exists():
+            shutil.move(str(source), str(target))
 
 
 def _run_legacy_migrations(engine: Engine, data_dir: Path, legacy_metadata_dir: Path) -> bool:
