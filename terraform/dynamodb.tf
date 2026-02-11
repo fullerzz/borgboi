@@ -21,10 +21,14 @@ resource "aws_dynamodb_table" "borg-repo-table" {
 
   global_secondary_index {
     name            = "name_gsi"
-    hash_key        = "common_name"
     write_capacity  = 5
     read_capacity   = 5
     projection_type = "ALL"
+
+    key_schema {
+      attribute_name = "common_name"
+      key_type       = "HASH"
+    }
   }
 }
 
@@ -62,19 +66,31 @@ resource "aws_dynamodb_table" "bb-repos-table" {
 
   global_secondary_index {
     name            = "name_gsi"
-    hash_key        = "repo_name"
     write_capacity  = 5
     read_capacity   = 5
     projection_type = "ALL"
+
+    key_schema {
+      attribute_name = "repo_name"
+      key_type       = "HASH"
+    }
   }
 
   global_secondary_index {
     name            = "backup_target_path_gsi"
-    hash_key        = "backup_target_path"
-    range_key       = "hostname"
     write_capacity  = 5
     read_capacity   = 5
     projection_type = "ALL"
+
+    key_schema {
+      attribute_name = "backup_target_path"
+      key_type       = "HASH"
+    }
+
+    key_schema {
+      attribute_name = "hostname"
+      key_type       = "RANGE"
+    }
   }
 }
 
@@ -112,18 +128,30 @@ resource "aws_dynamodb_table" "bb-archives-table" {
 
   global_secondary_index {
     name            = "hostname_gsi"
-    hash_key        = "hostname"
-    range_key       = "archive_id"
     write_capacity  = 5
     read_capacity   = 5
     projection_type = "ALL"
+
+    key_schema {
+      attribute_name = "hostname"
+      key_type       = "HASH"
+    }
+
+    key_schema {
+      attribute_name = "archive_id"
+      key_type       = "RANGE"
+    }
   }
 
   global_secondary_index {
     name            = "archive_id_gsi"
-    hash_key        = "archive_id"
     write_capacity  = 5
     read_capacity   = 5
     projection_type = "ALL"
+
+    key_schema {
+      attribute_name = "archive_id"
+      key_type       = "HASH"
+    }
   }
 }

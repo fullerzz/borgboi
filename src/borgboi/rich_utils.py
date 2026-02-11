@@ -219,6 +219,32 @@ def output_s3_bucket_stats(stats: "S3BucketStats") -> None:
     summary_table.add_row("CloudWatch Timestamp", timestamp)
     summary_table.add_row("Metric Source", "AWS/S3 daily storage metrics")
 
+    forecast = stats.intelligent_tiering_forecast
+    if forecast is None:
+        summary_table.add_row("Upcoming IT FA->IA (7d)", "Unavailable")
+    elif not forecast.available:
+        summary_table.add_row("Upcoming IT FA->IA (7d)", "Unavailable")
+        if forecast.unavailable_reason:
+            summary_table.add_row("Forecast Details", forecast.unavailable_reason)
+    else:
+        summary_table.add_row(
+            "Upcoming IT FA->IA (7d)",
+            (
+                f"{forecast.objects_transitioning_next_week:,} objects / "
+                f"{forecast.size_bytes_transitioning_next_week / (1024**3):.2f} GB"
+            ),
+        )
+        inventory_generated_at = (
+            forecast.inventory_generated_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+            if forecast.inventory_generated_at
+            else "Unavailable"
+        )
+        summary_table.add_row("Inventory Timestamp", inventory_generated_at)
+        if forecast.inventory_configuration_id:
+            summary_table.add_row("Inventory Config", forecast.inventory_configuration_id)
+        if forecast.estimation_method:
+            summary_table.add_row("Forecast Method", forecast.estimation_method)
+
     panel = Panel(summary_table, title="S3 Bucket Stats", border_style=COLOR_HEX.blue, expand=False)
     console.print(panel)
 

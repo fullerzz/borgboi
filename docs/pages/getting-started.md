@@ -23,6 +23,11 @@ For BorgBoi to function properly in online mode, it requires an S3 bucket and Dy
 
 Use the [IAC present in the `terraform` directory](https://github.com/fullerzz/borgboi/tree/main/terraform) to provision these resources on AWS with Terraform or OpenTofu.
 
+The Terraform/OpenTofu configuration also provisions S3 Inventory for the backup bucket so `bb s3 stats` can report upcoming Intelligent-Tiering FA->IA transition estimates.
+
+!!! note "S3 Inventory delivery delay"
+    The first S3 Inventory report can take up to 48 hours after enabling the configuration.
+
 !!! note "Offline Mode Available"
     If you prefer not to use AWS services, BorgBoi also supports offline mode. See the [Offline Mode](#offline-mode) section below.
 

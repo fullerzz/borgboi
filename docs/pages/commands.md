@@ -236,6 +236,14 @@ Usage: bb s3 stats
   including Intelligent-Tiering tiers (FA/IA/AIA/AA/DAA) when available.
   Values are sourced from AWS/S3 CloudWatch daily storage metrics.
 
+  Also includes inventory-based metadata for estimated upcoming
+  Intelligent-Tiering FA->IA transitions in the next 7 days.
+
+  Note: This forecast requires an enabled S3 Inventory configuration that
+  includes optional fields: Size, LastModifiedDate, StorageClass, and
+  IntelligentTieringAccessTier. The first inventory delivery can take up to
+  48 hours after configuration.
+
 ```
 
 ---
