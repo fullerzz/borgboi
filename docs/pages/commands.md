@@ -225,6 +225,19 @@ Usage: bb s3 stats
 
 ```
 
+### `s3 stats`
+
+```text
+Usage: bb s3 stats
+
+  Show general S3 bucket storage metrics and class composition.
+
+  Displays total bucket size, total object count, and a storage class breakdown
+  including Intelligent-Tiering tiers (FA/IA/AIA/AA/DAA) when available.
+  Values are sourced from AWS/S3 CloudWatch daily storage metrics.
+
+```
+
 ---
 
 ## Exclusions Commands (`exclusions`)
