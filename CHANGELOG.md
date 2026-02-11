@@ -1,3 +1,32 @@
+## v1.13.0 (2026-02-11)
+
+### 🚀 Features
+
+- **s3**: Add bucket stats command with CloudWatch breakdown (#168)
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- Add precommit hooks with prek
+
+- Remove unreleased section from CHANGELOG
+
+- **renovate**: Group Renovate Dependency Updates and Add Config Validator (#166)
+
+- **deps**: Update python docker tag to v3.14 (#129)
+
+
+
+### 🎡 Continuous Integration
+
+- Migrate to git-cliff for changelog generation
+
+- **changelog-preview**: Update existing comment if present
+
+- **ci-deps**: Update ci dependencies (#167)
+
+
 ## v1.12.0 (2026-02-10)
 
 ### 🚀 Features
