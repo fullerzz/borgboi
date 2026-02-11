@@ -117,6 +117,8 @@ def get_bucket_stats(cfg: Config | None = None) -> S3BucketStats:
             if size_bytes <= 0:
                 continue
 
+            # Keep this additive in case AWS introduces multiple storage-type metrics
+            # that map to the same logical storage class/tier pair.
             key = (storage_class, tier)
             aggregated_size[key] = aggregated_size.get(key, 0) + size_bytes
 
@@ -152,8 +154,6 @@ def get_bucket_stats(cfg: Config | None = None) -> S3BucketStats:
             cause=exc,
         ) from exc
     except Exception as exc:
-        if isinstance(exc, StorageError):
-            raise
         raise StorageError(
             f"Failed to retrieve S3 bucket stats for bucket '{bucket_name}': {exc}",
             operation="s3_stats",

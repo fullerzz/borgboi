@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 import pytest
+from botocore.exceptions import ClientError
 
 from borgboi.clients import s3
 from borgboi.config import AWSConfig, Config
@@ -113,8 +114,8 @@ def test_sync_with_s3_stdout_none(monkeypatch: pytest.MonkeyPatch) -> None:
         _ = list(s3.sync_with_s3("/path/to/repo", "test-repo", cfg=cfg))
 
 
-def test_sync_with_s3_correct_command(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that S3 sync uses correct AWS CLI command."""
+def test_sync_with_s3_runs_without_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that S3 sync runs cleanly with mocked process."""
     cfg = _make_config("my-backup-bucket")
 
     class MockProc:
@@ -131,10 +132,6 @@ def test_sync_with_s3_correct_command(monkeypatch: pytest.MonkeyPatch) -> None:
     mock_proc = MockProc()
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)  # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
     _ = list(s3.sync_with_s3("/home/user/repos/my-repo", "my-repo", cfg=cfg))
-
-    # The test ensures the function runs without error with the mocked Popen
-    # Command verification would require capturing the call arguments, which is
-    # more complex with monkeypatch than with unittest.mock
 
 
 class _MockCloudWatchClient:
@@ -219,6 +216,28 @@ def test_get_bucket_stats_wraps_cloudwatch_errors(monkeypatch: pytest.MonkeyPatc
         def get_metric_statistics(self, **kwargs: object) -> dict[str, object]:
             _ = kwargs
             raise RuntimeError("cloudwatch unavailable")
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: FailingClient())
+
+    with pytest.raises(StorageError, match="Failed to retrieve S3 bucket stats"):
+        _ = s3.get_bucket_stats(cfg=cfg)
+
+
+def test_get_bucket_stats_wraps_botocore_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _make_config("test-bucket")
+
+    class FailingClient:
+        def get_metric_statistics(self, **kwargs: object) -> dict[str, object]:
+            _ = kwargs
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "InternalError",
+                        "Message": "cloudwatch unavailable",
+                    }
+                },
+                "GetMetricStatistics",
+            )
 
     monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: FailingClient())
 

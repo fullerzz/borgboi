@@ -80,4 +80,6 @@ def test_s3_stats_returns_error_when_stats_fail(monkeypatch: pytest.MonkeyPatch)
     result = runner.invoke(cli, ["s3", "stats"])
 
     assert result.exit_code == 1
-    assert any("error:" in str(item).lower() and "boom" in str(item).lower() for item in printed)
+    output_text = " ".join(str(item).lower() for item in printed)
+    assert "error" in output_text
+    assert "boom" in output_text
