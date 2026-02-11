@@ -3,8 +3,30 @@
   "extends": [
     "config:best-practices"
   ],
-  "labels": ["renovate 🤖"],
-  "reviewers": ["fullerzz"],
+  "labels": [
+    "renovate 🤖"
+  ],
+  "reviewers": [
+    "fullerzz"
+  ],
+  "packageRules": [
+    {
+      "matchManagers": [
+        "pep621"
+      ],
+      "groupName": "python dependencies",
+      "semanticCommitScope": "python-deps",
+      "semanticCommitType": "fix"
+    },
+    {
+      "matchCategories": [
+        "ci"
+      ],
+      "groupName": "CI dependencies",
+      "semanticCommitScope": "ci-deps",
+      "semanticCommitType": "ci"
+    }
+  ],
   "lockFileMaintenance": {
     "enabled": true
   }
