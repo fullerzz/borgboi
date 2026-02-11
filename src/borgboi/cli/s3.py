@@ -90,3 +90,22 @@ def s3_delete(ctx: BorgBoiContext, name: str, dry_run: bool) -> None:
 
     console.print("[bold yellow]S3 delete not yet implemented in new CLI[/]")
     # Will be implemented when S3 client class is complete
+
+
+@s3.command("stats")
+@pass_context
+def s3_stats(ctx: BorgBoiContext) -> None:
+    """Show S3 bucket storage metrics and class composition."""
+    if ctx.offline:
+        console.print("[bold yellow]S3 stats are not available in offline mode[/]")
+        return
+
+    try:
+        from borgboi import rich_utils
+        from borgboi.clients import s3 as s3_client
+
+        stats = s3_client.get_bucket_stats(cfg=ctx.config)
+        rich_utils.output_s3_bucket_stats(stats)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1) from e

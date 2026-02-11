@@ -1,4 +1,6 @@
 from collections.abc import Generator, Iterable
+from datetime import UTC
+from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 from rich.columns import Columns
@@ -19,6 +21,9 @@ from borgboi.models import BorgBoiRepo
 
 TEXT_COLOR = COLOR_HEX.text
 console = Console(record=True)
+
+if TYPE_CHECKING:
+    from borgboi.clients.s3 import S3BucketStats
 
 
 def save_console_output() -> None:
@@ -195,3 +200,46 @@ def render_excludes_file(excludes_file_path: str, lines_to_highlight: set[int] |
     )
     panel = Panel(syntax, title="Excludes File", expand=False)
     console.print(panel)
+
+
+def output_s3_bucket_stats(stats: "S3BucketStats") -> None:
+    """Render S3 bucket metrics with Rich panel/table output."""
+    timestamp = (
+        stats.metrics_timestamp.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+        if stats.metrics_timestamp
+        else "Unavailable"
+    )
+
+    summary_table = Table.grid(padding=(0, 1))
+    summary_table.add_column(style=f"bold {COLOR_HEX.blue}")
+    summary_table.add_column(style=f"{COLOR_HEX.text}")
+    summary_table.add_row("Bucket", stats.bucket_name)
+    summary_table.add_row("Total Size", f"{stats.total_size_bytes / (1024**3):.2f} GB")
+    summary_table.add_row("Total Objects", f"{stats.total_object_count:,}")
+    summary_table.add_row("CloudWatch Timestamp", timestamp)
+    summary_table.add_row("Metric Source", "AWS/S3 daily storage metrics")
+
+    panel = Panel(summary_table, title="S3 Bucket Stats", border_style=COLOR_HEX.blue, expand=False)
+    console.print(panel)
+
+    composition_table = Table(title="Storage Class Composition", show_lines=True)
+    composition_table.add_column("Storage Class", style=f"bold {COLOR_HEX.sky}")
+    composition_table.add_column("Tier", style=f"{COLOR_HEX.green}")
+    composition_table.add_column("Size (GB)", justify="right", style=f"{COLOR_HEX.peach}")
+    composition_table.add_column("% of Bucket", justify="right", style=f"{COLOR_HEX.yellow}")
+
+    total_size = stats.total_size_bytes
+    if not stats.storage_breakdown:
+        composition_table.add_row("No data", "-", "0.00", "0.00%")
+    else:
+        for item in stats.storage_breakdown:
+            size_gb = item.size_bytes / (1024**3)
+            pct_of_bucket = (item.size_bytes / total_size * 100) if total_size > 0 else 0.0
+            composition_table.add_row(
+                item.storage_class,
+                item.tier,
+                f"{size_gb:.2f}",
+                f"{pct_of_bucket:.2f}%",
+            )
+
+    console.print(composition_table)

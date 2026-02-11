@@ -1,10 +1,13 @@
 import subprocess as sp
+from datetime import UTC, datetime
 from typing import Literal
 
 import pytest
+from botocore.exceptions import ClientError
 
 from borgboi.clients import s3
 from borgboi.config import AWSConfig, Config
+from borgboi.core.errors import StorageError
 
 
 def _make_config(bucket: str) -> Config:
@@ -111,8 +114,8 @@ def test_sync_with_s3_stdout_none(monkeypatch: pytest.MonkeyPatch) -> None:
         _ = list(s3.sync_with_s3("/path/to/repo", "test-repo", cfg=cfg))
 
 
-def test_sync_with_s3_correct_command(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that S3 sync uses correct AWS CLI command."""
+def test_sync_with_s3_runs_without_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that S3 sync runs cleanly with mocked process."""
     cfg = _make_config("my-backup-bucket")
 
     class MockProc:
@@ -130,6 +133,113 @@ def test_sync_with_s3_correct_command(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("subprocess.Popen", lambda *args, **kwargs: mock_proc)  # pyright: ignore[reportUnknownArgumentType, reportUnknownLambdaType]
     _ = list(s3.sync_with_s3("/home/user/repos/my-repo", "my-repo", cfg=cfg))
 
-    # The test ensures the function runs without error with the mocked Popen
-    # Command verification would require capturing the call arguments, which is
-    # more complex with monkeypatch than with unittest.mock
+
+class _MockCloudWatchClient:
+    def __init__(self, metrics: dict[tuple[str, str], list[dict[str, object]]]) -> None:
+        self._metrics = metrics
+
+    def get_metric_statistics(self, **kwargs: object) -> dict[str, object]:
+        metric_name = kwargs.get("MetricName")
+        dimensions = kwargs.get("Dimensions")
+        if not isinstance(metric_name, str) or not isinstance(dimensions, list):
+            return {"Datapoints": []}
+
+        storage_type = ""
+        for dim in dimensions:
+            if isinstance(dim, dict) and dim.get("Name") == "StorageType":
+                value = dim.get("Value")
+                if isinstance(value, str):
+                    storage_type = value
+                break
+
+        datapoints = self._metrics.get((metric_name, storage_type), [])
+        return {"Datapoints": datapoints}
+
+
+def test_get_bucket_stats_includes_intelligent_tiering_breakdown(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _make_config("test-bucket")
+    timestamp = datetime(2026, 2, 1, tzinfo=UTC)
+
+    metrics: dict[tuple[str, str], list[dict[str, object]]] = {
+        ("BucketSizeBytes", "StandardStorage"): [{"Timestamp": timestamp, "Average": 10 * 1024**3}],
+        ("BucketSizeBytes", "IntelligentTieringFAStorage"): [{"Timestamp": timestamp, "Average": 6 * 1024**3}],
+        ("BucketSizeBytes", "IntelligentTieringIAStorage"): [{"Timestamp": timestamp, "Average": 4 * 1024**3}],
+        ("NumberOfObjects", "AllStorageTypes"): [{"Timestamp": timestamp, "Average": 12345.0}],
+    }
+    mock_client = _MockCloudWatchClient(metrics)
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: mock_client)
+
+    stats = s3.get_bucket_stats(cfg=cfg)
+
+    assert stats.bucket_name == cfg.aws.s3_bucket
+    assert stats.total_object_count == 12345
+    assert stats.total_size_bytes == 20 * 1024**3
+    assert stats.metrics_timestamp == timestamp
+
+    composed = {(item.storage_class, item.tier): item.size_bytes for item in stats.storage_breakdown}
+    assert composed[("STANDARD", "-")] == 10 * 1024**3
+    assert composed[("INTELLIGENT_TIERING", "FA")] == 6 * 1024**3
+    assert composed[("INTELLIGENT_TIERING", "IA")] == 4 * 1024**3
+
+
+def test_get_bucket_stats_uses_latest_cloudwatch_datapoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _make_config("test-bucket")
+    older = datetime(2026, 1, 30, tzinfo=UTC)
+    latest = datetime(2026, 1, 31, tzinfo=UTC)
+
+    metrics: dict[tuple[str, str], list[dict[str, object]]] = {
+        (
+            "BucketSizeBytes",
+            "StandardStorage",
+        ): [
+            {"Timestamp": older, "Average": 1 * 1024**3},
+            {"Timestamp": latest, "Average": 2 * 1024**3},
+        ],
+        ("NumberOfObjects", "AllStorageTypes"): [{"Timestamp": latest, "Average": 2.0}],
+    }
+    mock_client = _MockCloudWatchClient(metrics)
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: mock_client)
+
+    stats = s3.get_bucket_stats(cfg=cfg)
+
+    assert stats.total_size_bytes == 2 * 1024**3
+    assert stats.total_object_count == 2
+    assert stats.metrics_timestamp == latest
+
+
+def test_get_bucket_stats_wraps_cloudwatch_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _make_config("test-bucket")
+
+    class FailingClient:
+        def get_metric_statistics(self, **kwargs: object) -> dict[str, object]:
+            _ = kwargs
+            raise RuntimeError("cloudwatch unavailable")
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: FailingClient())
+
+    with pytest.raises(StorageError, match="Failed to retrieve S3 bucket stats"):
+        _ = s3.get_bucket_stats(cfg=cfg)
+
+
+def test_get_bucket_stats_wraps_botocore_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _make_config("test-bucket")
+
+    class FailingClient:
+        def get_metric_statistics(self, **kwargs: object) -> dict[str, object]:
+            _ = kwargs
+            raise ClientError(
+                {
+                    "Error": {
+                        "Code": "InternalError",
+                        "Message": "cloudwatch unavailable",
+                    }
+                },
+                "GetMetricStatistics",
+            )
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: FailingClient())
+
+    with pytest.raises(StorageError, match="Failed to retrieve S3 bucket stats"):
+        _ = s3.get_bucket_stats(cfg=cfg)
