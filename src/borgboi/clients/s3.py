@@ -332,23 +332,25 @@ def _iter_inventory_rows(
     if body is None:
         return
 
-    raw_bytes = body.read()
-    if not isinstance(raw_bytes, bytes):
-        return
+    binary_stream: Any = gzip.GzipFile(fileobj=body, mode="rb") if object_key.endswith(".gz") else body
 
-    data = gzip.decompress(raw_bytes) if object_key.endswith(".gz") else raw_bytes
-    decoded = data.decode("utf-8")
-    reader = csv.reader(io.StringIO(decoded))
+    try:
+        with io.TextIOWrapper(binary_stream, encoding="utf-8", newline="") as text_stream:
+            reader = csv.reader(text_stream)
 
-    for row in reader:
-        if len(row) < len(schema_columns):
-            continue
+            for row in reader:
+                if len(row) < len(schema_columns):
+                    continue
 
-        if row[: len(schema_columns)] == schema_columns:
-            continue
+                if row[: len(schema_columns)] == schema_columns:
+                    continue
 
-        mapped = {schema_columns[idx]: row[idx] for idx in range(len(schema_columns))}
-        yield mapped
+                mapped = {schema_columns[idx]: row[idx] for idx in range(len(schema_columns))}
+                yield mapped
+    finally:
+        close = getattr(binary_stream, "close", None)
+        if callable(close):
+            close()
 
 
 def _extract_inventory_destination_details(configuration: dict[str, Any]) -> tuple[str, str] | None:

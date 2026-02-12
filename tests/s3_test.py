@@ -1,4 +1,5 @@
 import gzip
+import io
 import json
 import subprocess as sp
 from datetime import UTC, datetime, timedelta
@@ -163,12 +164,15 @@ class _MockCloudWatchClient:
         return {"Datapoints": datapoints}
 
 
-class _MockStreamingBody:
-    def __init__(self, payload: bytes) -> None:
-        self._payload = payload
+class _MockStreamingBody(io.BytesIO):
+    def __init__(self, payload: bytes, *, allow_unbounded_read: bool = True) -> None:
+        super().__init__(payload)
+        self._allow_unbounded_read = allow_unbounded_read
 
-    def read(self) -> bytes:
-        return self._payload
+    def read(self, size: int | None = -1, /) -> bytes:
+        if size in (-1, None) and not self._allow_unbounded_read:
+            raise AssertionError("Inventory payload must be consumed as a stream.")
+        return super().read(-1 if size is None else size)
 
 
 class _MockS3InventoryClient:
@@ -178,10 +182,12 @@ class _MockS3InventoryClient:
         inventory_configurations: list[dict[str, object]] | None = None,
         objects_by_prefix: dict[str, list[dict[str, object]]] | None = None,
         object_payloads: dict[str, bytes] | None = None,
+        object_keys_requiring_streaming: set[str] | None = None,
     ) -> None:
         self._inventory_configurations = inventory_configurations or []
         self._objects_by_prefix = objects_by_prefix or {}
         self._object_payloads = object_payloads or {}
+        self._object_keys_requiring_streaming = object_keys_requiring_streaming or set()
 
     def list_bucket_inventory_configurations(self, **kwargs: object) -> dict[str, object]:
         _ = kwargs
@@ -207,7 +213,13 @@ class _MockS3InventoryClient:
         payload = self._object_payloads.get(key)
         if payload is None:
             raise AssertionError(f"Unexpected key requested from mock S3 client: {key}")
-        return {"Body": _MockStreamingBody(payload)}
+
+        return {
+            "Body": _MockStreamingBody(
+                payload,
+                allow_unbounded_read=key not in self._object_keys_requiring_streaming,
+            )
+        }
 
 
 def test_get_bucket_stats_includes_intelligent_tiering_breakdown(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -405,6 +417,79 @@ def test_get_bucket_stats_inventory_forecast_falls_back_to_last_modified_when_la
             manifest_key: json.dumps(manifest_payload).encode("utf-8"),
             data_key: gzip.compress(csv_rows.encode("utf-8")),
         },
+    )
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: mock_cloudwatch)
+    monkeypatch.setattr(s3, "_create_s3_client", lambda _cfg: mock_s3)
+
+    stats = s3.get_bucket_stats(cfg=cfg)
+
+    assert stats.intelligent_tiering_forecast is not None
+    assert stats.intelligent_tiering_forecast.available
+    assert stats.intelligent_tiering_forecast.objects_transitioning_next_week == 1
+    assert stats.intelligent_tiering_forecast.size_bytes_transitioning_next_week == 1024**3
+
+
+def test_get_bucket_stats_inventory_forecast_streams_inventory_objects(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = _make_config("test-bucket")
+    bucket_name = cfg.aws.s3_bucket
+    timestamp = datetime(2026, 2, 1, tzinfo=UTC)
+
+    metrics: dict[tuple[str, str], list[dict[str, object]]] = {
+        ("BucketSizeBytes", "StandardStorage"): [{"Timestamp": timestamp, "Average": 10 * 1024**3}],
+        ("NumberOfObjects", "AllStorageTypes"): [{"Timestamp": timestamp, "Average": 1.0}],
+    }
+    mock_cloudwatch = _MockCloudWatchClient(metrics)
+
+    now = datetime.now(UTC)
+    in_window_last_access = (now - timedelta(days=24)).isoformat().replace("+00:00", "Z")
+
+    manifest_key = f"inventory/{bucket_name}/entire-bucket/2026-02-01T00-00Z/manifest.json"
+    data_key = f"inventory/{bucket_name}/entire-bucket/data/part-00000.csv.gz"
+
+    manifest_payload = {
+        "fileFormat": "CSV",
+        "fileSchema": "Bucket,Key,Size,LastModifiedDate,LastAccessDate,StorageClass,IntelligentTieringAccessTier",
+        "creationTimestamp": now.isoformat().replace("+00:00", "Z"),
+        "files": [{"key": data_key}],
+    }
+
+    csv_rows = (
+        f"{bucket_name},repo/a,1073741824,{in_window_last_access},{in_window_last_access},INTELLIGENT_TIERING,FREQUENT"
+    )
+
+    mock_s3 = _MockS3InventoryClient(
+        inventory_configurations=[
+            {
+                "Id": "entire-bucket",
+                "IsEnabled": True,
+                "OptionalFields": [
+                    "Size",
+                    "LastModifiedDate",
+                    "StorageClass",
+                    "IntelligentTieringAccessTier",
+                ],
+                "Destination": {
+                    "S3BucketDestination": {
+                        "Bucket": "arn:aws:s3:::test-bucket-logs",
+                        "Prefix": "inventory",
+                    }
+                },
+            }
+        ],
+        objects_by_prefix={
+            f"inventory/{bucket_name}/entire-bucket/": [
+                {
+                    "Key": manifest_key,
+                    "LastModified": now,
+                }
+            ],
+        },
+        object_payloads={
+            manifest_key: json.dumps(manifest_payload).encode("utf-8"),
+            data_key: gzip.compress(csv_rows.encode("utf-8")),
+        },
+        object_keys_requiring_streaming={data_key},
     )
 
     monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: mock_cloudwatch)
