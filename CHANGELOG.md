@@ -1,3 +1,10 @@
+## v1.14.0 (2026-02-12)
+
+### 🚀 Features
+
+- S3 metadata transitions (#170)
+
+
 ## v1.13.1 (2026-02-12)
 
 ### 🐛 Bug Fixes
