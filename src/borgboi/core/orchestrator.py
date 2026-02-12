@@ -290,10 +290,7 @@ class Orchestrator:
         resolved_repo = self._resolve_repo(repo)
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
 
-        # Check that excludes file exists
-        excludes_path = self._get_excludes_path(resolved_repo.name)
-        if not excludes_path.exists():
-            raise ValidationError("Exclude list must be created before performing a backup", field="excludes")
+        excludes_path = self._resolve_excludes_path_for_backup(resolved_repo.name)
 
         # Create archive
         for line in self.borg.create(
@@ -699,6 +696,27 @@ class Orchestrator:
             Path to excludes file
         """
         return self.config.borgboi_dir / f"{repo_name}_{self.config.excludes_filename}"
+
+    def _get_default_excludes_path(self) -> Path:
+        """Get the default shared excludes file path."""
+        return self.config.borgboi_dir / self.config.excludes_filename
+
+    def _resolve_excludes_path_for_backup(self, repo_name: str) -> Path:
+        """Resolve excludes file for backup.
+
+        Resolution order:
+        1. Repo-specific excludes file (~/.borgboi/{repo}_excludes.txt)
+        2. Default shared excludes file (~/.borgboi/excludes.txt)
+        """
+        excludes_path = self._get_excludes_path(repo_name)
+        if excludes_path.exists():
+            return excludes_path
+
+        default_excludes_path = self._get_default_excludes_path()
+        if not default_excludes_path.exists():
+            raise ValidationError("Exclude list must be created before performing a backup", field="excludes")
+
+        return default_excludes_path
 
     def _delete_excludes_file(self, repo_name: str) -> None:
         """Delete a repository's excludes file.

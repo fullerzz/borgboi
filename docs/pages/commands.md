@@ -86,6 +86,14 @@ Options:
 
 ```
 
+!!! info "Exclude File Resolution"
+    Backup commands (`backup run` and `backup daily`) resolve exclusion files in this order:
+
+    1. `~/.borgboi/{repo-name}_excludes.txt` (repository-specific)
+    2. `~/.borgboi/excludes.txt` (shared default)
+
+    If neither file exists, backup fails with: `Exclude list must be created before performing a backup`.
+
 ### `backup daily`
 
 ```text
