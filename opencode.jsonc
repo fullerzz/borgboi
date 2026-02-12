@@ -1,0 +1,40 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "aws-docs-mcp": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "awslabs.aws-documentation-mcp-server@latest",
+      ],
+      "enabled": true,
+      "environment": {
+        "AWS_DOCUMENTATION_PARTITION": "aws",
+        "MCP_USER_AGENT": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      },
+    },
+    "opentofu-mcp": {
+      "type": "local",
+      "command": [
+        "bunx",
+        "-y",
+        "@opentofu/opentofu-mcp-server",
+      ],
+      "enabled": true,
+    },
+  },
+  "lsp": {
+    "opentofu-lsp": {
+      "command": [
+        "tofu-ls",
+        "serve"
+      ],
+      "extensions": [
+        ".tf",
+        ".tfvars",
+        ".hcl",
+        ".tofu"
+      ]
+    }
+  }
+}
