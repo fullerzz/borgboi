@@ -1,3 +1,10 @@
+## v1.13.1 (2026-02-12)
+
+### 🐛 Bug Fixes
+
+- Fallback to default excludes.txt file if repo-specific one isn't present (#169)
+
+
 ## v1.13.0 (2026-02-11)
 
 ### 🚀 Features
