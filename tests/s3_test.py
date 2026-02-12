@@ -279,6 +279,8 @@ def test_get_bucket_stats_includes_inventory_based_upcoming_transitions(monkeypa
     mock_cloudwatch = _MockCloudWatchClient(metrics)
 
     now = datetime.now(UTC)
+    in_window_last_access = (now - timedelta(days=24)).isoformat().replace("+00:00", "Z")
+    outside_window_last_access = (now - timedelta(days=10)).isoformat().replace("+00:00", "Z")
     in_window_last_modified = (now - timedelta(days=24)).isoformat().replace("+00:00", "Z")
     outside_window_last_modified = (now - timedelta(days=10)).isoformat().replace("+00:00", "Z")
 
@@ -287,15 +289,15 @@ def test_get_bucket_stats_includes_inventory_based_upcoming_transitions(monkeypa
 
     manifest_payload = {
         "fileFormat": "CSV",
-        "fileSchema": "Bucket,Key,Size,LastModifiedDate,StorageClass,IntelligentTieringAccessTier",
+        "fileSchema": "Bucket,Key,Size,LastModifiedDate,LastAccessDate,StorageClass,IntelligentTieringAccessTier",
         "creationTimestamp": now.isoformat().replace("+00:00", "Z"),
         "files": [{"key": data_key}],
     }
 
     csv_rows = "\n".join(
         [
-            f"{bucket_name},repo/a,1073741824,{in_window_last_modified},INTELLIGENT_TIERING,FREQUENT",
-            f"{bucket_name},repo/b,2147483648,{outside_window_last_modified},INTELLIGENT_TIERING,FREQUENT",
+            f"{bucket_name},repo/a,1073741824,{outside_window_last_modified},{in_window_last_access},INTELLIGENT_TIERING,FREQUENT",
+            f"{bucket_name},repo/b,2147483648,{in_window_last_modified},{outside_window_last_access},INTELLIGENT_TIERING,FREQUENT",
         ]
     )
 
@@ -340,6 +342,78 @@ def test_get_bucket_stats_includes_inventory_based_upcoming_transitions(monkeypa
     assert stats.intelligent_tiering_forecast is not None
     assert stats.intelligent_tiering_forecast.available
     assert stats.intelligent_tiering_forecast.inventory_configuration_id == "entire-bucket"
+    assert stats.intelligent_tiering_forecast.objects_transitioning_next_week == 1
+    assert stats.intelligent_tiering_forecast.size_bytes_transitioning_next_week == 1024**3
+
+
+def test_get_bucket_stats_inventory_forecast_falls_back_to_last_modified_when_last_access_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = _make_config("test-bucket")
+    bucket_name = cfg.aws.s3_bucket
+    timestamp = datetime(2026, 2, 1, tzinfo=UTC)
+
+    metrics: dict[tuple[str, str], list[dict[str, object]]] = {
+        ("BucketSizeBytes", "StandardStorage"): [{"Timestamp": timestamp, "Average": 10 * 1024**3}],
+        ("NumberOfObjects", "AllStorageTypes"): [{"Timestamp": timestamp, "Average": 1.0}],
+    }
+    mock_cloudwatch = _MockCloudWatchClient(metrics)
+
+    now = datetime.now(UTC)
+    in_window_last_modified = (now - timedelta(days=24)).isoformat().replace("+00:00", "Z")
+
+    manifest_key = f"inventory/{bucket_name}/entire-bucket/2026-02-01T00-00Z/manifest.json"
+    data_key = f"inventory/{bucket_name}/entire-bucket/data/part-00000.csv.gz"
+
+    manifest_payload = {
+        "fileFormat": "CSV",
+        "fileSchema": "Bucket,Key,Size,LastModifiedDate,StorageClass,IntelligentTieringAccessTier",
+        "creationTimestamp": now.isoformat().replace("+00:00", "Z"),
+        "files": [{"key": data_key}],
+    }
+
+    csv_rows = f"{bucket_name},repo/a,1073741824,{in_window_last_modified},INTELLIGENT_TIERING,FREQUENT"
+
+    mock_s3 = _MockS3InventoryClient(
+        inventory_configurations=[
+            {
+                "Id": "entire-bucket",
+                "IsEnabled": True,
+                "OptionalFields": [
+                    "Size",
+                    "LastModifiedDate",
+                    "StorageClass",
+                    "IntelligentTieringAccessTier",
+                ],
+                "Destination": {
+                    "S3BucketDestination": {
+                        "Bucket": "arn:aws:s3:::test-bucket-logs",
+                        "Prefix": "inventory",
+                    }
+                },
+            }
+        ],
+        objects_by_prefix={
+            f"inventory/{bucket_name}/entire-bucket/": [
+                {
+                    "Key": manifest_key,
+                    "LastModified": now,
+                }
+            ],
+        },
+        object_payloads={
+            manifest_key: json.dumps(manifest_payload).encode("utf-8"),
+            data_key: gzip.compress(csv_rows.encode("utf-8")),
+        },
+    )
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: mock_cloudwatch)
+    monkeypatch.setattr(s3, "_create_s3_client", lambda _cfg: mock_s3)
+
+    stats = s3.get_bucket_stats(cfg=cfg)
+
+    assert stats.intelligent_tiering_forecast is not None
+    assert stats.intelligent_tiering_forecast.available
     assert stats.intelligent_tiering_forecast.objects_transitioning_next_week == 1
     assert stats.intelligent_tiering_forecast.size_bytes_transitioning_next_week == 1024**3
 

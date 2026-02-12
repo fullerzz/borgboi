@@ -20,10 +20,10 @@ _INTELLIGENT_TIERING_TRANSITION_DAYS = 30
 _INTELLIGENT_TIERING_FORECAST_WINDOW_DAYS = 7
 _INVENTORY_REQUIRED_FIELDS = {
     "Size",
-    "LastModifiedDate",
     "StorageClass",
     "IntelligentTieringAccessTier",
 }
+_INVENTORY_ACCESS_TIME_FIELDS = ("LastAccessDate", "LastModifiedDate")
 
 
 @dataclass(frozen=True)
@@ -196,7 +196,10 @@ def _is_eligible_inventory_configuration(configuration: dict[str, Any]) -> bool:
     if not isinstance(optional_fields, list):
         return False
 
-    return _INVENTORY_REQUIRED_FIELDS.issubset(set(optional_fields))
+    optional_field_set = set(optional_fields)
+    return _INVENTORY_REQUIRED_FIELDS.issubset(optional_field_set) and any(
+        field in optional_field_set for field in _INVENTORY_ACCESS_TIME_FIELDS
+    )
 
 
 def _extract_inventory_configuration(s3_client: Any, bucket_name: str) -> dict[str, Any] | None:
@@ -395,7 +398,11 @@ def _extract_inventory_schema_columns(manifest: dict[str, Any]) -> list[str] | N
         return None
 
     schema_columns = [column.strip() for column in file_schema.split(",") if column.strip()]
-    if not _INVENTORY_REQUIRED_FIELDS.issubset(set(schema_columns)):
+    schema_column_set = set(schema_columns)
+    if not _INVENTORY_REQUIRED_FIELDS.issubset(schema_column_set):
+        return None
+
+    if not any(field in schema_column_set for field in _INVENTORY_ACCESS_TIME_FIELDS):
         return None
 
     return schema_columns
@@ -426,11 +433,14 @@ def _project_intelligent_tiering_transitions(
                 continue
 
             size_bytes = _parse_inventory_int(row.get("Size"))
-            last_modified = _parse_inventory_timestamp(row.get("LastModifiedDate"))
-            if size_bytes is None or last_modified is None:
+            last_accessed_or_modified = _parse_inventory_timestamp(row.get("LastAccessDate"))
+            if last_accessed_or_modified is None:
+                last_accessed_or_modified = _parse_inventory_timestamp(row.get("LastModifiedDate"))
+
+            if size_bytes is None or last_accessed_or_modified is None:
                 continue
 
-            projected_transition_at = last_modified + timedelta(days=_INTELLIGENT_TIERING_TRANSITION_DAYS)
+            projected_transition_at = last_accessed_or_modified + timedelta(days=_INTELLIGENT_TIERING_TRANSITION_DAYS)
             if now <= projected_transition_at <= window_end:
                 projected_objects += 1
                 projected_size_bytes += max(size_bytes, 0)
@@ -448,7 +458,7 @@ def _build_intelligent_tiering_forecast(s3_client: Any, *, bucket_name: str) -> 
             return _unavailable_intelligent_tiering_forecast(
                 reason=(
                     "No enabled S3 Inventory configuration includes required optional fields "
-                    "(Size, LastModifiedDate, StorageClass, IntelligentTieringAccessTier)."
+                    "(Size, StorageClass, IntelligentTieringAccessTier, and LastAccessDate or LastModifiedDate)."
                 ),
                 now=now,
                 window_end=window_end,
@@ -526,7 +536,10 @@ def _build_intelligent_tiering_forecast(s3_client: Any, *, bucket_name: str) -> 
             size_bytes_transitioning_next_week=projected_size_bytes,
             inventory_generated_at=inventory_generated_at,
             inventory_configuration_id=configuration_id,
-            estimation_method="S3 Inventory heuristic: LastModifiedDate + 30 days without access.",
+            estimation_method=(
+                "S3 Inventory heuristic: LastAccessDate + 30 days without access "
+                "(fallback to LastModifiedDate when LastAccessDate is unavailable)."
+            ),
         )
     except (ClientError, BotoCoreError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return _unavailable_intelligent_tiering_forecast(

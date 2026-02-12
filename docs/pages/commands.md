@@ -240,8 +240,9 @@ Usage: bb s3 stats
   Intelligent-Tiering FA->IA transitions in the next 7 days.
 
   Note: This forecast requires an enabled S3 Inventory configuration that
-  includes optional fields: Size, LastModifiedDate, StorageClass, and
-  IntelligentTieringAccessTier. The first inventory delivery can take up to
+  includes optional fields: Size, StorageClass,
+  IntelligentTieringAccessTier, and either LastAccessDate (preferred)
+  or LastModifiedDate (fallback). The first inventory delivery can take up to
   48 hours after configuration.
 
 ```
