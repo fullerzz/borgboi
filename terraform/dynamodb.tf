@@ -126,6 +126,11 @@ resource "aws_dynamodb_table" "bb-archives-table" {
     type = "S"
   }
 
+  ttl {
+    attribute_name = "TTL"
+    enabled        = true
+  }
+
   global_secondary_index {
     name            = "hostname_gsi"
     write_capacity  = 5
