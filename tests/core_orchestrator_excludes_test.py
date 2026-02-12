@@ -74,6 +74,7 @@ def test_backup_prefers_repo_specific_excludes_file(monkeypatch: pytest.MonkeyPa
 
     borg_client.create.assert_called_once()
     assert borg_client.create.call_args.kwargs["exclude_file"] == repo_specific_excludes_path.as_posix()
+    assert borg_client.create.call_args.kwargs["exclude_file"] != default_excludes_path.as_posix()
 
 
 def test_backup_raises_when_no_excludes_files_exist(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -93,3 +94,42 @@ def test_backup_raises_when_no_excludes_files_exist(monkeypatch: pytest.MonkeyPa
         orchestrator.backup(repo)
 
     borg_client.create.assert_not_called()
+
+
+def test_get_exclusions_uses_default_shared_excludes_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+
+    orchestrator = Orchestrator(
+        config=cfg,
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, object()),
+    )
+    repo = _build_repo()
+
+    default_excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    default_excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    default_excludes_path.write_text("*.tmp\n.cache/\n")
+
+    assert orchestrator.get_exclusions(repo) == ["*.tmp", ".cache/"]
+
+
+def test_get_exclusions_prefers_repo_specific_excludes_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+
+    orchestrator = Orchestrator(
+        config=cfg,
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, object()),
+    )
+    repo = _build_repo()
+
+    default_excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    default_excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    default_excludes_path.write_text("*.tmp\n")
+
+    repo_specific_excludes_path = cfg.borgboi_dir / f"{repo.name}_{cfg.excludes_filename}"
+    repo_specific_excludes_path.write_text("*.iso\n")
+
+    assert orchestrator.get_exclusions(repo) == ["*.iso"]

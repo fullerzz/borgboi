@@ -585,9 +585,9 @@ class Orchestrator:
             List of exclusion patterns
         """
         resolved_repo = self._resolve_repo(repo)
-        excludes_path = self._get_excludes_path(resolved_repo.name)
+        excludes_path = self._resolve_excludes_path_for_read(resolved_repo.name)
 
-        if not excludes_path.exists():
+        if excludes_path is None:
             return []
 
         content = excludes_path.read_text()
@@ -708,15 +708,31 @@ class Orchestrator:
         1. Repo-specific excludes file (~/.borgboi/{repo}_excludes.txt)
         2. Default shared excludes file (~/.borgboi/excludes.txt)
         """
+        excludes_path = self._resolve_excludes_path_for_read(repo_name)
+        if excludes_path is None:
+            raise ValidationError("Exclude list must be created before performing a backup", field="excludes")
+
+        return excludes_path
+
+    def _resolve_excludes_path_for_read(self, repo_name: str) -> Path | None:
+        """Resolve existing excludes file for read operations.
+
+        Resolution order:
+        1. Repo-specific excludes file (~/.borgboi/{repo}_excludes.txt)
+        2. Default shared excludes file (~/.borgboi/excludes.txt)
+
+        Returns:
+            Path to the first existing excludes file, or None if no file exists.
+        """
         excludes_path = self._get_excludes_path(repo_name)
         if excludes_path.exists():
             return excludes_path
 
         default_excludes_path = self._get_default_excludes_path()
-        if not default_excludes_path.exists():
-            raise ValidationError("Exclude list must be created before performing a backup", field="excludes")
+        if default_excludes_path.exists():
+            return default_excludes_path
 
-        return default_excludes_path
+        return None
 
     def _delete_excludes_file(self, repo_name: str) -> None:
         """Delete a repository's excludes file.
