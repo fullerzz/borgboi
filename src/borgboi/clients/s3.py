@@ -149,6 +149,29 @@ def _unavailable_intelligent_tiering_forecast(
     )
 
 
+def _format_inventory_forecast_unavailable_reason(exc: Exception) -> str:
+    if isinstance(exc, ClientError):
+        response = exc.response
+        error_details = response.get("Error", {}) if isinstance(response, dict) else {}
+        code = str(error_details.get("Code", ""))
+        message = str(error_details.get("Message", ""))
+
+        if code in {"AccessDenied", "AccessDeniedException"} and "kms:Decrypt" in message:
+            return (
+                "Missing KMS permissions for S3 Inventory objects. "
+                "Grant kms:Decrypt (and kms:DescribeKey) in the inventory bucket region and allow this principal "
+                "in the KMS key policy."
+            )
+
+        if code in {"AccessDenied", "AccessDeniedException"}:
+            return (
+                "Access denied while reading S3 Inventory metadata. "
+                "Ensure this principal can list/get inventory objects and decrypt them when SSE-KMS is enabled."
+            )
+
+    return f"Failed to load S3 Inventory metadata: {exc}"
+
+
 def _parse_inventory_timestamp(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -545,7 +568,7 @@ def _build_intelligent_tiering_forecast(s3_client: Any, *, bucket_name: str) -> 
         )
     except (ClientError, BotoCoreError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         return _unavailable_intelligent_tiering_forecast(
-            reason=f"Failed to load S3 Inventory metadata: {exc}",
+            reason=_format_inventory_forecast_unavailable_reason(exc),
             now=now,
             window_end=window_end,
         )
