@@ -1,3 +1,10 @@
+## v1.14.2 (2026-02-14)
+
+### 🐛 Bug Fixes
+
+- **deps**: Lock file maintenance (#164)
+
+
 ## v1.14.1 (2026-02-14)
 
 ### 🐛 Bug Fixes
