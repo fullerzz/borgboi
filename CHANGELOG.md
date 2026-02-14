@@ -1,3 +1,16 @@
+## v1.14.1 (2026-02-14)
+
+### 🐛 Bug Fixes
+
+- **s3**: Improve error message for missing permissions when running s3 stats (#173)
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update anthropics/claude-code-action digest to c22f7c3 (#171)
+
+
 ## v1.14.0 (2026-02-12)
 
 ### 🚀 Features
