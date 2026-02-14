@@ -22,7 +22,7 @@ data "aws_iam_policy_document" "borgboi" {
   statement {
     effect    = "Allow"
     sid       = "AllowKMSAccess"
-    actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+    actions   = ["kms:Decrypt", "kms:DescribeKey", "kms:GenerateDataKey*"]
     resources = ["*"]
   }
 

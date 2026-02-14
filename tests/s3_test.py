@@ -183,11 +183,13 @@ class _MockS3InventoryClient:
         objects_by_prefix: dict[str, list[dict[str, object]]] | None = None,
         object_payloads: dict[str, bytes] | None = None,
         object_keys_requiring_streaming: set[str] | None = None,
+        object_errors: dict[str, Exception] | None = None,
     ) -> None:
         self._inventory_configurations = inventory_configurations or []
         self._objects_by_prefix = objects_by_prefix or {}
         self._object_payloads = object_payloads or {}
         self._object_keys_requiring_streaming = object_keys_requiring_streaming or set()
+        self._object_errors = object_errors or {}
 
     def list_bucket_inventory_configurations(self, **kwargs: object) -> dict[str, object]:
         _ = kwargs
@@ -209,6 +211,10 @@ class _MockS3InventoryClient:
         key = kwargs.get("Key")
         if not isinstance(key, str):
             return {"Body": _MockStreamingBody(b"")}
+
+        object_error = self._object_errors.get(key)
+        if object_error is not None:
+            raise object_error
 
         payload = self._object_payloads.get(key)
         if payload is None:
@@ -501,6 +507,153 @@ def test_get_bucket_stats_inventory_forecast_streams_inventory_objects(monkeypat
     assert stats.intelligent_tiering_forecast.available
     assert stats.intelligent_tiering_forecast.objects_transitioning_next_week == 1
     assert stats.intelligent_tiering_forecast.size_bytes_transitioning_next_week == 1024**3
+
+
+def test_get_bucket_stats_inventory_forecast_kms_access_denied_shows_actionable_guidance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = _make_config("test-bucket")
+    bucket_name = cfg.aws.s3_bucket
+    timestamp = datetime(2026, 2, 1, tzinfo=UTC)
+
+    metrics: dict[tuple[str, str], list[dict[str, object]]] = {
+        ("BucketSizeBytes", "StandardStorage"): [{"Timestamp": timestamp, "Average": 10 * 1024**3}],
+        ("NumberOfObjects", "AllStorageTypes"): [{"Timestamp": timestamp, "Average": 1.0}],
+    }
+    mock_cloudwatch = _MockCloudWatchClient(metrics)
+
+    now = datetime.now(UTC)
+    manifest_key = f"inventory/{bucket_name}/entire-bucket/2026-02-01T00-00Z/manifest.json"
+
+    kms_access_denied = ClientError(
+        {
+            "Error": {
+                "Code": "AccessDenied",
+                "Message": (
+                    "User is not authorized to perform: kms:Decrypt on the resource associated with this ciphertext"
+                ),
+            }
+        },
+        "GetObject",
+    )
+
+    mock_s3 = _MockS3InventoryClient(
+        inventory_configurations=[
+            {
+                "Id": "entire-bucket",
+                "IsEnabled": True,
+                "OptionalFields": [
+                    "Size",
+                    "LastModifiedDate",
+                    "StorageClass",
+                    "IntelligentTieringAccessTier",
+                ],
+                "Destination": {
+                    "S3BucketDestination": {
+                        "Bucket": "arn:aws:s3:::test-bucket-logs",
+                        "Prefix": "inventory",
+                    }
+                },
+            }
+        ],
+        objects_by_prefix={
+            f"inventory/{bucket_name}/entire-bucket/": [
+                {
+                    "Key": manifest_key,
+                    "LastModified": now,
+                }
+            ],
+        },
+        object_errors={
+            manifest_key: kms_access_denied,
+        },
+    )
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: mock_cloudwatch)
+    monkeypatch.setattr(s3, "_create_s3_client", lambda _cfg: mock_s3)
+
+    stats = s3.get_bucket_stats(cfg=cfg)
+
+    assert stats.intelligent_tiering_forecast is not None
+    assert not stats.intelligent_tiering_forecast.available
+    assert stats.intelligent_tiering_forecast.unavailable_reason == (
+        "Missing KMS permissions for S3 Inventory objects. "
+        "Grant kms:Decrypt (and kms:DescribeKey) in the inventory bucket region and allow this principal "
+        "in the KMS key policy."
+    )
+
+
+def test_get_bucket_stats_inventory_forecast_access_denied_preserves_denied_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = _make_config("test-bucket")
+    bucket_name = cfg.aws.s3_bucket
+    timestamp = datetime(2026, 2, 1, tzinfo=UTC)
+
+    metrics: dict[tuple[str, str], list[dict[str, object]]] = {
+        ("BucketSizeBytes", "StandardStorage"): [{"Timestamp": timestamp, "Average": 10 * 1024**3}],
+        ("NumberOfObjects", "AllStorageTypes"): [{"Timestamp": timestamp, "Average": 1.0}],
+    }
+    mock_cloudwatch = _MockCloudWatchClient(metrics)
+
+    now = datetime.now(UTC)
+    manifest_key = f"inventory/{bucket_name}/entire-bucket/2026-02-01T00-00Z/manifest.json"
+
+    access_denied = ClientError(
+        {
+            "Error": {
+                "Code": "AccessDenied",
+                "Message": (
+                    "User is not authorized to perform: kms:DescribeKey on resource "
+                    "arn:aws:kms:us-east-1:111122223333:key/example"
+                ),
+            }
+        },
+        "GetObject",
+    )
+
+    mock_s3 = _MockS3InventoryClient(
+        inventory_configurations=[
+            {
+                "Id": "entire-bucket",
+                "IsEnabled": True,
+                "OptionalFields": [
+                    "Size",
+                    "LastModifiedDate",
+                    "StorageClass",
+                    "IntelligentTieringAccessTier",
+                ],
+                "Destination": {
+                    "S3BucketDestination": {
+                        "Bucket": "arn:aws:s3:::test-bucket-logs",
+                        "Prefix": "inventory",
+                    }
+                },
+            }
+        ],
+        objects_by_prefix={
+            f"inventory/{bucket_name}/entire-bucket/": [
+                {
+                    "Key": manifest_key,
+                    "LastModified": now,
+                }
+            ],
+        },
+        object_errors={
+            manifest_key: access_denied,
+        },
+    )
+
+    monkeypatch.setattr(s3, "_create_cloudwatch_client", lambda _cfg: mock_cloudwatch)
+    monkeypatch.setattr(s3, "_create_s3_client", lambda _cfg: mock_s3)
+
+    stats = s3.get_bucket_stats(cfg=cfg)
+
+    assert stats.intelligent_tiering_forecast is not None
+    assert not stats.intelligent_tiering_forecast.available
+    assert stats.intelligent_tiering_forecast.unavailable_reason is not None
+    assert "Access denied while reading S3 Inventory metadata." in stats.intelligent_tiering_forecast.unavailable_reason
+    assert "kms:DescribeKey" in stats.intelligent_tiering_forecast.unavailable_reason
 
 
 def test_get_bucket_stats_wraps_cloudwatch_errors(monkeypatch: pytest.MonkeyPatch) -> None:
