@@ -155,6 +155,7 @@ def _format_inventory_forecast_unavailable_reason(exc: Exception) -> str:
         error_details = response.get("Error", {}) if isinstance(response, dict) else {}
         code = str(error_details.get("Code", ""))
         message = str(error_details.get("Message", ""))
+        error_summary = f"{code}: {message}" if code and message else message or code or str(exc)
 
         if code in {"AccessDenied", "AccessDeniedException"} and "kms:Decrypt" in message:
             return (
@@ -166,7 +167,8 @@ def _format_inventory_forecast_unavailable_reason(exc: Exception) -> str:
         if code in {"AccessDenied", "AccessDeniedException"}:
             return (
                 "Access denied while reading S3 Inventory metadata. "
-                "Ensure this principal can list/get inventory objects and decrypt them when SSE-KMS is enabled."
+                "Ensure this principal can list/get inventory objects and decrypt them when SSE-KMS is enabled. "
+                f"AWS error details: {error_summary}"
             )
 
     return f"Failed to load S3 Inventory metadata: {exc}"
