@@ -202,3 +202,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "borgboi" {
     }
   }
 }
+
+resource "aws_s3_bucket_lifecycle_configuration" "borgboi-logs" {
+  bucket = aws_s3_bucket.borgboi-logs.id
+
+  rule {
+    id     = "delete-stale-inventory-reports"
+    status = "Enabled"
+
+    filter {
+      prefix = "inventory/"
+    }
+
+    expiration {
+      days = 14
+    }
+  }
+}
