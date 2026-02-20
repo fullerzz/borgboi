@@ -1,3 +1,16 @@
+## v1.14.3 (2026-02-20)
+
+### 🐛 Bug Fixes
+
+- Add s3 lifecycle rule for stale inventory reports (#176)
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies (#172)
+
+
 ## v1.14.2 (2026-02-14)
 
 ### 🐛 Bug Fixes
