@@ -218,4 +218,27 @@ resource "aws_s3_bucket_lifecycle_configuration" "borgboi-logs" {
       days = 14
     }
   }
+
+  rule {
+    id     = "transition-to-intelligent-tiering"
+    status = "Enabled"
+
+    filter {}
+
+    transition {
+      days          = 0
+      storage_class = "INTELLIGENT_TIERING"
+    }
+  }
+
+  rule {
+    id     = "delete-old-objects"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 365
+    }
+  }
 }
