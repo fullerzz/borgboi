@@ -50,7 +50,8 @@ jobs:
           git add CHANGELOG.md pyproject.toml uv.lock
           git commit -m "bump: version ${{ steps.cz.outputs.previous_version }} -> ${{ steps.cz.outputs.next_version }}"
           git tag "v${{ steps.cz.outputs.next_version }}"
-          git push origin "HEAD:${{ github.ref_name }}" --follow-tags
+          git push origin "HEAD:${{ github.ref_name }}"
+          git push origin "v${{ steps.cz.outputs.next_version }}"
       - name: Release
         if: ${{ steps.cz.outputs.next_version != steps.cz.outputs.previous_version }}
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
