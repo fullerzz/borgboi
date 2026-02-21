@@ -164,6 +164,35 @@ Main commands available via `borgboi` or `bb`:
 - Linting with tflint via `just tflint`
 - Validation with `tofu validate` via `just tofu-validate`
 
+## Memory (graphiti-mem MCP Server)
+
+This project uses the `graphiti-mem` MCP server for persistent, Knowledge Graph-based memory. Always use `group_id = "borgboi"` for all memory operations to keep data scoped to this project.
+
+### Key Tools
+
+| Tool | Purpose |
+|------|---------|
+| `add_memory` | Persist new information (entities, facts, decisions, context) to the graph |
+| `search_nodes` | Find entities by natural language query |
+| `search_memory_facts` | Find relationships/facts between entities |
+| `get_episodes` | Retrieve recent episodes stored for this project |
+| `delete_entity_edge` | Remove a stale or incorrect fact |
+| `delete_episode` | Remove a specific episode |
+| `clear_graph` | Wipe all data for a group (use with caution) |
+
+### Usage Guidelines
+
+- Always use the graph name `borgboi` for this project.
+- For APIs that take a single graph identifier, set `group_id="borgboi"`.
+- For APIs that take multiple graph identifiers, set `group_ids=["borgboi"]`.
+- **Add memory proactively** when discovering important project facts: architectural decisions, bug root causes, non-obvious constraints, or anything that would be useful context in a future session.
+- **Search before starting a task** to surface any relevant prior context stored about that area of the codebase.
+- Use `source="text"` for prose notes, `source="json"` for structured data (must be a valid JSON string), and `source="message"` for conversation-style entries.
+- Provide descriptive `name` values and detailed `episode_body` content to improve future search relevance.
+- Do not rely on default graph selection or create alternate graph names for repository work.
+- Treat memory deletion operations (`clear_graph`, `delete_episode`, `delete_entity_edge`) as destructive and run them only when explicitly requested.
+
+
 ## Search Guidance
 
 - Use `ast-grep` for searching and matching source code patterns (AST-aware queries).
