@@ -1,3 +1,26 @@
+## v1.14.4 (2026-02-21)
+
+### 🐛 Bug Fixes
+
+- **s3**: Add lifecycle rules to logging bucket
+
+- Encrypt inventory report with ss3_s3 (#177)
+
+
+
+### 💼 Other
+
+- Merge pull request #178 from fullerzz/dev
+
+S3 Lifecycle Rules + Inventory Report Config
+
+
+
+### 📚 Documentation
+
+- Add graphiti memory mcp usage
+
+
 ## v1.14.3 (2026-02-20)
 
 ### 🐛 Bug Fixes
