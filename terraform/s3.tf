@@ -164,6 +164,10 @@ resource "aws_s3_bucket_inventory" "borgboi" {
       bucket_arn = aws_s3_bucket.borgboi-logs.arn
       format     = "CSV"
       prefix     = "inventory"
+
+      encryption {
+        sse_s3 {}
+      }
     }
   }
 
