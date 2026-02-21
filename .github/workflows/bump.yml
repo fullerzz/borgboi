@@ -33,15 +33,29 @@ jobs:
         run: |
           NEXT_VERSION=$(uv run cz bump --get-next)
           GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" uv run git-cliff --tag "v${NEXT_VERSION}" --github-repo "${{ github.repository }}" --output body.md --prepend CHANGELOG.md --unreleased
-      - name: Create bump and changelog
+      - id: cz
+        name: Create bump and changelog
         uses: commitizen-tools/commitizen-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           changelog: false
+          commit: false
+          push: false
+      - name: Update lockfile after version bump
+        if: ${{ steps.cz.outputs.next_version != steps.cz.outputs.previous_version }}
+        run: uv sync
+      - name: Commit and tag bump changes
+        if: ${{ steps.cz.outputs.next_version != steps.cz.outputs.previous_version }}
+        run: |
+          git add CHANGELOG.md pyproject.toml uv.lock
+          git commit -m "bump: version ${{ steps.cz.outputs.previous_version }} -> ${{ steps.cz.outputs.next_version }}"
+          git tag "v${{ steps.cz.outputs.next_version }}"
+          git push origin "HEAD:${{ github.ref_name }}" --follow-tags
       - name: Release
+        if: ${{ steps.cz.outputs.next_version != steps.cz.outputs.previous_version }}
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           body_path: "body.md"
-          tag_name: v${{ env.REVISION }}
+          tag_name: v${{ steps.cz.outputs.next_version }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
