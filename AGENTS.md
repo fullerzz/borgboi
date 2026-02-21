@@ -153,6 +153,15 @@ network is blocked by default (`--disable-socket`), and `just test` removes `pri
 - Treat `~/.borgboi/config.yaml` as user-local runtime state, not repo state.
 - Be cautious with deletion/destructive backup flows; preserve dry-run support.
 
+## Graphiti Memory MCP Usage
+
+- Use the `graphiti-mem` MCP server for knowledge graph-based memory when storing or retrieving agent memory.
+- Always use the graph name `borgboi` for this project.
+- For APIs that take a single graph identifier, set `group_id="borgboi"`.
+- For APIs that take multiple graph identifiers, set `group_ids=["borgboi"]`.
+- Do not rely on default graph selection or create alternate graph names for repository work.
+- Treat memory deletion operations (`clear_graph`, `delete_episode`, `delete_entity_edge`) as destructive and run them only when explicitly requested.
+
 ## Cursor / Copilot Rules Status
 
 No extra editor-agent instruction files were found when this file was updated:

@@ -164,6 +164,10 @@ resource "aws_s3_bucket_inventory" "borgboi" {
       bucket_arn = aws_s3_bucket.borgboi-logs.arn
       format     = "CSV"
       prefix     = "inventory"
+
+      encryption {
+        sse_s3 {}
+      }
     }
   }
 
@@ -216,6 +220,29 @@ resource "aws_s3_bucket_lifecycle_configuration" "borgboi-logs" {
 
     expiration {
       days = 14
+    }
+  }
+
+  rule {
+    id     = "transition-to-intelligent-tiering"
+    status = "Enabled"
+
+    filter {}
+
+    transition {
+      days          = 0
+      storage_class = "INTELLIGENT_TIERING"
+    }
+  }
+
+  rule {
+    id     = "delete-old-objects"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 365
     }
   }
 }
