@@ -9,7 +9,7 @@ from borgboi.lib import utils
 from borgboi.rich_utils import console
 
 
-def _build_archive_stats_tables(repo_path: str, archive_info: ArchiveInfo) -> tuple[Table, Table, Table]:
+def _build_archive_stats_tables(repo_path: str, archive_info: ArchiveInfo) -> tuple[Table, Table]:
     """Build Rich tables for Borg archive statistics."""
     archive = archive_info.archive
     archive_stats_raw = archive.get("stats", {})
@@ -44,26 +44,15 @@ def _build_archive_stats_tables(repo_path: str, archive_info: ArchiveInfo) -> tu
     size_table.add_row("This archive", this_original_size, this_compressed_size, this_deduplicated_size)
     size_table.add_row("All archives", all_original_size, all_compressed_size, all_deduplicated_size)
 
-    chunk_table = Table(title="Chunk Index", show_header=False)
-    chunk_table.add_column("Metric", style="bold cyan")
-    chunk_table.add_column("Unique chunks", justify="right")
-    chunk_table.add_column("Total chunks", justify="right")
-    chunk_table.add_row(
-        "Chunk index",
-        f"{cache_stats.total_unique_chunks:,}",
-        f"{cache_stats.total_chunks:,}",
-    )
-
-    return summary_table, size_table, chunk_table
+    return summary_table, size_table
 
 
 def _render_archive_stats_table(repo_path: str, archive_info: ArchiveInfo) -> None:
     """Render Borg archive statistics in Rich tables."""
-    summary_table, size_table, chunk_table = _build_archive_stats_tables(repo_path, archive_info)
+    summary_table, size_table = _build_archive_stats_tables(repo_path, archive_info)
 
     console.print(summary_table)
     console.print(size_table)
-    console.print(chunk_table)
 
 
 @click.group()
