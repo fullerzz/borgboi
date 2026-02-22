@@ -1,9 +1,69 @@
 """Backup operation commands for BorgBoi CLI."""
 
 import click
+from rich.table import Table
 
 from borgboi.cli.main import BorgBoiContext, pass_context
+from borgboi.clients.borg import ArchiveInfo
+from borgboi.lib import utils
 from borgboi.rich_utils import console
+
+
+def _build_archive_stats_tables(repo_path: str, archive_info: ArchiveInfo) -> tuple[Table, Table, Table]:
+    """Build Rich tables for Borg archive statistics."""
+    archive = archive_info.archive
+    archive_stats_raw = archive.get("stats", {})
+    archive_stats = archive_stats_raw if isinstance(archive_stats_raw, dict) else {}
+
+    this_original_size = utils.format_size_bytes(utils.coerce_int(archive_stats.get("original_size")))
+    this_compressed_size = utils.format_size_bytes(utils.coerce_int(archive_stats.get("compressed_size")))
+    this_deduplicated_size = utils.format_size_bytes(utils.coerce_int(archive_stats.get("deduplicated_size")))
+
+    cache_stats = archive_info.cache.stats
+    all_original_size = utils.format_size_bytes(cache_stats.total_size)
+    all_compressed_size = utils.format_size_bytes(cache_stats.total_csize)
+    all_deduplicated_size = utils.format_size_bytes(cache_stats.unique_csize)
+
+    number_of_files = utils.coerce_int(archive_stats.get("nfiles"))
+    summary_table = Table(title="Archive Summary", show_header=False)
+    summary_table.add_column("Metric", style="bold cyan")
+    summary_table.add_column("Value")
+    summary_table.add_row("Repository", repo_path)
+    summary_table.add_row("Archive name", str(archive.get("name", "Unknown")))
+    summary_table.add_row("Archive fingerprint", str(archive.get("id", "Unknown")))
+    summary_table.add_row("Time (start)", utils.format_iso_timestamp(archive.get("start")))
+    summary_table.add_row("Time (end)", utils.format_iso_timestamp(archive.get("end")))
+    summary_table.add_row("Duration", utils.format_duration_seconds(archive.get("duration")))
+    summary_table.add_row("Number of files", str(number_of_files) if number_of_files is not None else "Unknown")
+
+    size_table = Table(title="Size Statistics")
+    size_table.add_column("Scope", style="bold cyan")
+    size_table.add_column("Original size", justify="right")
+    size_table.add_column("Compressed size", justify="right")
+    size_table.add_column("Deduplicated size", justify="right")
+    size_table.add_row("This archive", this_original_size, this_compressed_size, this_deduplicated_size)
+    size_table.add_row("All archives", all_original_size, all_compressed_size, all_deduplicated_size)
+
+    chunk_table = Table(title="Chunk Index", show_header=False)
+    chunk_table.add_column("Metric", style="bold cyan")
+    chunk_table.add_column("Unique chunks", justify="right")
+    chunk_table.add_column("Total chunks", justify="right")
+    chunk_table.add_row(
+        "Chunk index",
+        f"{cache_stats.total_unique_chunks:,}",
+        f"{cache_stats.total_chunks:,}",
+    )
+
+    return summary_table, size_table, chunk_table
+
+
+def _render_archive_stats_table(repo_path: str, archive_info: ArchiveInfo) -> None:
+    """Render Borg archive statistics in Rich tables."""
+    summary_table, size_table, chunk_table = _build_archive_stats_tables(repo_path, archive_info)
+
+    console.print(summary_table)
+    console.print(size_table)
+    console.print(chunk_table)
 
 
 @click.group()
@@ -23,7 +83,19 @@ def backup_run(ctx: BorgBoiContext, path: str | None, name: str | None, passphra
     """Create a new backup archive."""
     try:
         repo = ctx.orchestrator.get_repo(name=name, path=path)
-        ctx.orchestrator.backup(repo, passphrase=passphrase)
+        archive_name = ctx.orchestrator.backup(repo, passphrase=passphrase)
+
+        try:
+            resolved_passphrase = ctx.orchestrator.resolve_passphrase(repo, passphrase)
+            archive_info = ctx.orchestrator.borg.archive_info(
+                repo.path,
+                archive_name,
+                passphrase=resolved_passphrase,
+            )
+            _render_archive_stats_table(repo.path, archive_info)
+        except Exception as stats_error:
+            console.print(f"[bold yellow]Warning:[/] Backup succeeded, but stats could not be rendered: {stats_error}")
+
         console.print("[bold green]Backup completed successfully[/]")
     except Exception as e:
         console.print(f"[bold red]Error:[/] {e}")
@@ -53,7 +125,6 @@ def backup_daily(ctx: BorgBoiContext, path: str, passphrase: str | None, no_s3_s
 @pass_context
 def backup_list(ctx: BorgBoiContext, path: str | None, name: str | None, passphrase: str | None) -> None:
     """List archives in a repository."""
-    from borgboi.lib import utils
     from borgboi.lib.colors import COLOR_HEX
 
     try:
@@ -128,7 +199,6 @@ def backup_contents(
     """List contents of an archive."""
     from pathlib import Path
 
-    from borgboi.lib import utils
     from borgboi.lib.colors import COLOR_HEX
 
     try:
