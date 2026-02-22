@@ -192,10 +192,14 @@ class ArchiveStats(BaseModel):
 
 
 class ArchiveInfo(BaseModel):
-    archive: dict[str, Any]
+    archives: list[dict[str, Any]]
     cache: RepoCache
     encryption: Encryption
     repository: Repository
+
+    @property
+    def archive(self) -> dict[str, Any]:
+        return self.archives[0]
 
 
 def info(repo_path: str, passphrase: str | None = None) -> RepoInfo:
