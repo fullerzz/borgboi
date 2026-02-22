@@ -199,6 +199,8 @@ class ArchiveInfo(BaseModel):
 
     @property
     def archive(self) -> dict[str, Any]:
+        if not self.archives:
+            raise ValueError("ArchiveInfo contains no archives.")
         return self.archives[0]
 
 
