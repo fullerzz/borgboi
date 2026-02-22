@@ -40,7 +40,7 @@ def test_build_archive_stats_tables_includes_archive_and_cache_metrics() -> None
         }
     )
 
-    summary_table, size_table, chunk_table = _build_archive_stats_tables(
+    summary_table, size_table = _build_archive_stats_tables(
         "/mnt/raid1/borg-backup-repos/samba-ser8",
         archive_info,
     )
@@ -74,10 +74,3 @@ def test_build_archive_stats_tables_includes_archive_and_cache_metrics() -> None
     assert original_cells == ["5.00 GB", "28.00 GB"]
     assert compressed_cells == ["4.00 GB", "26.00 GB"]
     assert deduplicated_cells == ["0 B", "5.00 GB"]
-
-    chunk_metric_cells = list(chunk_table.columns[0].cells)
-    unique_chunk_cells = list(chunk_table.columns[1].cells)
-    total_chunk_cells = list(chunk_table.columns[2].cells)
-    assert chunk_metric_cells == ["Chunk index"]
-    assert unique_chunk_cells == ["1,914"]
-    assert total_chunk_cells == ["10,931"]
