@@ -1,3 +1,38 @@
+## v1.15.0 (2026-02-23)
+
+### 🚀 Features
+
+- **backup**: Render rich archive stats table on Error: Either name or path must be provided output
+
+
+
+### 🐛 Bug Fixes
+
+- Remove Chunk Table from Archive Stats Output (#180)
+
+
+
+### 💼 Other
+
+- Merge pull request #181 from fullerzz/dev
+
+Output Archive Stats on Successful Backup
+
+
+
+### 🚜 Refactor
+
+- Centralize archive name generation
+
+
+
+### 🎡 Continuous Integration
+
+- **bump.yml**: Update release workflow to include updated uv.lock file (#179)
+
+- **test.yml**: Bump UV_VERSION env var to 0.10.4
+
+
 ## v1.14.4 (2026-02-21)
 
 ### 🐛 Bug Fixes
