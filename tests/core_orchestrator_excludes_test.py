@@ -96,7 +96,7 @@ def test_backup_returns_created_archive_name(monkeypatch: pytest.MonkeyPatch, tm
     default_excludes_path.write_text("*.tmp\n")
 
     expected_archive_name = "2026-02-22_00:02:27"
-    monkeypatch.setattr(orchestrator, "_create_archive_name", lambda: expected_archive_name)
+    monkeypatch.setattr("borgboi.core.orchestrator.create_archive_name", lambda: expected_archive_name)
 
     created_archive_name = orchestrator.backup(repo)
 

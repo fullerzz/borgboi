@@ -2,6 +2,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+ARCHIVE_NAME_FORMAT = "%Y-%m-%d_%H:%M:%S"
+
+
+def create_archive_name() -> str:
+    """Create an archive name using Borg's timestamp format."""
+    return datetime.now(UTC).strftime(ARCHIVE_NAME_FORMAT)
+
 
 def shorten_archive_path(archive_path: str) -> str:
     """

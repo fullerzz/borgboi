@@ -3,7 +3,16 @@ from typing import Any
 
 import pytest
 
-from borgboi.lib.utils import calculate_archive_age, shorten_archive_path
+from borgboi.lib.utils import calculate_archive_age, create_archive_name, shorten_archive_path
+
+
+class TestCreateArchiveName:
+    """Test cases for create_archive_name function."""
+
+    def test_create_archive_name_uses_borg_timestamp_format(self) -> None:
+        archive_name = create_archive_name()
+        parsed = datetime.strptime(archive_name, "%Y-%m-%d_%H:%M:%S")
+        assert isinstance(parsed, datetime)
 
 
 class TestShortenArchivePath:

@@ -6,7 +6,6 @@ backup operations using dependency injection for testability.
 
 import shutil
 import socket
-from datetime import UTC, datetime
 from pathlib import Path
 from platform import system
 
@@ -23,6 +22,7 @@ from borgboi.lib.passphrase import (
     resolve_passphrase,
     save_passphrase_to_file,
 )
+from borgboi.lib.utils import create_archive_name
 from borgboi.models import BorgBoiRepo
 from borgboi.storage.base import RepositoryStorage
 
@@ -295,7 +295,7 @@ class Orchestrator:
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
 
         excludes_path = self._resolve_excludes_path_for_backup(resolved_repo.name)
-        archive_name = self._create_archive_name()
+        archive_name = create_archive_name()
 
         # Create archive
         for line in self.borg.create(
@@ -681,10 +681,6 @@ class Orchestrator:
         if isinstance(repo, str):
             return self.get_repo(name=repo)
         return repo
-
-    def _create_archive_name(self) -> str:
-        """Create an archive name using Borg's timestamp format."""
-        return datetime.now(UTC).strftime("%Y-%m-%d_%H:%M:%S")
 
     def _is_local(self, repo: BorgBoiRepo) -> bool:
         """Check if a repository is on the local machine.
