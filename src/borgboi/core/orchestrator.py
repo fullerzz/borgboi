@@ -22,6 +22,7 @@ from borgboi.lib.passphrase import (
     resolve_passphrase,
     save_passphrase_to_file,
 )
+from borgboi.lib.utils import create_archive_name
 from borgboi.models import BorgBoiRepo
 from borgboi.storage.base import RepositoryStorage
 
@@ -279,23 +280,28 @@ class Orchestrator:
         repo: BorgBoiRepo | str,
         options: BackupOptions | None = None,
         passphrase: str | None = None,
-    ) -> None:
+    ) -> str:
         """Create a backup of the repository's target directory.
 
         Args:
             repo: Repository or repository name
             options: Backup options
             passphrase: Optional passphrase override
+
+        Returns:
+            Name of the created archive
         """
         resolved_repo = self._resolve_repo(repo)
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
 
         excludes_path = self._resolve_excludes_path_for_backup(resolved_repo.name)
+        archive_name = create_archive_name()
 
         # Create archive
         for line in self.borg.create(
             resolved_repo.path,
             resolved_repo.backup_target,
+            archive_name=archive_name,
             options=options,
             exclude_file=excludes_path.as_posix(),
             passphrase=resolved_passphrase,
@@ -303,6 +309,7 @@ class Orchestrator:
             self.output.on_stderr(line)
 
         self.output.on_log("info", "Archive created successfully")
+        return archive_name
 
     def daily_backup(
         self,

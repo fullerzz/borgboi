@@ -7,7 +7,7 @@ repository metadata, supporting both offline (local) and online
 All imports are lazy to avoid circular imports with borgboi.config.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from borgboi.storage.base import RepositoryStorage
@@ -33,7 +33,7 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> type:
+def __getattr__(name: str) -> object:
     if name == "RepositoryStorage":
         from borgboi.storage.base import RepositoryStorage
 
@@ -53,5 +53,5 @@ def __getattr__(name: str) -> type:
     if name in ("RepositoryEntry", "RepositoryIndex", "S3RepoStats", "S3StatsCache"):
         from borgboi.storage import models
 
-        return getattr(models, name)
+        return cast(object, getattr(models, name))
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

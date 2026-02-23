@@ -1,6 +1,6 @@
 import subprocess as sp
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import datetime
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field, computed_field
 
 from borgboi.config import config
+from borgboi.lib.utils import create_archive_name
 
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
 
@@ -75,7 +76,7 @@ def init_repository(
 
 def _create_archive_title() -> str:
     """Returns an archive title in the format of YYYY-MM-DD_HH:MM:SS"""
-    return datetime.now(UTC).strftime("%Y-%m-%d_%H:%M:%S")
+    return create_archive_name()
 
 
 def create_archive(
@@ -192,10 +193,16 @@ class ArchiveStats(BaseModel):
 
 
 class ArchiveInfo(BaseModel):
-    archive: dict[str, Any]
+    archives: list[dict[str, Any]]
     cache: RepoCache
     encryption: Encryption
     repository: Repository
+
+    @property
+    def archive(self) -> dict[str, Any]:
+        if not self.archives:
+            raise ValueError("ArchiveInfo contains no archives.")
+        return self.archives[0]
 
 
 def info(repo_path: str, passphrase: str | None = None) -> RepoInfo:

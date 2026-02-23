@@ -3,7 +3,7 @@ import io
 import json
 import subprocess as sp
 from datetime import UTC, datetime, timedelta
-from typing import Literal, cast
+from typing import Literal, cast, override
 
 import pytest
 from botocore.exceptions import ClientError
@@ -169,6 +169,7 @@ class _MockStreamingBody(io.BytesIO):
         super().__init__(payload)
         self._allow_unbounded_read = allow_unbounded_read
 
+    @override
     def read(self, size: int | None = -1, /) -> bytes:
         if size in (-1, None) and not self._allow_unbounded_read:
             raise AssertionError("Inventory payload must be consumed as a stream.")

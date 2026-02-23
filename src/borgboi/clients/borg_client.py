@@ -9,7 +9,6 @@ import json
 import os
 import subprocess as sp
 from collections.abc import Generator
-from datetime import UTC, datetime
 from pathlib import Path
 
 from borgboi.clients.borg import (
@@ -22,6 +21,7 @@ from borgboi.config import BorgConfig, Config, get_config
 from borgboi.core.errors import BorgError, BorgExitCode
 from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
 from borgboi.core.output import DefaultOutputHandler, OutputHandler, SilentOutputHandler
+from borgboi.lib.utils import create_archive_name
 
 
 class BorgClient:
@@ -163,14 +163,6 @@ class BorgClient:
         returncode = proc.wait()
         self._handle_exit_code(returncode, cmd)
 
-    def _create_archive_name(self) -> str:
-        """Create a unique archive name based on current timestamp.
-
-        Returns:
-            Archive name in format YYYY-MM-DD_HH:MM:SS
-        """
-        return datetime.now(UTC).strftime("%Y-%m-%d_%H:%M:%S")
-
     # Core Operations
 
     def init(
@@ -290,7 +282,7 @@ class BorgClient:
             BorgError: If the command fails
         """
         if archive_name is None:
-            archive_name = self._create_archive_name()
+            archive_name = create_archive_name()
 
         opts = options or BackupOptions(compression=self.config.compression)
         cmd = [

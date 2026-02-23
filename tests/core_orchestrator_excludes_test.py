@@ -77,6 +77,33 @@ def test_backup_prefers_repo_specific_excludes_file(monkeypatch: pytest.MonkeyPa
     assert borg_client.create.call_args.kwargs["exclude_file"] != default_excludes_path.as_posix()
 
 
+def test_backup_returns_created_archive_name(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: None)
+    cfg = Config(offline=True)
+    borg_client = Mock()
+    borg_client.create.return_value = ["archive line"]
+
+    orchestrator = Orchestrator(
+        config=cfg,
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, object()),
+    )
+    repo = _build_repo()
+
+    default_excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    default_excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    default_excludes_path.write_text("*.tmp\n")
+
+    expected_archive_name = "2026-02-22_00:02:27"
+    monkeypatch.setattr("borgboi.core.orchestrator.create_archive_name", lambda: expected_archive_name)
+
+    created_archive_name = orchestrator.backup(repo)
+
+    assert created_archive_name == expected_archive_name
+    assert borg_client.create.call_args.kwargs["archive_name"] == expected_archive_name
+
+
 def test_backup_raises_when_no_excludes_files_exist(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: None)
