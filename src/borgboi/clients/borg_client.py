@@ -5,6 +5,7 @@ It supports dependency injection for configuration and output handling,
 making it easier to test and customize behavior.
 """
 
+import io
 import json
 import os
 import subprocess as sp
@@ -146,18 +147,28 @@ class BorgClient:
         env = self._build_env_with_passphrase(passphrase)
         proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
 
-        out_stream = proc.stderr
-        while out_stream and out_stream.readable():
-            line = out_stream.readline()
+        # Wrap stderr with TextIOWrapper using universal newlines (default).
+        # Borg progress messages use \r (carriage return) to overwrite the
+        # current terminal line.  Without this wrapper, readline() only splits
+        # on \n, so multiple \r-separated messages get concatenated into one
+        # garbled line.  TextIOWrapper translates \r, \n, and \r\n into \n,
+        # making readline() split correctly on all line-ending styles.
+        text_stream: io.TextIOWrapper | None = None
+        if proc.stderr:
+            text_stream = io.TextIOWrapper(proc.stderr, encoding="utf-8", errors="replace")
+
+        while text_stream:
+            line = text_stream.readline()
             if not line:
                 break
-            decoded = line.decode("utf-8")
-            yield decoded
+            yield line
 
         # Clean up
         if proc.stdout:
             proc.stdout.close()
-        if proc.stderr:
+        if text_stream:
+            text_stream.close()  # also closes underlying proc.stderr
+        elif proc.stderr:
             proc.stderr.close()
 
         returncode = proc.wait()
