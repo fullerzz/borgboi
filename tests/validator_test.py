@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from borgboi.clients.utils.borg_logs import ArchiveProgress, LogMessage
+from borgboi.clients.utils.borg_logs import ArchiveProgress, FileStatus, LogMessage
 from borgboi.models import BorgBoiRepo
 from borgboi.validator import (
     exclude_list_created,
@@ -118,6 +118,15 @@ class TestParseLog:
         assert isinstance(result, LogMessage)
         assert result.levelname == "INFO"
         assert result.message == "Test message"
+
+    def test_parse_log_file_status(self) -> None:
+        """Test parsing file status entries."""
+        log_json = '{"type": "file_status", "status": "A", "path": "/var/data/example.txt"}'
+
+        result = parse_log(log_json)
+        assert isinstance(result, FileStatus)
+        assert result.status == "A"
+        assert result.path == "/var/data/example.txt"
 
     def test_parse_log_invalid_json(self) -> None:
         """Test that invalid JSON raises ValidationError."""

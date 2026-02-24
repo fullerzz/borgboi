@@ -2,7 +2,6 @@ from collections.abc import Generator, Iterable
 from datetime import UTC
 from typing import TYPE_CHECKING
 
-from pydantic import ValidationError
 from rich.columns import Columns
 from rich.console import Console
 from rich.panel import Panel
@@ -15,6 +14,7 @@ from borgboi.clients.utils.borg_logs import (
     LogMessage,
     ProgressMessage,
     ProgressPercent,
+    parse_borg_log_stream,
 )
 from borgboi.lib.colors import COLOR_HEX, PYGMENTS_STYLES
 from borgboi.models import BorgBoiRepo
@@ -142,19 +142,7 @@ def parse_logs(
     Yields:
         Generator[ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus]: validated log message
     """
-    log_msg: ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
-    for log in log_stream:
-        try:
-            log_msg = ArchiveProgress.model_validate_json(log)
-        except ValidationError:
-            try:
-                log_msg = ProgressPercent.model_validate_json(log)
-            except ValidationError:
-                try:
-                    log_msg = ProgressMessage.model_validate_json(log)
-                except ValidationError:
-                    log_msg = LogMessage.model_validate_json(log)
-        yield log_msg
+    yield from parse_borg_log_stream(log_stream)
 
 
 def render_cmd_output_lines(
