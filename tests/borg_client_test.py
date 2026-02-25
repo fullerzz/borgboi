@@ -40,28 +40,24 @@ def _make_client() -> BorgClient:
 
 
 @pytest.mark.parametrize(
-    ("label", "script", "expected"),
+    ("script", "expected"),
     [
         pytest.param(
-            "newline",
             r"import sys; sys.stderr.buffer.write(b'alpha\nbeta\ngamma\n')",
             ["alpha\n", "beta\n", "gamma\n"],
             id="newline",
         ),
         pytest.param(
-            "carriage_return",
             r"import sys; sys.stderr.buffer.write(b'tick1\rtick2\rtick3\r')",
             ["tick1\n", "tick2\n", "tick3\n"],
             id="carriage-return",
         ),
         pytest.param(
-            "crlf",
             r"import sys; sys.stderr.buffer.write(b'line1\r\nline2\r\n')",
             ["line1\n", "line2\n"],
             id="crlf",
         ),
         pytest.param(
-            "mixed",
             r"import sys; sys.stderr.buffer.write(b'progress\rinfo\nwarn\r\ndone\n')",
             ["progress\n", "info\n", "warn\n", "done\n"],
             id="mixed",
@@ -69,7 +65,6 @@ def _make_client() -> BorgClient:
     ],
 )
 def test_streaming_command_splits_on_all_line_endings(
-    label: str,
     script: str,
     expected: list[str],
 ) -> None:

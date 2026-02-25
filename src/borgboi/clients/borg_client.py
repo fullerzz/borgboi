@@ -145,27 +145,21 @@ class BorgClient:
             BorgError: If the command fails
         """
         env = self._build_env_with_passphrase(passphrase)
-        proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
+        proc = sp.Popen(cmd, stdout=sp.DEVNULL, stderr=sp.PIPE, env=env)  # noqa: S603
 
         # Wrap stderr with TextIOWrapper using universal newlines (default).
         # Borg progress messages use \r (carriage return) to overwrite the
-        # current terminal line.  Without this wrapper, readline() only splits
-        # on \n, so multiple \r-separated messages get concatenated into one
-        # garbled line.  TextIOWrapper translates \r, \n, and \r\n into \n,
-        # making readline() split correctly on all line-ending styles.
+        # current terminal line. TextIOWrapper translates \r, \n, and \r\n into
+        # \n, so iterating the stream yields clean line-oriented output for all
+        # line-ending styles.
         text_stream: io.TextIOWrapper | None = None
         if proc.stderr:
             text_stream = io.TextIOWrapper(proc.stderr, encoding="utf-8", errors="replace")
 
-        while text_stream:
-            line = text_stream.readline()
-            if not line:
-                break
-            yield line
+        if text_stream is not None:
+            yield from text_stream
 
         # Clean up
-        if proc.stdout:
-            proc.stdout.close()
         if text_stream:
             text_stream.close()  # also closes underlying proc.stderr
         elif proc.stderr:

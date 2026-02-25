@@ -113,7 +113,7 @@ def test_backup_run_no_json_passes_options_and_skips_stats(
 
     class _FakeOrchestrator:
         def __init__(self, config: object) -> None:
-            _ = config
+            del config
             self.borg = _FakeBorgClient()
 
         def get_repo(self, name: str | None = None, path: str | None = None) -> object:
@@ -147,3 +147,52 @@ def test_backup_run_no_json_passes_options_and_skips_stats(
     assert isinstance(options, BackupOptions)
     assert options.json_output is False
     assert render_calls == []
+
+
+def test_backup_run_default_fetches_stats_and_renders_table(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured_options: list[BackupOptions | None] = []
+    archive_info_calls: list[tuple[str, str, str | None]] = []
+    render_calls: list[tuple[object, ...]] = []
+    archive_info_result = object()
+
+    class _FakeBorgClient:
+        def archive_info(self, repo_path: str, archive_name: str, passphrase: str | None = None) -> object:
+            archive_info_calls.append((repo_path, archive_name, passphrase))
+            return archive_info_result
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+            self.borg = _FakeBorgClient()
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            _ = name
+            return SimpleNamespace(path=path)
+
+        def backup(
+            self,
+            repo: object,
+            passphrase: str | None = None,
+            options: BackupOptions | None = None,
+        ) -> str:
+            _ = (repo, passphrase)
+            captured_options.append(options)
+            return "archive-2026-02-23"
+
+        def resolve_passphrase(self, repo: object, passphrase: str | None = None) -> str:
+            _ = (repo, passphrase)
+            return "resolved-passphrase"
+
+    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+    monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main.cli, ["backup", "run", "--path", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert captured_options == [None]
+    assert archive_info_calls == [(str(tmp_path), "archive-2026-02-23", "resolved-passphrase")]
+    assert render_calls == [(str(tmp_path), archive_info_result)]
