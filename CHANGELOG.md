@@ -1,3 +1,36 @@
+## v1.17.0 (2026-02-25)
+
+### 🚀 Features
+
+- **backup**: Allow daily backups by repository name
+
+
+
+### 🐛 Bug Fixes
+
+- **backup**: Reject conflicting or missing --name/--path in daily command
+
+
+
+### 💼 Other
+
+- Merge pull request #188 from fullerzz/dev
+
+Support Passing Repo Name for Daily Backup + Inline Snapshot Test Config
+
+
+
+### 📚 Documentation
+
+- Remove duplicate s3 stats section from commands docs
+
+
+
+### 🧪 Testing
+
+- Add inline-snapshot testing
+
+
 ## v1.16.0 (2026-02-25)
 
 ### 🚀 Features
