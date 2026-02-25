@@ -1,5 +1,15 @@
+import importlib
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from click.testing import CliRunner
+
 from borgboi.cli.backup import _build_archive_stats_tables
 from borgboi.clients.borg import ArchiveInfo
+from borgboi.core.models import BackupOptions
+
+cli_main = importlib.import_module("borgboi.cli.main")
 
 
 def test_build_archive_stats_tables_includes_archive_and_cache_metrics() -> None:
@@ -74,3 +84,115 @@ def test_build_archive_stats_tables_includes_archive_and_cache_metrics() -> None
     assert original_cells == ["5.00 GB", "28.00 GB"]
     assert compressed_cells == ["4.00 GB", "26.00 GB"]
     assert deduplicated_cells == ["0 B", "5.00 GB"]
+
+
+def test_backup_options_default_includes_log_json() -> None:
+    args = BackupOptions().to_borg_args()
+    assert "--log-json" in args
+
+
+def test_backup_options_no_json_excludes_log_json() -> None:
+    args = BackupOptions(json_output=False).to_borg_args()
+    assert "--log-json" not in args
+    assert "--stats" in args
+    assert "--progress" in args
+    assert "--list" in args
+
+
+def test_backup_run_no_json_passes_options_and_skips_stats(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured_options: list[BackupOptions | None] = []
+    render_calls: list[tuple[object, ...]] = []
+
+    class _FakeBorgClient:
+        def archive_info(self, repo_path: str, archive_name: str, passphrase: str | None = None) -> None:
+            _ = (repo_path, archive_name, passphrase)
+            raise AssertionError("archive_info should not be called when --no-json is used")
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+            self.borg = _FakeBorgClient()
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            _ = name
+            return SimpleNamespace(path=path)
+
+        def backup(
+            self,
+            repo: object,
+            passphrase: str | None = None,
+            options: BackupOptions | None = None,
+        ) -> str:
+            _ = (repo, passphrase)
+            captured_options.append(options)
+            return "archive-2026-02-23"
+
+        def resolve_passphrase(self, repo: object, passphrase: str | None = None) -> str:
+            _ = (repo, passphrase)
+            return "fake-passphrase"
+
+    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+    monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main.cli, ["backup", "run", "--path", str(tmp_path), "--no-json"])
+
+    assert result.exit_code == 0
+    assert len(captured_options) == 1
+
+    options = captured_options[0]
+    assert isinstance(options, BackupOptions)
+    assert options.json_output is False
+    assert render_calls == []
+
+
+def test_backup_run_default_fetches_stats_and_renders_table(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured_options: list[BackupOptions | None] = []
+    archive_info_calls: list[tuple[str, str, str | None]] = []
+    render_calls: list[tuple[object, ...]] = []
+    archive_info_result = object()
+
+    class _FakeBorgClient:
+        def archive_info(self, repo_path: str, archive_name: str, passphrase: str | None = None) -> object:
+            archive_info_calls.append((repo_path, archive_name, passphrase))
+            return archive_info_result
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+            self.borg = _FakeBorgClient()
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            _ = name
+            return SimpleNamespace(path=path)
+
+        def backup(
+            self,
+            repo: object,
+            passphrase: str | None = None,
+            options: BackupOptions | None = None,
+        ) -> str:
+            _ = (repo, passphrase)
+            captured_options.append(options)
+            return "archive-2026-02-23"
+
+        def resolve_passphrase(self, repo: object, passphrase: str | None = None) -> str:
+            _ = (repo, passphrase)
+            return "resolved-passphrase"
+
+    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+    monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main.cli, ["backup", "run", "--path", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert captured_options == [None]
+    assert archive_info_calls == [(str(tmp_path), "archive-2026-02-23", "resolved-passphrase")]
+    assert render_calls == [(str(tmp_path), archive_info_result)]

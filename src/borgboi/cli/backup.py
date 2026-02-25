@@ -5,6 +5,7 @@ from rich.table import Table
 
 from borgboi.cli.main import BorgBoiContext, pass_context
 from borgboi.clients.borg import ArchiveInfo
+from borgboi.core.models import BackupOptions
 from borgboi.lib import utils
 from borgboi.rich_utils import console
 
@@ -67,23 +68,32 @@ def backup() -> None:
 @click.option("--path", "-p", type=click.Path(exists=True), help="Repository path")
 @click.option("--name", "-n", type=str, help="Repository name")
 @click.option("--passphrase", type=str, default=None, help="Passphrase override")
+@click.option("--no-json", is_flag=True, help="Disable JSON logging; stream Borg's native output")
 @pass_context
-def backup_run(ctx: BorgBoiContext, path: str | None, name: str | None, passphrase: str | None) -> None:
+def backup_run(ctx: BorgBoiContext, path: str | None, name: str | None, passphrase: str | None, no_json: bool) -> None:
     """Create a new backup archive."""
     try:
         repo = ctx.orchestrator.get_repo(name=name, path=path)
-        archive_name = ctx.orchestrator.backup(repo, passphrase=passphrase)
 
-        try:
-            resolved_passphrase = ctx.orchestrator.resolve_passphrase(repo, passphrase)
-            archive_info = ctx.orchestrator.borg.archive_info(
-                repo.path,
-                archive_name,
-                passphrase=resolved_passphrase,
-            )
-            _render_archive_stats_table(repo.path, archive_info)
-        except Exception as stats_error:
-            console.print(f"[bold yellow]Warning:[/] Backup succeeded, but stats could not be rendered: {stats_error}")
+        options: BackupOptions | None = None
+        if no_json:
+            options = BackupOptions(json_output=False, compression=ctx.config.borg.compression)
+
+        archive_name = ctx.orchestrator.backup(repo, passphrase=passphrase, options=options)
+
+        if not no_json:
+            try:
+                resolved_passphrase = ctx.orchestrator.resolve_passphrase(repo, passphrase)
+                archive_info = ctx.orchestrator.borg.archive_info(
+                    repo.path,
+                    archive_name,
+                    passphrase=resolved_passphrase,
+                )
+                _render_archive_stats_table(repo.path, archive_info)
+            except Exception as stats_error:
+                console.print(
+                    f"[bold yellow]Warning:[/] Backup succeeded, but stats could not be rendered: {stats_error}"
+                )
 
         console.print("[bold green]Backup completed successfully[/]")
     except Exception as e:
