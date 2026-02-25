@@ -1,3 +1,22 @@
+## v1.15.1 (2026-02-25)
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Lock file maintenance (#182)
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **tofu-deps**: Lock file maintenance (#174)
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies (#184)
+
+
 ## v1.15.0 (2026-02-23)
 
 ### 🚀 Features
