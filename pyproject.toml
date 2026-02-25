@@ -34,6 +34,7 @@ dev = [
     "boto3-stubs[essential]>=1.35.92",
     "commitizen>=4.8.3",
     "git-cliff>=2.10.1",
+    "inline-snapshot>=0.32.3",
     "moto[dynamodb,iam,s3]>=5.0.26",
     "mypy[faster-cache]>=1.14.1",
     "prek>=0.3.2",
@@ -145,6 +146,9 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+
+[tool.inline-snapshot]
+format-command = "ruff format --stdin-filename {filename}"
 
 [tool.ty.rules]
 possibly-unresolved-reference = "warn"

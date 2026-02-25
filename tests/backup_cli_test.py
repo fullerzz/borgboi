@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from click.testing import CliRunner
+from inline_snapshot import snapshot
 
 from borgboi.cli.backup import _build_archive_stats_tables
 from borgboi.clients.borg import ArchiveInfo
@@ -57,33 +58,37 @@ def test_build_archive_stats_tables_includes_archive_and_cache_metrics() -> None
 
     summary_labels = list(summary_table.columns[0].cells)
     summary_values = list(summary_table.columns[1].cells)
-    assert summary_labels == [
-        "Repository",
-        "Archive name",
-        "Archive fingerprint",
-        "Time (start)",
-        "Time (end)",
-        "Duration",
-        "Number of files",
-    ]
-    assert summary_values == [
-        "/mnt/raid1/borg-backup-repos/samba-ser8",
-        "2026-02-22_00:02:27",
-        "b7fe3d5228c11fde30c5f36126f2fc3555b95f154f1f1c7e4802dd4e94795e88",
-        "Sat, 2026-02-21 17:02:27",
-        "Sat, 2026-02-21 17:02:27",
-        "0.06 seconds",
-        "64",
-    ]
+    assert summary_labels == snapshot(
+        [
+            "Repository",
+            "Archive name",
+            "Archive fingerprint",
+            "Time (start)",
+            "Time (end)",
+            "Duration",
+            "Number of files",
+        ]
+    )
+    assert summary_values == snapshot(
+        [
+            "/mnt/raid1/borg-backup-repos/samba-ser8",
+            "2026-02-22_00:02:27",
+            "b7fe3d5228c11fde30c5f36126f2fc3555b95f154f1f1c7e4802dd4e94795e88",
+            "Sat, 2026-02-21 17:02:27",
+            "Sat, 2026-02-21 17:02:27",
+            "0.06 seconds",
+            "64",
+        ]
+    )
 
     scope_cells = list(size_table.columns[0].cells)
     original_cells = list(size_table.columns[1].cells)
     compressed_cells = list(size_table.columns[2].cells)
     deduplicated_cells = list(size_table.columns[3].cells)
-    assert scope_cells == ["This archive", "All archives"]
-    assert original_cells == ["5.00 GB", "28.00 GB"]
-    assert compressed_cells == ["4.00 GB", "26.00 GB"]
-    assert deduplicated_cells == ["0 B", "5.00 GB"]
+    assert scope_cells == snapshot(["This archive", "All archives"])
+    assert original_cells == snapshot(["5.00 GB", "28.00 GB"])
+    assert compressed_cells == snapshot(["4.00 GB", "26.00 GB"])
+    assert deduplicated_cells == snapshot(["0 B", "5.00 GB"])
 
 
 def test_backup_options_default_includes_log_json() -> None:
