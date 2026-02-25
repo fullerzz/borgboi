@@ -201,3 +201,56 @@ def test_backup_run_default_fetches_stats_and_renders_table(
     assert captured_options == [None]
     assert archive_info_calls == [(str(tmp_path), "archive-2026-02-23", "resolved-passphrase")]
     assert render_calls == [(str(tmp_path), archive_info_result)]
+
+
+def test_backup_daily_accepts_repo_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    get_repo_calls: list[tuple[str | None, str | None]] = []
+    daily_backup_calls: list[tuple[object, str | None, bool]] = []
+    fake_repo = SimpleNamespace(name="daily-repo", path="/fake/repo")
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            get_repo_calls.append((name, path))
+            return fake_repo
+
+        def daily_backup(self, repo: object, passphrase: str | None = None, sync_to_s3: bool = True) -> None:
+            daily_backup_calls.append((repo, passphrase, sync_to_s3))
+
+    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main.cli, ["backup", "daily", "--name", "daily-repo"])
+
+    assert result.exit_code == 0
+    assert get_repo_calls == [("daily-repo", None)]
+    assert daily_backup_calls == [(fake_repo, None, True)]
+
+
+def test_backup_daily_name_respects_no_s3_sync_and_passphrase(monkeypatch: pytest.MonkeyPatch) -> None:
+    daily_backup_calls: list[tuple[object, str | None, bool]] = []
+    fake_repo = SimpleNamespace(name="daily-repo", path="/fake/repo")
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            _ = (name, path)
+            return fake_repo
+
+        def daily_backup(self, repo: object, passphrase: str | None = None, sync_to_s3: bool = True) -> None:
+            daily_backup_calls.append((repo, passphrase, sync_to_s3))
+
+    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main.cli,
+        ["backup", "daily", "--name", "daily-repo", "--passphrase", "cli-passphrase", "--no-s3-sync"],
+    )
+
+    assert result.exit_code == 0
+    assert daily_backup_calls == [(fake_repo, "cli-passphrase", False)]

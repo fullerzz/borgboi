@@ -102,11 +102,14 @@ Usage: bb backup daily [OPTIONS]
   Perform daily backup with prune and compact.
 
 Options:
-  -p, --path PATH      Repository path  [required]
+  -p, --path PATH      Repository path
+  -n, --name TEXT      Repository name
   --passphrase TEXT    Passphrase override
   --no-s3-sync         Skip S3 sync after backup
 
 ```
+
+Provide either `--path` or `--name` to select the repository.
 
 ### `backup list`
 
