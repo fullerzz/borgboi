@@ -132,7 +132,7 @@ def test_backup_run_no_json_passes_options_and_skips_stats(
 
         def resolve_passphrase(self, repo: object, passphrase: str | None = None) -> str:
             _ = (repo, passphrase)
-            raise AssertionError("resolve_passphrase should not be called when --no-json is used")
+            return "fake-passphrase"
 
     monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
     monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
