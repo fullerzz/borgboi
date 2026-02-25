@@ -29,7 +29,7 @@ bb repo create --path /opt/borg-repos/docs \
     --name my-docs-backup
 
 # Run a daily backup
-bb backup daily --path /opt/borg-repos/docs
+bb backup daily --name my-docs-backup
 
 # List all repositories
 bb repo list

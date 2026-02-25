@@ -102,11 +102,14 @@ Usage: bb backup daily [OPTIONS]
   Perform daily backup with prune and compact.
 
 Options:
-  -p, --path PATH      Repository path  [required]
+  -p, --path PATH      Repository path
+  -n, --name TEXT      Repository name
   --passphrase TEXT    Passphrase override
   --no-s3-sync         Skip S3 sync after backup
 
 ```
+
+Provide either `--path` or `--name` to select the repository.
 
 ### `backup list`
 
@@ -209,19 +212,6 @@ Usage: bb s3 delete [OPTIONS]
 Options:
   -n, --name TEXT      Repository name  [required]
   --dry-run            Simulate deletion without making changes
-
-```
-
-### `s3 stats`
-
-```text
-Usage: bb s3 stats
-
-  Show general S3 bucket storage metrics and class composition.
-
-  Displays total bucket size, total object count, and a storage class breakdown
-  including Intelligent-Tiering tiers (FA/IA/AIA/AA/DAA) when available.
-  Values are sourced from AWS/S3 CloudWatch daily storage metrics.
 
 ```
 

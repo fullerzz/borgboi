@@ -143,10 +143,10 @@ bb create-repo --repo-path /opt/borg-repos/docs \
 Run a daily backup with automatic pruning and compaction:
 
 ```sh
-bb backup daily --path /opt/borg-repos/docs
+bb backup daily --name my-docs-backup
 ```
 
-This command creates a new archive, prunes old archives based on retention policy, compacts the repository, and syncs to S3 (unless `--no-s3-sync` is specified or running in offline mode).
+This command creates a new archive, prunes old archives based on retention policy, compacts the repository, and syncs to S3 (unless `--no-s3-sync` is specified or running in offline mode). You can also target the repository with `--path`.
 
 ## List Your Repositories
 

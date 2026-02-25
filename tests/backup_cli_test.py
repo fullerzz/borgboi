@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from click.testing import CliRunner
+from inline_snapshot import snapshot
 
 from borgboi.cli.backup import _build_archive_stats_tables
 from borgboi.clients.borg import ArchiveInfo
@@ -57,33 +58,37 @@ def test_build_archive_stats_tables_includes_archive_and_cache_metrics() -> None
 
     summary_labels = list(summary_table.columns[0].cells)
     summary_values = list(summary_table.columns[1].cells)
-    assert summary_labels == [
-        "Repository",
-        "Archive name",
-        "Archive fingerprint",
-        "Time (start)",
-        "Time (end)",
-        "Duration",
-        "Number of files",
-    ]
-    assert summary_values == [
-        "/mnt/raid1/borg-backup-repos/samba-ser8",
-        "2026-02-22_00:02:27",
-        "b7fe3d5228c11fde30c5f36126f2fc3555b95f154f1f1c7e4802dd4e94795e88",
-        "Sat, 2026-02-21 17:02:27",
-        "Sat, 2026-02-21 17:02:27",
-        "0.06 seconds",
-        "64",
-    ]
+    assert summary_labels == snapshot(
+        [
+            "Repository",
+            "Archive name",
+            "Archive fingerprint",
+            "Time (start)",
+            "Time (end)",
+            "Duration",
+            "Number of files",
+        ]
+    )
+    assert summary_values == snapshot(
+        [
+            "/mnt/raid1/borg-backup-repos/samba-ser8",
+            "2026-02-22_00:02:27",
+            "b7fe3d5228c11fde30c5f36126f2fc3555b95f154f1f1c7e4802dd4e94795e88",
+            "Sat, 2026-02-21 17:02:27",
+            "Sat, 2026-02-21 17:02:27",
+            "0.06 seconds",
+            "64",
+        ]
+    )
 
     scope_cells = list(size_table.columns[0].cells)
     original_cells = list(size_table.columns[1].cells)
     compressed_cells = list(size_table.columns[2].cells)
     deduplicated_cells = list(size_table.columns[3].cells)
-    assert scope_cells == ["This archive", "All archives"]
-    assert original_cells == ["5.00 GB", "28.00 GB"]
-    assert compressed_cells == ["4.00 GB", "26.00 GB"]
-    assert deduplicated_cells == ["0 B", "5.00 GB"]
+    assert scope_cells == snapshot(["This archive", "All archives"])
+    assert original_cells == snapshot(["5.00 GB", "28.00 GB"])
+    assert compressed_cells == snapshot(["4.00 GB", "26.00 GB"])
+    assert deduplicated_cells == snapshot(["0 B", "5.00 GB"])
 
 
 def test_backup_options_default_includes_log_json() -> None:
@@ -196,3 +201,75 @@ def test_backup_run_default_fetches_stats_and_renders_table(
     assert captured_options == [None]
     assert archive_info_calls == [(str(tmp_path), "archive-2026-02-23", "resolved-passphrase")]
     assert render_calls == [(str(tmp_path), archive_info_result)]
+
+
+def test_backup_daily_accepts_repo_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    get_repo_calls: list[tuple[str | None, str | None]] = []
+    daily_backup_calls: list[tuple[object, str | None, bool]] = []
+    fake_repo = SimpleNamespace(name="daily-repo", path="/fake/repo")
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            get_repo_calls.append((name, path))
+            return fake_repo
+
+        def daily_backup(self, repo: object, passphrase: str | None = None, sync_to_s3: bool = True) -> None:
+            daily_backup_calls.append((repo, passphrase, sync_to_s3))
+
+    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main.cli, ["backup", "daily", "--name", "daily-repo"])
+
+    assert result.exit_code == 0
+    assert get_repo_calls == [("daily-repo", None)]
+    assert daily_backup_calls == [(fake_repo, None, True)]
+
+
+def test_backup_daily_name_respects_no_s3_sync_and_passphrase(monkeypatch: pytest.MonkeyPatch) -> None:
+    daily_backup_calls: list[tuple[object, str | None, bool]] = []
+    fake_repo = SimpleNamespace(name="daily-repo", path="/fake/repo")
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            _ = (name, path)
+            return fake_repo
+
+        def daily_backup(self, repo: object, passphrase: str | None = None, sync_to_s3: bool = True) -> None:
+            daily_backup_calls.append((repo, passphrase, sync_to_s3))
+
+    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main.cli,
+        ["backup", "daily", "--name", "daily-repo", "--passphrase", "cli-passphrase", "--no-s3-sync"],
+    )
+
+    assert result.exit_code == 0
+    assert daily_backup_calls == [(fake_repo, "cli-passphrase", False)]
+
+
+def test_backup_daily_rejects_neither_name_nor_path() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli_main.cli, ["backup", "daily"])
+
+    assert result.exit_code != 0
+    assert "Provide either --name or --path" in result.output
+
+
+def test_backup_daily_rejects_both_name_and_path(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main.cli,
+        ["backup", "daily", "--name", "my-repo", "--path", str(tmp_path)],
+    )
+
+    assert result.exit_code != 0
+    assert "mutually exclusive" in result.output

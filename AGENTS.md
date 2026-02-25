@@ -141,6 +141,7 @@ network is blocked by default (`--disable-socket`), and `just test` removes `pri
 - Use `moto` for AWS interactions; do not use real AWS in tests.
 - Add regression tests for bug fixes.
 - Prefer colocated tests by feature area rather than large generic test files.
+- Use `inline-snapshot` `snapshot()` for tests asserting against large structured or formatted expected values. Run `just snapshot-review` to update; see `just snapshot-create`, `just snapshot-fix`, `just snapshot-trim`, `just snapshot-update` for targeted workflows.
 
 ## Commit and PR Expectations
 

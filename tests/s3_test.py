@@ -7,6 +7,7 @@ from typing import Literal, cast, override
 
 import pytest
 from botocore.exceptions import ClientError
+from inline_snapshot import snapshot
 
 from borgboi.clients import s3
 from borgboi.config import AWSConfig, Config
@@ -358,11 +359,21 @@ def test_get_bucket_stats_includes_inventory_based_upcoming_transitions(monkeypa
 
     stats = s3.get_bucket_stats(cfg=cfg)
 
-    assert stats.intelligent_tiering_forecast is not None
-    assert stats.intelligent_tiering_forecast.available
-    assert stats.intelligent_tiering_forecast.inventory_configuration_id == "entire-bucket"
-    assert stats.intelligent_tiering_forecast.objects_transitioning_next_week == 1
-    assert stats.intelligent_tiering_forecast.size_bytes_transitioning_next_week == 1024**3
+    forecast = stats.intelligent_tiering_forecast
+    assert forecast is not None
+    assert {
+        "available": forecast.available,
+        "inventory_configuration_id": forecast.inventory_configuration_id,
+        "objects_transitioning_next_week": forecast.objects_transitioning_next_week,
+        "size_bytes_transitioning_next_week": forecast.size_bytes_transitioning_next_week,
+    } == snapshot(
+        {
+            "available": True,
+            "inventory_configuration_id": "entire-bucket",
+            "objects_transitioning_next_week": 1,
+            "size_bytes_transitioning_next_week": 1073741824,
+        }
+    )
 
 
 def test_get_bucket_stats_inventory_forecast_falls_back_to_last_modified_when_last_access_missing(
@@ -431,10 +442,19 @@ def test_get_bucket_stats_inventory_forecast_falls_back_to_last_modified_when_la
 
     stats = s3.get_bucket_stats(cfg=cfg)
 
-    assert stats.intelligent_tiering_forecast is not None
-    assert stats.intelligent_tiering_forecast.available
-    assert stats.intelligent_tiering_forecast.objects_transitioning_next_week == 1
-    assert stats.intelligent_tiering_forecast.size_bytes_transitioning_next_week == 1024**3
+    forecast = stats.intelligent_tiering_forecast
+    assert forecast is not None
+    assert {
+        "available": forecast.available,
+        "objects_transitioning_next_week": forecast.objects_transitioning_next_week,
+        "size_bytes_transitioning_next_week": forecast.size_bytes_transitioning_next_week,
+    } == snapshot(
+        {
+            "available": True,
+            "objects_transitioning_next_week": 1,
+            "size_bytes_transitioning_next_week": 1073741824,
+        }
+    )
 
 
 def test_get_bucket_stats_inventory_forecast_streams_inventory_objects(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -504,10 +524,19 @@ def test_get_bucket_stats_inventory_forecast_streams_inventory_objects(monkeypat
 
     stats = s3.get_bucket_stats(cfg=cfg)
 
-    assert stats.intelligent_tiering_forecast is not None
-    assert stats.intelligent_tiering_forecast.available
-    assert stats.intelligent_tiering_forecast.objects_transitioning_next_week == 1
-    assert stats.intelligent_tiering_forecast.size_bytes_transitioning_next_week == 1024**3
+    forecast = stats.intelligent_tiering_forecast
+    assert forecast is not None
+    assert {
+        "available": forecast.available,
+        "objects_transitioning_next_week": forecast.objects_transitioning_next_week,
+        "size_bytes_transitioning_next_week": forecast.size_bytes_transitioning_next_week,
+    } == snapshot(
+        {
+            "available": True,
+            "objects_transitioning_next_week": 1,
+            "size_bytes_transitioning_next_week": 1073741824,
+        }
+    )
 
 
 def test_get_bucket_stats_inventory_forecast_kms_access_denied_shows_actionable_guidance(
@@ -577,7 +606,7 @@ def test_get_bucket_stats_inventory_forecast_kms_access_denied_shows_actionable_
 
     assert stats.intelligent_tiering_forecast is not None
     assert not stats.intelligent_tiering_forecast.available
-    assert stats.intelligent_tiering_forecast.unavailable_reason == (
+    assert stats.intelligent_tiering_forecast.unavailable_reason == snapshot(
         "Missing KMS permissions for S3 Inventory objects. "
         "Grant kms:Decrypt (and kms:DescribeKey) in the inventory bucket region and allow this principal "
         "in the KMS key policy."
@@ -652,9 +681,12 @@ def test_get_bucket_stats_inventory_forecast_access_denied_preserves_denied_acti
 
     assert stats.intelligent_tiering_forecast is not None
     assert not stats.intelligent_tiering_forecast.available
-    assert stats.intelligent_tiering_forecast.unavailable_reason is not None
-    assert "Access denied while reading S3 Inventory metadata." in stats.intelligent_tiering_forecast.unavailable_reason
-    assert "kms:DescribeKey" in stats.intelligent_tiering_forecast.unavailable_reason
+    assert stats.intelligent_tiering_forecast.unavailable_reason == snapshot(
+        "Access denied while reading S3 Inventory metadata. "
+        "Ensure this principal can list/get inventory objects and decrypt them when SSE-KMS is enabled. "
+        "AWS error details: AccessDenied: User is not authorized to perform: kms:DescribeKey on resource "
+        "arn:aws:kms:us-east-1:111122223333:key/example"
+    )
 
 
 def test_get_bucket_stats_wraps_cloudwatch_errors(monkeypatch: pytest.MonkeyPatch) -> None:

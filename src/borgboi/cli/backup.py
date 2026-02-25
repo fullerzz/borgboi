@@ -102,14 +102,25 @@ def backup_run(ctx: BorgBoiContext, path: str | None, name: str | None, passphra
 
 
 @backup.command("daily")
-@click.option("--path", "-p", required=True, type=click.Path(exists=True), help="Repository path")
+@click.option("--path", "-p", type=click.Path(exists=True), help="Repository path")
+@click.option("--name", "-n", type=str, help="Repository name")
 @click.option("--passphrase", type=str, default=None, help="Passphrase override")
 @click.option("--no-s3-sync", is_flag=True, help="Skip S3 sync after backup")
 @pass_context
-def backup_daily(ctx: BorgBoiContext, path: str, passphrase: str | None, no_s3_sync: bool) -> None:
+def backup_daily(
+    ctx: BorgBoiContext,
+    path: str | None,
+    name: str | None,
+    passphrase: str | None,
+    no_s3_sync: bool,
+) -> None:
     """Perform daily backup with prune and compact."""
+    if not name and not path:
+        raise click.UsageError("Provide either --name or --path to select a repository.")
+    if name and path:
+        raise click.UsageError("--name and --path are mutually exclusive; provide only one.")
     try:
-        repo = ctx.orchestrator.get_repo(path=path)
+        repo = ctx.orchestrator.get_repo(name=name, path=path)
         ctx.orchestrator.daily_backup(repo, passphrase=passphrase, sync_to_s3=not no_s3_sync)
         console.print("[bold green]Daily backup completed successfully[/]")
     except Exception as e:

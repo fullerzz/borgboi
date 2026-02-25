@@ -62,3 +62,23 @@ changelog-unreleased:
 # validate renovate config
 validate-renovate:
     bunx --yes --package renovate -- renovate-config-validator
+
+# interactively review and approve snapshot changes
+snapshot-review *args:
+    uv run pytest --inline-snapshot=review {{ args }}
+
+# fill empty snapshot() placeholders with recorded values
+snapshot-create *args:
+    uv run pytest --inline-snapshot=create {{ args }}
+
+# create missing snapshots and update changed values
+snapshot-fix *args:
+    uv run pytest --inline-snapshot=create,fix {{ args }}
+
+# trim unused snapshot data (prefer full-suite runs)
+snapshot-trim *args:
+    uv run pytest --inline-snapshot=trim {{ args }}
+
+# update snapshot repr formatting without value changes
+snapshot-update *args:
+    uv run pytest --inline-snapshot=update {{ args }}

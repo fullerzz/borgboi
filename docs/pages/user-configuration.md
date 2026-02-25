@@ -220,7 +220,7 @@ bb config show
 
 ```sh
 # One-off command-level override (without exporting)
-BORGBOI_BORG__COMPRESSION=zstd,9 bb backup daily --path /opt/borg-repos/docs
+BORGBOI_BORG__COMPRESSION=zstd,9 bb backup daily --name my-docs-backup
 ```
 
 ## Validation and Warnings
