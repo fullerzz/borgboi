@@ -115,6 +115,10 @@ def backup_daily(
     no_s3_sync: bool,
 ) -> None:
     """Perform daily backup with prune and compact."""
+    if not name and not path:
+        raise click.UsageError("Provide either --name or --path to select a repository.")
+    if name and path:
+        raise click.UsageError("--name and --path are mutually exclusive; provide only one.")
     try:
         repo = ctx.orchestrator.get_repo(name=name, path=path)
         ctx.orchestrator.daily_backup(repo, passphrase=passphrase, sync_to_s3=not no_s3_sync)

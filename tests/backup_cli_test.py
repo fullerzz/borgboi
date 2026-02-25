@@ -254,3 +254,22 @@ def test_backup_daily_name_respects_no_s3_sync_and_passphrase(monkeypatch: pytes
 
     assert result.exit_code == 0
     assert daily_backup_calls == [(fake_repo, "cli-passphrase", False)]
+
+
+def test_backup_daily_rejects_neither_name_nor_path() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli_main.cli, ["backup", "daily"])
+
+    assert result.exit_code != 0
+    assert "Provide either --name or --path" in result.output
+
+
+def test_backup_daily_rejects_both_name_and_path(tmp_path: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main.cli,
+        ["backup", "daily", "--name", "my-repo", "--path", str(tmp_path)],
+    )
+
+    assert result.exit_code != 0
+    assert "mutually exclusive" in result.output
