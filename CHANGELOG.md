@@ -1,3 +1,10 @@
+## v1.16.0 (2026-02-25)
+
+### 🚀 Features
+
+- **backup**: Add `--no-json` Flag for Native Borg Output (#185)
+
+
 ## v1.15.1 (2026-02-25)
 
 ### 🐛 Bug Fixes
