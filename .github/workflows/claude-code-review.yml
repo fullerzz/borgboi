@@ -44,4 +44,4 @@ jobs:
           track_progress: true
           include_fix_links: true
           claude_args: |
-            --model anthropic/claude-opus-4-5-20251101
+            --model claude-opus-4-6
