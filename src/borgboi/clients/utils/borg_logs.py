@@ -1,11 +1,12 @@
 from collections.abc import Generator, Iterable
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
 
 class ArchiveProgress(BaseModel):
+    type: Literal["archive_progress"] = "archive_progress"
     original_size: int | None = None
     compressed_size: int | None = None
     deduplicated_size: int | None = None
@@ -16,6 +17,7 @@ class ArchiveProgress(BaseModel):
 
 
 class ProgressMessage(BaseModel):
+    type: Literal["progress_message"] = "progress_message"
     operation: int
     msgid: str | None
     finished: bool
@@ -24,6 +26,7 @@ class ProgressMessage(BaseModel):
 
 
 class ProgressPercent(BaseModel):
+    type: Literal["progress_percent"] = "progress_percent"
     operation: int
     msgid: str | None
     finished: bool
@@ -35,11 +38,13 @@ class ProgressPercent(BaseModel):
 
 
 class FileStatus(BaseModel):
+    type: Literal["file_status"] = "file_status"
     status: str
     path: str
 
 
 class LogMessage(BaseModel):
+    type: Literal["log_message"] = "log_message"
     time: datetime
     levelname: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
     name: str
@@ -47,26 +52,25 @@ class LogMessage(BaseModel):
     msgid: str | None = None
 
 
-type BorgLogEvent = ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus
+BorgLogEvent = Annotated[
+    ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus,
+    Field(discriminator="type"),
+]
 
 _JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, Any])
+_TYPED_EVENT_ADAPTER: TypeAdapter[ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus] = (
+    TypeAdapter(BorgLogEvent)
+)
 
 
-def _parse_by_type(payload: dict[str, Any]) -> BorgLogEvent | None:
-    event_type = payload.get("type")
-    if event_type == "archive_progress":
-        return ArchiveProgress.model_validate(payload)
-    if event_type == "progress_message":
-        if "current" in payload or "total" in payload:
-            return ProgressPercent.model_validate(payload)
-        return ProgressMessage.model_validate(payload)
-    if event_type == "progress_percent":
-        return ProgressPercent.model_validate(payload)
-    if event_type == "file_status":
-        return FileStatus.model_validate(payload)
-    if event_type == "log_message":
-        return LogMessage.model_validate(payload)
-    return None
+def _is_unknown_union_tag_error(exc: ValidationError) -> bool:
+    return any(error.get("type") == "union_tag_invalid" for error in exc.errors())
+
+
+def _normalize_payload_type(payload: dict[str, Any]) -> None:
+    """Borg sends type=progress_message for payloads that are semantically ProgressPercent."""
+    if payload.get("type") == "progress_message" and ("current" in payload or "total" in payload):
+        payload["type"] = "progress_percent"
 
 
 def _parse_by_shape(payload: dict[str, Any]) -> BorgLogEvent:
@@ -88,9 +92,15 @@ def _parse_by_shape(payload: dict[str, Any]) -> BorgLogEvent:
 def parse_borg_log_line(log_line: str) -> BorgLogEvent:
     """Parse a Borg JSON log line into a strongly typed event model."""
     payload = _JSON_OBJECT_ADAPTER.validate_json(log_line)
-    parsed_by_type = _parse_by_type(payload)
-    if parsed_by_type is not None:
-        return parsed_by_type
+    if "type" in payload:
+        _normalize_payload_type(payload)
+        try:
+            return _TYPED_EVENT_ADAPTER.validate_python(payload)
+        except ValidationError as exc:
+            if _is_unknown_union_tag_error(exc):
+                payload_without_type = {key: value for key, value in payload.items() if key != "type"}
+                return _parse_by_shape(payload_without_type)
+            raise
     return _parse_by_shape(payload)
 
 

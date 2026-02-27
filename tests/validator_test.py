@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from borgboi.clients.utils.borg_logs import ArchiveProgress, FileStatus, LogMessage
+from borgboi.clients.utils.borg_logs import (
+    ArchiveProgress,
+    FileStatus,
+    LogMessage,
+    ProgressMessage,
+    ProgressPercent,
+)
 from borgboi.models import BorgBoiRepo
 from borgboi.validator import (
     exclude_list_created,
@@ -209,3 +215,61 @@ class TestValidLine:
         assert valid_line(lines, 1) is True
         assert valid_line(lines, 0) is False
         assert valid_line(lines, 2) is False
+
+
+class TestDiscriminatedUnion:
+    """Test discriminated union routing for typed Borg log payloads."""
+
+    def test_archive_progress_by_type(self) -> None:
+        log_json = '{"type": "archive_progress", "original_size": 1000, "compressed_size": 500, "deduplicated_size": 300, "nfiles": 10, "path": "/test", "time": 1234567890.0, "finished": false}'
+        result = parse_log(log_json)
+        assert isinstance(result, ArchiveProgress)
+        assert result.original_size == 1000
+
+    def test_progress_message_by_type(self) -> None:
+        log_json = '{"type": "progress_message", "operation": 1, "msgid": null, "finished": false, "message": "Reading files", "time": 1234567890.0}'
+        result = parse_log(log_json)
+        assert isinstance(result, ProgressMessage)
+        assert result.message == "Reading files"
+
+    def test_progress_percent_by_type(self) -> None:
+        log_json = '{"type": "progress_percent", "operation": 1, "msgid": null, "finished": false, "current": 50, "total": 100, "time": 1234567890.0}'
+        result = parse_log(log_json)
+        assert isinstance(result, ProgressPercent)
+        assert result.current == 50
+        assert result.total == 100
+
+    def test_file_status_by_type(self) -> None:
+        log_json = '{"type": "file_status", "status": "A", "path": "/var/data/file.txt"}'
+        result = parse_log(log_json)
+        assert isinstance(result, FileStatus)
+        assert result.status == "A"
+
+    def test_log_message_by_type(self) -> None:
+        log_json = (
+            '{"type": "log_message", "time": 1234567890.0, "levelname": "INFO", "name": "borg", "message": "Done"}'
+        )
+        result = parse_log(log_json)
+        assert isinstance(result, LogMessage)
+        assert result.message == "Done"
+
+    def test_progress_message_with_current_total_becomes_percent(self) -> None:
+        """Borg sends type=progress_message for payloads with current/total; should normalize to ProgressPercent."""
+        log_json = '{"type": "progress_message", "operation": 1, "msgid": null, "finished": false, "current": 25, "total": 200, "time": 1234567890.0}'
+        result = parse_log(log_json)
+        assert isinstance(result, ProgressPercent)
+        assert result.current == 25
+        assert result.total == 200
+
+    def test_unknown_type_falls_back_to_shape(self) -> None:
+        log_json = (
+            '{"type": "unknown_event", "time": 1234567890.0, "levelname": "INFO", "name": "borg", "message": "Done"}'
+        )
+        result = parse_log(log_json)
+        assert isinstance(result, LogMessage)
+        assert result.message == "Done"
+
+    def test_unknown_type_with_unknown_shape_raises_validation_error(self) -> None:
+        log_json = '{"type": "unknown_event", "foo": "bar"}'
+        with pytest.raises(ValidationError):
+            parse_log(log_json)
