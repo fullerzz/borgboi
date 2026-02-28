@@ -1,3 +1,18 @@
+## v1.17.1 (2026-02-28)
+
+### 🐛 Bug Fixes
+
+- **output**: Render borg JSON logs as readable rich messages (#189)
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies (#186)
+
+- **claude-code-review**: Specify model as claude-opus-4-6
+
+
 ## v1.17.0 (2026-02-25)
 
 ### 🚀 Features
