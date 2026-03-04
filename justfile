@@ -50,9 +50,9 @@ tflint:
     cd terraform && tflint --init
     tflint --recursive --color
 
-# run mkdocs local server
+# run zensical local server
 serve-docs:
-    uv run mkdocs serve
+    uv run zensical serve
 
 # generate unreleased changelog with git-cliff
 changelog-unreleased:
