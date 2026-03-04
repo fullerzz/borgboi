@@ -1,3 +1,32 @@
+## v1.17.2 (2026-03-04)
+
+### 🐛 Bug Fixes
+
+- Support `bb version` command
+
+- **python-deps**: Lock file maintenance (#193)
+
+
+
+### 💼 Other
+
+- Merge pull request #195 from fullerzz/dev
+
+Dependency Upgrades + Support `bb version` Command
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Update terraform aws to ~> 6.0 (#191)
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies (#190)
+
+
 ## v1.17.1 (2026-02-28)
 
 ### 🐛 Bug Fixes
