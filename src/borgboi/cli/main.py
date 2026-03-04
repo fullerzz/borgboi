@@ -3,6 +3,7 @@
 This module provides the top-level CLI group and common options.
 """
 
+from importlib.metadata import version as get_version
 from typing import Any
 
 import click
@@ -78,6 +79,12 @@ def cli(ctx: click.Context, offline: bool, debug: bool) -> None:
     are still available as top-level commands.
     """
     ctx.obj = BorgBoiContext(offline=offline, debug=debug)
+
+
+@cli.command()
+def version() -> None:
+    """Display the installed borgboi version."""
+    click.echo(f"borgboi {get_version('borgboi')}")
 
 
 def _register_commands() -> None:
