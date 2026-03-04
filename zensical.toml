@@ -22,12 +22,18 @@ variant = "modern"
 favicon = "images/favicon.ico"
 features = [
     "navigation.instant",
+    "navigation.instant.prefetch",
     "navigation.instant.progress",
     "navigation.tracking",
     "navigation.expand",
     "navigation.path",
     "navigation.top",
+    "navigation.footer",
     "toc.follow",
+    "search.highlight",
+    "content.code.copy",
+    "content.code.annotate",
+    "content.tabs.link",
 ]
 
 [project.theme.icon]
@@ -42,15 +48,15 @@ toggle.name = "Switch to light mode"
 media = "(prefers-color-scheme: light)"
 scheme = "default"
 primary = "teal"
-accent = "pink"
+accent = "blue grey"
 toggle.icon = "material/toggle-switch"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
-primary = "black"
-accent = "deep orange"
+primary = "indigo"
+accent = "blue grey"
 toggle.icon = "material/toggle-switch-off-outline"
 toggle.name = "Switch to light mode"
 
