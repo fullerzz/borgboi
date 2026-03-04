@@ -48,7 +48,9 @@ dev = [
     "ty>=0.0.1a12",
     "types-pyyaml>=6.0.12",
 ]
-docs = ["mkdocs-glightbox>=0.4.0", "mkdocs-material>=9.6.6"]
+docs = [
+    "zensical>=0.0.24",
+]
 
 [tool.uv]
 default-groups = ["dev", "docs"]
