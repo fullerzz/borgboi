@@ -1,3 +1,50 @@
+## v1.17.3 (2026-03-07)
+
+### 🐛 Bug Fixes
+
+- Reuse rich output handler for command rendering
+
+- Preserve legacy output handler fallback
+
+
+
+### 💼 Other
+
+- Merge pull request #201 from fullerzz/dev
+
+Refresh README and Improve Output Streaming for Archive Creation
+
+
+
+### 🚜 Refactor
+
+- Unify borg backup output streaming
+
+
+
+### 📚 Documentation
+
+- Migrate to Zensical for Project Documentation (#197)
+
+- **README.md**: Refresh readme
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Update terraform aws to v6.35.1 (#199)
+
+- Resolve mypy violations in test file
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Pin dependencies (#196)
+
+- **ci-deps**: Update ci dependencies (#198)
+
+
 ## v1.17.2 (2026-03-04)
 
 ### 🐛 Bug Fixes
