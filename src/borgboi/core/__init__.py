@@ -22,6 +22,7 @@ from borgboi.core.models import (
     RetentionPolicy,
 )
 from borgboi.core.output import (
+    BaseOutputHandler,
     CollectingOutputHandler,
     DefaultOutputHandler,
     OutputHandler,
@@ -48,6 +49,7 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     "BackupOptions",
+    "BaseOutputHandler",
     "BorgBoiError",
     "BorgError",
     "BorgExitCode",

@@ -158,14 +158,15 @@ def render_cmd_output_lines(
     Returns:
         None
     """
-    console.rule(f"[bold {TEXT_COLOR}]{status}[/]", style=ruler_color)
+    from borgboi.core.output import DefaultOutputHandler
 
-    with console.status(status=f"[bold {COLOR_HEX.blue}]{status}[/]", spinner=spinner):
-        for log in log_stream:
-            print(log, end="")  # noqa: T201
-
-    console.rule(f":heavy_check_mark: [bold {TEXT_COLOR}]{success_msg}[/]", style=ruler_color)
-    console.print("")
+    DefaultOutputHandler().render_command(
+        status,
+        success_msg,
+        log_stream,
+        spinner=spinner,
+        ruler_color=ruler_color,
+    )
 
 
 def render_excludes_file(excludes_file_path: str, lines_to_highlight: set[int] | None = None) -> None:

@@ -21,7 +21,7 @@ from borgboi.clients.borg import (
 from borgboi.config import BorgConfig, Config, get_config
 from borgboi.core.errors import BorgError, BorgExitCode
 from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
-from borgboi.core.output import DefaultOutputHandler, OutputHandler, SilentOutputHandler
+from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, SilentOutputHandler
 from borgboi.lib.utils import create_archive_name
 
 
@@ -40,7 +40,7 @@ class BorgClient:
     def __init__(
         self,
         executable_path: str | None = None,
-        output_handler: OutputHandler | None = None,
+        output_handler: BaseOutputHandler | None = None,
         config: BorgConfig | None = None,
     ) -> None:
         """Initialize BorgClient.
@@ -542,7 +542,7 @@ def create_borg_client(
         Configured BorgClient instance
     """
     cfg = config or get_config()
-    handler: OutputHandler = SilentOutputHandler() if silent else DefaultOutputHandler()
+    handler: BaseOutputHandler = SilentOutputHandler() if silent else DefaultOutputHandler()
     return BorgClient(
         output_handler=handler,
         config=cfg.borg,
