@@ -1,7 +1,8 @@
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from platform import system
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import Mock
 
 import pytest
@@ -30,6 +31,7 @@ class RecordingOutputHandler(CollectingOutputHandler):
         super().__init__()
         self.render_calls: list[dict[str, Any]] = []
 
+    @override
     def render_command(
         self,
         status: str,
@@ -81,7 +83,7 @@ class LegacyOutputHandler:
         _ = stats
 
     @contextmanager
-    def section(self, status: str, success_msg: str):
+    def section(self, status: str, success_msg: str) -> Generator[None, Any]:
         _ = status, success_msg
         yield
 
