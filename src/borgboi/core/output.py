@@ -4,6 +4,8 @@ This module provides abstractions for handling output from Borg commands,
 allowing for flexible output processing (console, logging, silent, etc.).
 """
 
+from collections.abc import Generator, Iterable
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from typing import Any, Protocol
 
 from pydantic import ValidationError
@@ -32,11 +34,13 @@ def _humanize_msgid(msgid: str | None) -> str:
     return msgid.replace(".", " ").replace("_", " ").title()
 
 
-class OutputHandler(Protocol):
-    """Protocol for handling output from Borg operations.
+class BaseOutputHandler(Protocol):
+    """Compatibility protocol for Borg operation output handlers.
 
     Implementations can direct output to console, logs, files, or discard it entirely.
-    This enables flexible output handling across different contexts (CLI, tests, etc.).
+    This captures the pre-streaming handler contract so existing custom handlers that
+    only implement the `on_*` hooks can still be injected into orchestrators and
+    Borg clients.
     """
 
     def on_progress(self, current: int, total: int, info: str | None = None) -> None:
@@ -91,6 +95,85 @@ class OutputHandler(Protocol):
             stats: Statistics dictionary from Borg
         """
         ...
+
+
+class SectionOutputHandler(BaseOutputHandler, Protocol):
+    """Optional protocol for handlers that support section wrappers."""
+
+    def section(self, status: str, success_msg: str) -> AbstractContextManager[None]:
+        """Context manager wrapping a logical operation section.
+
+        Implementations may render visual decorations (rulers, spinners) around
+        the yielded block.  Non-interactive handlers should yield without side-effects.
+
+        Args:
+            status: Description of the operation shown while it runs
+            success_msg: Message displayed when the operation completes
+        """
+        ...
+
+
+class OutputHandler(BaseOutputHandler, Protocol):
+    """Extended output handler protocol with streaming command rendering.
+
+    Newer interactive handlers should implement this richer streaming hook.
+    Callers that need to support legacy handlers should use
+    `render_command_with_fallback()`.
+    """
+
+    def render_command(
+        self,
+        status: str,
+        success_msg: str,
+        log_stream: Iterable[str],
+        *,
+        spinner: str = "point",
+        ruler_color: str = "#74c7ec",
+    ) -> None:
+        """Render a streaming command operation.
+
+        Args:
+            status: Description of the operation shown while it runs
+            success_msg: Message displayed when the operation completes
+            log_stream: Iterable stream of command output lines
+            spinner: Rich spinner style for interactive handlers
+            ruler_color: Rich rule color for interactive handlers
+        """
+        ...
+
+
+def render_command_with_fallback(
+    output: BaseOutputHandler,
+    status: str,
+    success_msg: str,
+    log_stream: Iterable[str],
+    *,
+    spinner: str = "point",
+    ruler_color: str = "#74c7ec",
+) -> None:
+    """Render a command stream while supporting legacy output handlers.
+
+    If the handler implements `render_command()`, use it. Otherwise fall back to
+    the older `section()` plus `on_stderr()` streaming behavior when available,
+    or plain `on_stderr()` streaming for handlers that only implement `on_*`
+    methods.
+    """
+    render_command = getattr(output, "render_command", None)
+    if callable(render_command):
+        render_command(
+            status,
+            success_msg,
+            log_stream,
+            spinner=spinner,
+            ruler_color=ruler_color,
+        )
+        return
+
+    section = getattr(output, "section", None)
+    section_context = section(status, success_msg) if callable(section) else nullcontext()
+    with section_context:
+        for line in log_stream:
+            output.on_stderr(line)
 
 
 class DefaultOutputHandler:
@@ -247,6 +330,39 @@ class DefaultOutputHandler:
         for key, value in stats.items():
             self._console.print(f"  {key}: {value}")
 
+    def render_command(
+        self,
+        status: str,
+        success_msg: str,
+        log_stream: Iterable[str],
+        *,
+        spinner: str = "point",
+        ruler_color: str = "#74c7ec",
+    ) -> None:
+        """Render a streaming command with Rich status and parsed Borg output."""
+        from borgboi.lib.colors import COLOR_HEX
+        from borgboi.rich_utils import TEXT_COLOR
+
+        self._console.rule(f"[bold {TEXT_COLOR}]{status}[/]", style=ruler_color)
+        with self._console.status(status=f"[bold {COLOR_HEX.blue}]{status}[/]", spinner=spinner):
+            for line in log_stream:
+                self.on_stderr(line)
+        self._console.rule(f":heavy_check_mark: [bold {TEXT_COLOR}]{success_msg}[/]", style=ruler_color)
+        self._console.print("")
+
+    @contextmanager
+    def section(self, status: str, success_msg: str) -> Generator[None]:
+        """Render a Rich ruler + spinner around the yielded block."""
+        from borgboi.lib.colors import COLOR_HEX
+        from borgboi.rich_utils import TEXT_COLOR
+
+        ruler_color = "#74c7ec"
+        self._console.rule(f"[bold {TEXT_COLOR}]{status}[/]", style=ruler_color)
+        with self._console.status(status=f"[bold {COLOR_HEX.blue}]{status}[/]", spinner="point"):
+            yield
+        self._console.rule(f":heavy_check_mark: [bold {TEXT_COLOR}]{success_msg}[/]", style=ruler_color)
+        self._console.print("")
+
 
 class SilentOutputHandler:
     """Output handler that discards all output. Useful for testing."""
@@ -268,6 +384,25 @@ class SilentOutputHandler:
 
     def on_stats(self, stats: dict[str, Any]) -> None:
         """Discard statistics."""
+
+    @contextmanager
+    def section(self, status: str, success_msg: str) -> Generator[None]:
+        """No-op section wrapper."""
+        yield
+
+    def render_command(
+        self,
+        status: str,
+        success_msg: str,
+        log_stream: Iterable[str],
+        *,
+        spinner: str = "point",
+        ruler_color: str = "#74c7ec",
+    ) -> None:
+        """Consume command output without rendering it."""
+        _ = status, success_msg, spinner, ruler_color
+        for _line in log_stream:
+            pass
 
 
 class CollectingOutputHandler:
@@ -307,6 +442,25 @@ class CollectingOutputHandler:
     def on_stats(self, stats: dict[str, Any]) -> None:
         """Collect statistics."""
         self.stats.append(stats)
+
+    @contextmanager
+    def section(self, status: str, success_msg: str) -> Generator[None]:
+        """No-op section wrapper."""
+        yield
+
+    def render_command(
+        self,
+        status: str,
+        success_msg: str,
+        log_stream: Iterable[str],
+        *,
+        spinner: str = "point",
+        ruler_color: str = "#74c7ec",
+    ) -> None:
+        """Collect command output lines through the stderr channel."""
+        _ = status, success_msg, spinner, ruler_color
+        for line in log_stream:
+            self.on_stderr(line)
 
     def clear(self) -> None:
         """Clear all collected output."""

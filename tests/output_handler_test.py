@@ -1,8 +1,9 @@
+from contextlib import contextmanager
 from typing import Any
 
 import pytest
 
-from borgboi.core.output import DefaultOutputHandler
+from borgboi.core.output import CollectingOutputHandler, DefaultOutputHandler
 
 
 def _capture_prints(
@@ -80,3 +81,55 @@ def test_on_stderr_suppresses_stats_separator_lines(monkeypatch: pytest.MonkeyPa
     )
 
     assert printed == []
+
+
+def test_render_command_streams_lines_through_on_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    handler = DefaultOutputHandler()
+    events: list[tuple[str, Any]] = []
+
+    def fake_rule(*args: Any, **kwargs: Any) -> None:
+        events.append(("rule", args[0]))
+
+    @contextmanager
+    def fake_status(*args: Any, **kwargs: Any):
+        events.append(("status_enter", kwargs["status"]))
+        try:
+            yield
+        finally:
+            events.append(("status_exit", kwargs["spinner"]))
+
+    def fake_stderr(line: str) -> None:
+        events.append(("stderr", line))
+
+    monkeypatch.setattr(handler._console, "rule", fake_rule)
+    monkeypatch.setattr(handler._console, "status", fake_status)
+    monkeypatch.setattr(
+        handler._console, "print", lambda *args, **kwargs: events.append(("print", args[0] if args else ""))
+    )
+    monkeypatch.setattr(handler, "on_stderr", fake_stderr)
+
+    handler.render_command(
+        "Creating new archive",
+        "Archive created successfully",
+        ["first line\n", "second line\n"],
+        spinner="dots",
+        ruler_color="#abcdef",
+    )
+
+    assert events == [
+        ("rule", "[bold #cdd6f4]Creating new archive[/]"),
+        ("status_enter", "[bold #89b4fa]Creating new archive[/]"),
+        ("stderr", "first line\n"),
+        ("stderr", "second line\n"),
+        ("status_exit", "dots"),
+        ("rule", ":heavy_check_mark: [bold #cdd6f4]Archive created successfully[/]"),
+        ("print", ""),
+    ]
+
+
+def test_collecting_output_handler_render_command_collects_stderr_lines() -> None:
+    handler = CollectingOutputHandler()
+
+    handler.render_command("status", "success", ["one\n", "two\n"])
+
+    assert handler.stderr_lines == ["one\n", "two\n"]

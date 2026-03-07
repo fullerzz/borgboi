@@ -1,5 +1,6 @@
 from collections.abc import Generator, Iterable
 from datetime import UTC
+from functools import cache
 from typing import TYPE_CHECKING
 
 from rich.columns import Columns
@@ -19,11 +20,12 @@ from borgboi.clients.utils.borg_logs import (
 from borgboi.lib.colors import COLOR_HEX, PYGMENTS_STYLES
 from borgboi.models import BorgBoiRepo
 
-TEXT_COLOR = COLOR_HEX.text
-console = Console(record=True)
-
 if TYPE_CHECKING:
     from borgboi.clients.s3 import S3BucketStats
+    from borgboi.core.output import DefaultOutputHandler
+
+TEXT_COLOR = COLOR_HEX.text
+console = Console(record=True)
 
 
 def save_console_output() -> None:
@@ -31,6 +33,13 @@ def save_console_output() -> None:
     Save the console output to an HTML file.
     """
     console.save_html("borgboi_output.html")
+
+
+@cache
+def _get_default_output_handler() -> "DefaultOutputHandler":
+    from borgboi.core.output import DefaultOutputHandler
+
+    return DefaultOutputHandler()
 
 
 def _build_size_panel(total_size_gb: str, total_csize_gb: str, unique_csize_gb: str) -> Panel:
@@ -158,14 +167,13 @@ def render_cmd_output_lines(
     Returns:
         None
     """
-    console.rule(f"[bold {TEXT_COLOR}]{status}[/]", style=ruler_color)
-
-    with console.status(status=f"[bold {COLOR_HEX.blue}]{status}[/]", spinner=spinner):
-        for log in log_stream:
-            print(log, end="")  # noqa: T201
-
-    console.rule(f":heavy_check_mark: [bold {TEXT_COLOR}]{success_msg}[/]", style=ruler_color)
-    console.print("")
+    _get_default_output_handler().render_command(
+        status,
+        success_msg,
+        log_stream,
+        spinner=spinner,
+        ruler_color=ruler_color,
+    )
 
 
 def render_excludes_file(excludes_file_path: str, lines_to_highlight: set[int] | None = None) -> None:

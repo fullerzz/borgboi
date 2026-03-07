@@ -15,7 +15,7 @@ from borgboi.clients.s3_client import S3ClientInterface
 from borgboi.config import Config, get_config
 from borgboi.core.errors import StorageError, ValidationError
 from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
-from borgboi.core.output import DefaultOutputHandler, OutputHandler
+from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, render_command_with_fallback
 from borgboi.lib.passphrase import (
     generate_secure_passphrase,
     migrate_repo_passphrase,
@@ -45,7 +45,7 @@ class Orchestrator:
         storage: RepositoryStorage | None = None,
         s3_client: S3ClientInterface | None = None,
         config: Config | None = None,
-        output_handler: OutputHandler | None = None,
+        output_handler: BaseOutputHandler | None = None,
     ) -> None:
         """Initialize Orchestrator with optional dependencies.
 
@@ -54,7 +54,9 @@ class Orchestrator:
             storage: Repository storage backend (default: auto-created based on config)
             s3_client: S3 client for cloud sync (default: None)
             config: Configuration instance (default: get_config())
-            output_handler: Handler for output messages (default: DefaultOutputHandler)
+            output_handler: Handler for output messages (default: DefaultOutputHandler).
+                Handlers may optionally implement `render_command()` for richer
+                streaming output; legacy handlers remain supported.
         """
         self.config = config or get_config()
         self.output = output_handler or DefaultOutputHandler()
@@ -297,18 +299,17 @@ class Orchestrator:
         excludes_path = self._resolve_excludes_path_for_backup(resolved_repo.name)
         archive_name = create_archive_name()
 
-        # Create archive
-        for line in self.borg.create(
+        log_stream = self.borg.create(
             resolved_repo.path,
             resolved_repo.backup_target,
             archive_name=archive_name,
             options=options,
             exclude_file=excludes_path.as_posix(),
             passphrase=resolved_passphrase,
-        ):
-            self.output.on_stderr(line)
+        )
+        render_command_with_fallback(self.output, "Creating new archive", "Archive created successfully", log_stream)
 
-        self.output.on_log("info", "Archive created successfully")
+        self.output.on_log("info", "Archive created successfully", archive_name=archive_name, repo=resolved_repo.name)
         return archive_name
 
     def daily_backup(
