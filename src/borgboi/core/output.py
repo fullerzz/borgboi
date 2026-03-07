@@ -5,7 +5,7 @@ allowing for flexible output processing (console, logging, silent, etc.).
 """
 
 from collections.abc import Generator, Iterable
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from typing import Any, Protocol
 
 from pydantic import ValidationError
@@ -38,8 +38,9 @@ class BaseOutputHandler(Protocol):
     """Compatibility protocol for Borg operation output handlers.
 
     Implementations can direct output to console, logs, files, or discard it entirely.
-    This captures the pre-streaming handler contract so existing custom handlers can
-    still be injected into orchestrators and Borg clients.
+    This captures the pre-streaming handler contract so existing custom handlers that
+    only implement the `on_*` hooks can still be injected into orchestrators and
+    Borg clients.
     """
 
     def on_progress(self, current: int, total: int, info: str | None = None) -> None:
@@ -95,6 +96,10 @@ class BaseOutputHandler(Protocol):
         """
         ...
 
+
+class SectionOutputHandler(BaseOutputHandler, Protocol):
+    """Optional protocol for handlers that support section wrappers."""
+
     def section(self, status: str, success_msg: str) -> AbstractContextManager[None]:
         """Context manager wrapping a logical operation section.
 
@@ -149,7 +154,9 @@ def render_command_with_fallback(
     """Render a command stream while supporting legacy output handlers.
 
     If the handler implements `render_command()`, use it. Otherwise fall back to
-    the older `section()` plus `on_stderr()` streaming behavior.
+    the older `section()` plus `on_stderr()` streaming behavior when available,
+    or plain `on_stderr()` streaming for handlers that only implement `on_*`
+    methods.
     """
     render_command = getattr(output, "render_command", None)
     if callable(render_command):
@@ -162,7 +169,9 @@ def render_command_with_fallback(
         )
         return
 
-    with output.section(status, success_msg):
+    section = getattr(output, "section", None)
+    section_context = section(status, success_msg) if callable(section) else nullcontext()
+    with section_context:
         for line in log_stream:
             output.on_stderr(line)
 

@@ -59,7 +59,7 @@ class RecordingOutputHandler(CollectingOutputHandler):
         )
 
 
-class LegacyOutputHandler:
+class LegacyOutputHandlerBase:
     def __init__(self) -> None:
         self.log_messages: list[tuple[str, str, dict[str, Any]]] = []
         self.stderr_lines: list[str] = []
@@ -82,10 +82,16 @@ class LegacyOutputHandler:
     def on_stats(self, stats: dict[str, Any]) -> None:
         _ = stats
 
+
+class LegacyOutputHandler(LegacyOutputHandlerBase):
     @contextmanager
     def section(self, status: str, success_msg: str) -> Generator[None, Any]:
         _ = status, success_msg
         yield
+
+
+class MinimalLegacyOutputHandler(LegacyOutputHandlerBase):
+    pass
 
 
 def test_backup_uses_default_shared_excludes_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -211,6 +217,37 @@ def test_backup_falls_back_for_legacy_output_handlers(monkeypatch: pytest.Monkey
     borg_client = Mock()
     borg_client.create.return_value = iter(["archive line\n", "archive line 2\n"])
     output_handler = LegacyOutputHandler()
+
+    orchestrator = Orchestrator(
+        config=cfg,
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, object()),
+        output_handler=cast(Any, output_handler),
+    )
+    repo = _build_repo()
+
+    default_excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    default_excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    default_excludes_path.write_text("*.tmp\n")
+
+    archive_name = orchestrator.backup(repo)
+
+    assert archive_name
+    assert output_handler.stderr_lines == ["archive line\n", "archive line 2\n"]
+    assert output_handler.log_messages == [
+        ("info", "Archive created successfully", {"archive_name": archive_name, "repo": repo.name})
+    ]
+
+
+def test_backup_falls_back_for_legacy_output_handlers_without_section(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: None)
+    cfg = Config(offline=True)
+    borg_client = Mock()
+    borg_client.create.return_value = iter(["archive line\n", "archive line 2\n"])
+    output_handler = MinimalLegacyOutputHandler()
 
     orchestrator = Orchestrator(
         config=cfg,
