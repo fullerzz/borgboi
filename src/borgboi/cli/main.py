@@ -98,21 +98,11 @@ def version() -> None:
     console.print(f"borgboi {get_version('borgboi')}", highlight=False)
 
 
-def _register_commands() -> None:
-    from borgboi.cli.backup import backup
-    from borgboi.cli.config import config
-    from borgboi.cli.exclusions import exclusions
-    from borgboi.cli.repo import repo
-    from borgboi.cli.s3 import s3
-
-    app.command(repo)
-    app.command(backup)
-    app.command(s3)
-    app.command(exclusions)
-    app.command(config)
-
-
-_register_commands()
+app.command("borgboi.cli.repo:repo")
+app.command("borgboi.cli.backup:backup")
+app.command("borgboi.cli.s3:s3")
+app.command("borgboi.cli.exclusions:exclusions")
+app.command("borgboi.cli.config:config")
 
 
 def cli(tokens: Iterable[str] | str | None = None, **kwargs: Any) -> Any:

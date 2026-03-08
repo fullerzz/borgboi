@@ -28,6 +28,11 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert captured.out.startswith("borgboi ")
 
 
+def test_lazy_commands_are_importable() -> None:
+    for name in ("repo", "backup", "s3", "exclusions", "config"):
+        assert cli_main.app[name] is not None
+
+
 def test_package_exports_root_app() -> None:
     assert cli_package.app is cli_main.app
     assert cli_package.cli is cli_main.cli
