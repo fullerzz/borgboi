@@ -13,7 +13,7 @@ It layers a grouped CLI, YAML-based configuration, local metadata storage, and A
 - Syncs repositories to S3 and restores them when cloud mode is enabled.
 - Supports offline mode with local SQLite-backed metadata storage and no AWS dependency.
 - Stores repository passphrases in per-repo files under `~/.borgboi/passphrases/`.
-- Exposes grouped subcommands for repository, backup, S3, exclusions, and config workflows.
+- Exposes a Cyclopts-powered CLI with grouped subcommands for repository, backup, S3, exclusions, and config workflows.
 
 ## Prerequisites
 
@@ -40,6 +40,13 @@ Inspect the effective configuration:
 
 ```bash
 bb config show
+```
+
+Explore the generated help and version output:
+
+```bash
+bb --help
+bb version
 ```
 
 Create a repository:
@@ -98,6 +105,9 @@ Example:
 export BORGBOI_OFFLINE=1
 bb repo create --path /opt/borg-repos/docs --backup-target ~/Documents --name my-docs-backup
 bb backup daily --name my-docs-backup
+
+# or apply it as a root CLI flag for one command
+bb --offline repo list
 ```
 
 ## Configuration
@@ -119,6 +129,9 @@ The primary CLI is organized into grouped subcommands:
 - `s3` for sync, restore, and bucket stats
 - `exclusions` for managing backup exclusion files
 - `config` for displaying effective configuration
+- `version` for printing the installed BorgBoi version
+
+Every command also inherits the root-level `--offline` and `--debug` flags. Use `bb --help` or `bb <group> <command> --help` to inspect the current Cyclopts-generated help output.
 
 ## Documentation
 

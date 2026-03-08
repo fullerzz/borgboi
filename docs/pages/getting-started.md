@@ -39,6 +39,14 @@ BorgBoi uses a configuration file located at `~/.borgboi/config.yaml`. You can v
 bb config show
 ```
 
+You can inspect the current Cyclopts-generated help output at any time with:
+
+```sh
+bb --help
+bb repo --help
+bb backup run --help
+```
+
 For a complete reference of every field, environment variable, and allowed value, see [User Configuration](user-configuration.md).
 
 ### Configuration File
@@ -101,13 +109,13 @@ You can enable offline mode in three ways:
 
 1. **Configuration File**: Set `offline: true` in `~/.borgboi/config.yaml`
 2. **Environment Variable**: Set `BORGBOI_OFFLINE=1` in your environment
-3. **Command Flag**: Add `--offline` to any BorgBoi command
+3. **Command Flag**: Add `--offline` before any BorgBoi subcommand, such as `bb --offline repo list`
 
 ### How Offline Mode Works
 
 In offline mode:
 
-- Repository metadata is stored locally in `~/.borgboi/.borgboi_metadata/` instead of DynamoDB
+- Repository metadata is stored locally in `~/.borgboi/.database/borgboi.db` instead of DynamoDB
 - No S3 synchronization occurs during backups
 - All Borg operations work normally (create, backup, extract, etc.)
 - AWS credentials are not required
@@ -117,7 +125,6 @@ In offline mode:
 - Repository restoration from S3 is not available
 - Repository metadata is not shared across systems
 - No cloud backup of repository metadata
-- The `repo list` command is not yet implemented in offline mode
 
 ## Create a BorgBoi Repo
 
@@ -131,6 +138,17 @@ bb repo create --path /opt/borg-repos/docs \
 
 ![Demo of repository creation command](../gifs/create-repo.gif)
 
+## Create an Exclusions File
+
+Backup commands expect an exclusions file to exist before they run. Create a repository-specific file with:
+
+```sh
+bb exclusions create --path /opt/borg-repos/docs \
+    --source ~/borgboi-excludes.txt
+```
+
+If you prefer a shared default file, place it at `~/.borgboi/excludes.txt`.
+
 ## Perform a Daily Backup
 
 Run a daily backup with automatic pruning and compaction:
@@ -140,6 +158,12 @@ bb backup daily --name my-docs-backup
 ```
 
 This command creates a new archive, prunes old archives based on retention policy, compacts the repository, and syncs to S3 (unless `--no-s3-sync` is specified or running in offline mode). You can also target the repository with `--path`.
+
+If you want Borg's native streaming output instead of the default JSON-backed summary table, use:
+
+```sh
+bb backup run --name my-docs-backup --no-json
+```
 
 ## List Your Repositories
 

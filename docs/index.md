@@ -17,16 +17,24 @@ It contains the following features:
 * Metadata about your Borg repositories is stored in DynamoDB (or locally in offline mode)
 * Borg repositories are synced with S3 to enable cloud backups and archive restoration from other systems
 * **Offline mode** support for users who prefer not to use AWS services
-* **Hierarchical CLI** with organized subcommands (`repo`, `backup`, `s3`, `exclusions`, `config`)
+* **Cyclopts-powered CLI** with rich help output, global root flags, and organized subcommands (`repo`, `backup`, `s3`, `exclusions`, `config`, `version`)
 * **Secure passphrase management** with file-based storage and auto-generation
 
 ## Quick Start
 
 ```sh
+# Explore the generated CLI help
+bb --help
+bb repo --help
+
 # Create a new repository
 bb repo create --path /opt/borg-repos/docs \
     --backup-target ~/Documents \
     --name my-docs-backup
+
+# Create the exclusions file required by backup commands
+bb exclusions create --path /opt/borg-repos/docs \
+    --source ~/borgboi-excludes.txt
 
 # Run a daily backup
 bb backup daily --name my-docs-backup
@@ -36,6 +44,9 @@ bb repo list
 
 # View archives in a repository
 bb backup list --name my-docs-backup
+
+# Show the installed version
+bb version
 ```
 
 ## Installation
