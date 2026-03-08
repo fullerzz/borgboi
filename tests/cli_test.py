@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import borgboi.cli as cli_package
 from tests.cli_helpers import invoke_cli
 
 cli_main = importlib.import_module("borgboi.cli.main")
@@ -17,6 +18,19 @@ def test_help(capsys: pytest.CaptureFixture[str]) -> None:
     assert "repo" in captured.out
     assert "backup" in captured.out
     assert "config" in captured.out
+
+
+def test_version(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = invoke_cli(cli_main.cli, ["version"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out.startswith("borgboi ")
+
+
+def test_package_exports_root_app() -> None:
+    assert cli_package.app is cli_main.app
+    assert cli_package.cli is cli_main.cli
 
 
 def test_repo_create(

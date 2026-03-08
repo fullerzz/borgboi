@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import yaml
 from cyclopts import App, Parameter
@@ -16,7 +16,10 @@ from borgboi.config import Config, get_default_config_path, get_env_overrides, l
 from borgboi.lib.colors import COLOR_HEX, PYGMENTS_STYLES
 from borgboi.rich_utils import console
 
-config = App(name="config", help="Configuration management commands.")
+config = App(
+    name="config",
+    help="Configuration management commands.\n\nDisplay the effective BorgBoi configuration.",
+)
 
 
 def _write_stdout(text: str) -> None:
@@ -139,13 +142,6 @@ def _get_source_message(path: str | None, config_path: Path) -> str:
     return f"Configuration from: {config_path} (file not found, using defaults)"
 
 
-def _normalize_output_format(output_format: str) -> str:
-    normalized = output_format.lower()
-    if normalized not in {"yaml", "json", "tree"}:
-        print_error_and_exit("Invalid value for --format. Choose from yaml, json, or tree.")
-    return normalized
-
-
 @config.command(name="show")
 def config_show(
     *,
@@ -157,7 +153,7 @@ def config_show(
         ),
     ] = None,
     output_format: Annotated[
-        str,
+        Literal["yaml", "json", "tree"],
         Parameter(
             name=["--format", "-f"],
             help="Output format: yaml/json for text output, tree for Rich tree with env override highlighting",
@@ -192,7 +188,7 @@ def config_show(
 
     config_dict = _config_to_dict(cfg)
     env_overrides = get_env_overrides()
-    normalized_format = _normalize_output_format(output_format)
+    normalized_format = output_format
 
     _write_stdout(_get_source_message(path, config_path) + "\n\n")
 

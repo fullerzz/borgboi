@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from importlib.metadata import version as get_version
 from typing import Annotated, Any, NoReturn
 
+import cyclopts
 from cyclopts import App, Parameter
 from rich.prompt import Confirm
 from rich.traceback import install
@@ -12,7 +13,7 @@ from borgboi.config import Config, get_config
 from borgboi.core.orchestrator import Orchestrator
 from borgboi.rich_utils import console
 
-install()
+install(suppress=[cyclopts])
 
 
 class BorgBoiContext:
@@ -57,8 +58,8 @@ def confirm_action(prompt: str) -> bool:
     return Confirm.ask(prompt, console=console, default=False)
 
 
-main_app = App(
-    name="bb",
+app = App(
+    name="borgboi",
     help=(
         "BorgBoi - Borg backup automation with AWS integration.\n\n"
         "Use subcommands to manage repositories and backups: repo, backup, s3, exclusions, config."
@@ -67,7 +68,7 @@ main_app = App(
 )
 
 
-@main_app.meta.default
+@app.meta.default
 def _launcher(
     *tokens: MetaTokens,
     offline: Annotated[
@@ -80,7 +81,7 @@ def _launcher(
     ] = False,
 ) -> Any:
     ctx = BorgBoiContext(offline=offline, debug=debug)
-    command, bound, ignored = main_app.parse_args(tokens)
+    command, bound, ignored = app.parse_args(tokens)
     additional_kwargs: dict[str, Any] = {}
 
     for parameter_name, annotation in ignored.items():
@@ -90,7 +91,7 @@ def _launcher(
     return command(*bound.args, **bound.kwargs, **additional_kwargs)
 
 
-@main_app.command(name="version")
+@app.command(name="version")
 def version() -> None:
     """Display the installed borgboi version."""
     console.print(f"borgboi {get_version('borgboi')}", highlight=False)
@@ -103,11 +104,11 @@ def _register_commands() -> None:
     from borgboi.cli.repo import repo
     from borgboi.cli.s3 import s3
 
-    main_app.command(repo)
-    main_app.command(backup)
-    main_app.command(s3)
-    main_app.command(exclusions)
-    main_app.command(config)
+    app.command(repo)
+    app.command(backup)
+    app.command(s3)
+    app.command(exclusions)
+    app.command(config)
 
 
 _register_commands()
@@ -115,7 +116,7 @@ _register_commands()
 
 def cli(tokens: Iterable[str] | str | None = None, **kwargs: Any) -> Any:
     """Invoke the BorgBoi CLI."""
-    return main_app.meta(tokens, **kwargs)
+    return app.meta(tokens, **kwargs)
 
 
 def main() -> None:

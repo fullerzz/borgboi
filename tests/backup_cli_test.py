@@ -269,3 +269,20 @@ def test_backup_daily_rejects_both_name_and_path(tmp_path: Path, capsys: pytest.
 
     assert exit_code != 0
     assert "mutually exclusive" in captured.out
+
+
+def test_backup_restore_aborts_cleanly_when_confirmation_is_declined(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr("borgboi.cli.backup.confirm_action", lambda prompt: False)
+
+    exit_code = invoke_cli(
+        cli_main.cli,
+        ["backup", "restore", "--path", str(tmp_path), "--archive", "archive-2026-02-23"],
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Aborted." in captured.out

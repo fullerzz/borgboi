@@ -7,7 +7,10 @@ from cyclopts import App, Parameter
 from borgboi.cli.main import ContextArg, print_error_and_exit
 from borgboi.rich_utils import console
 
-exclusions = App(name="exclusions", help="Exclusions management commands.")
+exclusions = App(
+    name="exclusions",
+    help="Exclusions management commands.\n\nCreate, inspect, add, and remove exclusion patterns.",
+)
 
 
 @exclusions.command(name="create")

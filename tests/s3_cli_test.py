@@ -80,3 +80,16 @@ def test_s3_stats_returns_error_when_stats_fail(monkeypatch: pytest.MonkeyPatch)
     output_text = " ".join(str(item).lower() for item in printed)
     assert "error" in output_text
     assert "boom" in output_text
+
+
+def test_s3_delete_aborts_cleanly_when_confirmation_is_declined(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr("borgboi.cli.s3.confirm_action", lambda prompt: False)
+
+    exit_code = invoke_cli(cli, ["s3", "delete", "--name", "test-repo"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Aborted." in captured.out

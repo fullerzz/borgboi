@@ -7,7 +7,10 @@ from cyclopts import App, Parameter
 from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
 from borgboi.rich_utils import console
 
-repo = App(name="repo", help="Repository management commands.")
+repo = App(
+    name="repo",
+    help="Repository management commands.\n\nCreate, inspect, list, and delete Borg repositories.",
+)
 
 
 @repo.command(name="create")

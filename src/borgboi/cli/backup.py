@@ -57,7 +57,10 @@ def _render_archive_stats_table(repo_path: str, archive_info: ArchiveInfo) -> No
     console.print(size_table)
 
 
-backup = App(name="backup", help="Backup operation commands.")
+backup = App(
+    name="backup",
+    help="Backup operation commands.\n\nCreate, inspect, restore, and delete Borg archives.",
+)
 
 
 @backup.command(name="run")
@@ -163,7 +166,7 @@ def backup_restore(
     """Restore an archive to the current directory."""
     if not confirm_action("Extract archive contents to current directory?"):
         console.print("Aborted.")
-        raise SystemExit(1)
+        return
 
     try:
         repo_info = ctx.orchestrator.get_repo(path=path)

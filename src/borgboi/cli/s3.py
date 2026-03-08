@@ -7,7 +7,10 @@ from cyclopts import App, Parameter
 from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
 from borgboi.rich_utils import console
 
-s3 = App(name="s3", help="S3 synchronization commands.")
+s3 = App(
+    name="s3",
+    help="S3 synchronization commands.\n\nSync repositories to AWS S3 and inspect bucket stats.",
+)
 
 
 @s3.command(name="sync")
@@ -95,7 +98,7 @@ def s3_delete(
 
     if not confirm_action("Are you sure you want to delete this repository from S3?"):
         console.print("Aborted.")
-        raise SystemExit(1)
+        return
 
     console.print("[bold yellow]S3 delete not yet implemented in new CLI[/]")
 
