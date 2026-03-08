@@ -1,19 +1,26 @@
 """Backup operation commands for BorgBoi CLI."""
 
-from typing import Annotated
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Annotated
 
 from cyclopts import App, Parameter
-from rich.table import Table
 
 from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
-from borgboi.clients.borg import ArchiveInfo
-from borgboi.core.models import BackupOptions
-from borgboi.lib import utils
 from borgboi.rich_utils import console
+
+if TYPE_CHECKING:
+    from rich.table import Table
+
+    from borgboi.clients.borg import ArchiveInfo
 
 
 def _build_archive_stats_tables(repo_path: str, archive_info: ArchiveInfo) -> tuple[Table, Table]:
     """Build Rich tables for Borg archive statistics."""
+    from rich.table import Table
+
+    from borgboi.lib import utils
+
     archive = archive_info.archive
     archive_stats_raw = archive.get("stats", {})
     archive_stats = archive_stats_raw if isinstance(archive_stats_raw, dict) else {}
@@ -76,6 +83,8 @@ def backup_run(
     ctx: ContextArg,
 ) -> None:
     """Create a new backup archive."""
+    from borgboi.core.models import BackupOptions
+
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
 
@@ -136,6 +145,7 @@ def backup_list(
     ctx: ContextArg,
 ) -> None:
     """List archives in a repository."""
+    from borgboi.lib import utils
     from borgboi.lib.colors import COLOR_HEX
 
     try:
@@ -217,6 +227,7 @@ def backup_contents(
     from pathlib import Path
 
     from borgboi.clients import borg
+    from borgboi.lib import utils
     from borgboi.lib.colors import COLOR_HEX
 
     try:

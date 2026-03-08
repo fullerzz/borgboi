@@ -126,12 +126,11 @@ def _render_plain_text(config_dict: dict[str, Any], output_format: str, env_over
 def _load_config_for_show(ctx: BorgBoiContext, path: str | None, config_path: Path) -> Config:
     if path:
         base_config = load_config_from_path(config_path)
-        return Config(
-            aws=base_config.aws,
-            borg=base_config.borg,
-            ui=base_config.ui,
-            offline=ctx.offline or base_config.offline,
-            debug=ctx.debug or base_config.debug,
+        return base_config.model_copy(
+            update={
+                "offline": ctx.offline or base_config.offline,
+                "debug": ctx.debug or base_config.debug,
+            }
         )
     return ctx.config
 
@@ -188,22 +187,20 @@ def config_show(
 
     config_dict = _config_to_dict(cfg)
     env_overrides = get_env_overrides()
-    normalized_format = output_format
 
     _write_stdout(_get_source_message(path, config_path) + "\n\n")
 
-    if normalized_format == "json" and env_overrides:
-        output_config_dict = dict(config_dict)
-        output_config_dict["_env_overrides"] = env_overrides
+    if output_format == "json" and env_overrides:
+        output_config_dict = {**config_dict, "_env_overrides": env_overrides}
     else:
         output_config_dict = config_dict
 
-    if normalized_format == "tree" or (pretty_print and env_overrides and normalized_format != "json"):
+    if output_format == "tree" or (pretty_print and env_overrides and output_format != "json"):
         _render_tree_panel(config_dict, env_overrides)
         return
 
     if pretty_print:
-        _render_syntax_panel(output_config_dict, normalized_format)
+        _render_syntax_panel(output_config_dict, output_format)
         return
 
-    _render_plain_text(output_config_dict, normalized_format, env_overrides)
+    _render_plain_text(output_config_dict, output_format, env_overrides)

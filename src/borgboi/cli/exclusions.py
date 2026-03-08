@@ -40,18 +40,19 @@ def exclusions_show(
 
     try:
         repo_info = ctx.orchestrator.get_repo(name=name)
-        repo_excludes_path = ctx.config.borgboi_dir / f"{repo_info.name}_{ctx.config.excludes_filename}"
-        default_excludes_path = ctx.config.borgboi_dir / ctx.config.excludes_filename
+        candidates = [
+            ctx.config.borgboi_dir / f"{repo_info.name}_{ctx.config.excludes_filename}",
+            ctx.config.borgboi_dir / ctx.config.excludes_filename,
+        ]
 
-        if repo_excludes_path.exists():
-            excludes_path = repo_excludes_path
-        elif default_excludes_path.exists():
-            excludes_path = default_excludes_path
-        else:
-            console.print(f"[bold yellow]No exclusions file found for repository {name}[/]")
-            return
+        for candidate in candidates:
+            try:
+                rich_utils.render_excludes_file(candidate.as_posix())
+                return
+            except FileNotFoundError:
+                continue
 
-        rich_utils.render_excludes_file(excludes_path.as_posix())
+        console.print(f"[bold yellow]No exclusions file found for repository {name}[/]")
     except Exception as error:
         print_error_and_exit(str(error), error=error)
 

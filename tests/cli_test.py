@@ -58,7 +58,7 @@ def test_repo_create(
             _ = backup_target, passphrase
             return SimpleNamespace(path=path, name=name)
 
-    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
 
     exit_code = invoke_cli(
         cli_main.cli,

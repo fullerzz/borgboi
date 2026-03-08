@@ -139,7 +139,7 @@ def test_backup_run_no_json_passes_options_and_skips_stats(
             _ = (repo, passphrase)
             return "fake-passphrase"
 
-    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
     monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
 
     exit_code = invoke_cli(cli_main.cli, ["backup", "run", "--path", str(tmp_path), "--no-json"])
@@ -190,7 +190,7 @@ def test_backup_run_default_fetches_stats_and_renders_table(
             _ = (repo, passphrase)
             return "resolved-passphrase"
 
-    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
     monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
 
     exit_code = invoke_cli(cli_main.cli, ["backup", "run", "--path", str(tmp_path)])
@@ -217,7 +217,7 @@ def test_backup_daily_accepts_repo_name(monkeypatch: pytest.MonkeyPatch) -> None
         def daily_backup(self, repo: object, passphrase: str | None = None, sync_to_s3: bool = True) -> None:
             daily_backup_calls.append((repo, passphrase, sync_to_s3))
 
-    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
 
     exit_code = invoke_cli(cli_main.cli, ["backup", "daily", "--name", "daily-repo"])
 
@@ -241,7 +241,7 @@ def test_backup_daily_name_respects_no_s3_sync_and_passphrase(monkeypatch: pytes
         def daily_backup(self, repo: object, passphrase: str | None = None, sync_to_s3: bool = True) -> None:
             daily_backup_calls.append((repo, passphrase, sync_to_s3))
 
-    monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
 
     exit_code = invoke_cli(
         cli_main.cli,

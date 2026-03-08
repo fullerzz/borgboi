@@ -1,16 +1,20 @@
 """Main CLI app for BorgBoi."""
 
+from __future__ import annotations
+
 from collections.abc import Iterable
 from importlib.metadata import version as get_version
-from typing import Annotated, Any, NoReturn
+from typing import TYPE_CHECKING, Annotated, Any, NoReturn
 
 import cyclopts
 from cyclopts import App, Parameter
 from rich.prompt import Confirm
 from rich.traceback import install
 
+if TYPE_CHECKING:
+    from borgboi.core.orchestrator import Orchestrator
+
 from borgboi.config import Config, get_config
-from borgboi.core.orchestrator import Orchestrator
 from borgboi.rich_utils import console
 
 install(suppress=[cyclopts])
@@ -27,6 +31,8 @@ class BorgBoiContext:
 
     @property
     def orchestrator(self) -> Orchestrator:
+        from borgboi.core.orchestrator import Orchestrator
+
         if self._orchestrator is None:
             self._orchestrator = Orchestrator(config=self.config)
         return self._orchestrator
@@ -35,12 +41,11 @@ class BorgBoiContext:
     def config(self) -> Config:
         if self._config is None:
             base_config = get_config()
-            self._config = Config(
-                aws=base_config.aws,
-                borg=base_config.borg,
-                ui=base_config.ui,
-                offline=self.offline or base_config.offline,
-                debug=self.debug or base_config.debug,
+            self._config = base_config.model_copy(
+                update={
+                    "offline": self.offline or base_config.offline,
+                    "debug": self.debug or base_config.debug,
+                }
             )
         return self._config
 
@@ -58,13 +63,15 @@ def confirm_action(prompt: str) -> bool:
     return Confirm.ask(prompt, console=console, default=False)
 
 
+_VERSION = get_version("borgboi")
+
 app = App(
     name="borgboi",
     help=(
         "BorgBoi - Borg backup automation with AWS integration.\n\n"
         "Use subcommands to manage repositories and backups: repo, backup, s3, exclusions, config."
     ),
-    version=get_version("borgboi"),
+    version=_VERSION,
 )
 app.register_install_completion_command()  # NOTE: This modifies the user's shell rc file
 
@@ -95,7 +102,7 @@ def _launcher(
 @app.command(name="version")
 def version() -> None:
     """Display the installed borgboi version."""
-    console.print(f"borgboi {get_version('borgboi')}", highlight=False)
+    console.print(f"borgboi {_VERSION}", highlight=False)
 
 
 app.command("borgboi.cli.repo:repo")

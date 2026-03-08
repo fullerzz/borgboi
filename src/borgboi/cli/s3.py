@@ -90,8 +90,6 @@ def s3_delete(
     ctx: ContextArg,
 ) -> None:
     """Delete a repository from S3."""
-    _ = name, dry_run
-
     if ctx.offline:
         console.print("[bold yellow]S3 delete is not available in offline mode[/]")
         return
@@ -100,7 +98,8 @@ def s3_delete(
         console.print("Aborted.")
         return
 
-    console.print("[bold yellow]S3 delete not yet implemented in new CLI[/]")
+    # TODO: Implement S3 deletion via ctx.orchestrator
+    console.print(f"[bold yellow]S3 delete for '{name}' not yet implemented (dry_run={dry_run})[/]")
 
 
 @s3.command(name="stats")
