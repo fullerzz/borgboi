@@ -66,6 +66,7 @@ app = App(
     ),
     version=get_version("borgboi"),
 )
+app.register_install_completion_command()  # NOTE: This modifies the user's shell rc file
 
 
 @app.meta.default
