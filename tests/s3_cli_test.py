@@ -2,13 +2,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-from click.testing import CliRunner
 from rich.panel import Panel
 from rich.table import Table
 
 from borgboi import rich_utils
 from borgboi.cli import cli
 from borgboi.clients import s3 as s3_client
+from tests.cli_helpers import invoke_cli
 
 
 def test_s3_stats_renders_panel_and_table(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -33,10 +33,9 @@ def test_s3_stats_renders_panel_and_table(monkeypatch: pytest.MonkeyPatch) -> No
 
     monkeypatch.setattr(rich_utils.console, "print", fake_print)
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["s3", "stats"])
+    exit_code = invoke_cli(cli, ["s3", "stats"])
 
-    assert result.exit_code == 0
+    assert exit_code == 0
     assert any(isinstance(item, Panel) for item in printed)
     assert any(isinstance(item, Table) for item in printed)
 
@@ -55,10 +54,9 @@ def test_s3_stats_unavailable_in_offline_mode(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(rich_utils.console, "print", fake_print)
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["--offline", "s3", "stats"])
+    exit_code = invoke_cli(cli, ["--offline", "s3", "stats"])
 
-    assert result.exit_code == 0
+    assert exit_code == 0
     assert any("offline mode" in str(item).lower() for item in printed)
 
 
@@ -76,10 +74,9 @@ def test_s3_stats_returns_error_when_stats_fail(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(rich_utils.console, "print", fake_print)
 
-    runner = CliRunner()
-    result = runner.invoke(cli, ["s3", "stats"])
+    exit_code = invoke_cli(cli, ["s3", "stats"])
 
-    assert result.exit_code == 1
+    assert exit_code == 1
     output_text = " ".join(str(item).lower() for item in printed)
     assert "error" in output_text
     assert "boom" in output_text

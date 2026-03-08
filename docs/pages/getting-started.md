@@ -121,7 +121,7 @@ In offline mode:
 
 ## Create a BorgBoi Repo
 
-You can now create a Borg repository with the following BorgBoi command:
+You can create a Borg repository with the following BorgBoi command:
 
 ```sh
 bb repo create --path /opt/borg-repos/docs \
@@ -129,14 +129,7 @@ bb repo create --path /opt/borg-repos/docs \
     --name my-docs-backup
 ```
 
-Or using the legacy command syntax:
-
-```sh
-bb create-repo --repo-path /opt/borg-repos/docs \
-    --backup-target ~/Documents
-```
-
-![Demo of create-repo command](../gifs/create-repo.gif)
+![Demo of repository creation command](../gifs/create-repo.gif)
 
 ## Perform a Daily Backup
 

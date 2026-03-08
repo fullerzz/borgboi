@@ -1,7 +1,7 @@
 # BorgBoi Commands
 
 !!! info "CLI Structure"
-    BorgBoi uses a hierarchical CLI with subcommand groups: `repo`, `backup`, `s3`, `exclusions`, and `config`. Legacy flat commands (like `create-repo`, `daily-backup`) are still available for backward compatibility.
+    BorgBoi uses a hierarchical CLI with subcommand groups: `repo`, `backup`, `s3`, `exclusions`, and `config`.
 
 !!! info "Offline Mode"
     All commands support an `--offline` flag (or `BORGBOI_OFFLINE` environment variable) that enables offline mode. In offline mode, BorgBoi stores repository metadata locally in `~/.borgboi/.borgboi_metadata/` instead of using AWS DynamoDB and S3 services.
@@ -331,28 +331,3 @@ Options:
   --offline              Enable offline mode (no AWS services)
 
 ```
-
----
-
-## Legacy Commands
-
-!!! note "Backward Compatibility"
-    The following legacy commands are still available for backward compatibility but are deprecated. Consider using the new hierarchical commands above.
-
-| Legacy Command | New Command |
-|----------------|-------------|
-| `create-repo` | `repo create` |
-| `list-repos` | `repo list` |
-| `get-repo` | `repo info` |
-| `repo-info` | `repo info` |
-| `delete-repo` | `repo delete` |
-| `daily-backup` | `backup daily` |
-| `list-archives` | `backup list` |
-| `list-archive-contents` | `backup contents` |
-| `extract-archive` | `backup restore` |
-| `delete-archive` | `backup delete` |
-| `restore-repo` | `s3 restore` |
-| `create-exclusions` | `exclusions create` |
-| `append-excludes` | `exclusions add` |
-| `modify-excludes` | `exclusions remove` |
-| `export-repo-key` | *(no new equivalent)* |

@@ -3,12 +3,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from click.testing import CliRunner
 from inline_snapshot import snapshot
 
 from borgboi.cli.backup import _build_archive_stats_tables
 from borgboi.clients.borg import ArchiveInfo
 from borgboi.core.models import BackupOptions
+from tests.cli_helpers import invoke_cli
 
 cli_main = importlib.import_module("borgboi.cli.main")
 
@@ -142,10 +142,9 @@ def test_backup_run_no_json_passes_options_and_skips_stats(
     monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
     monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
 
-    runner = CliRunner()
-    result = runner.invoke(cli_main.cli, ["backup", "run", "--path", str(tmp_path), "--no-json"])
+    exit_code = invoke_cli(cli_main.cli, ["backup", "run", "--path", str(tmp_path), "--no-json"])
 
-    assert result.exit_code == 0
+    assert exit_code == 0
     assert len(captured_options) == 1
 
     options = captured_options[0]
@@ -194,10 +193,9 @@ def test_backup_run_default_fetches_stats_and_renders_table(
     monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
     monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
 
-    runner = CliRunner()
-    result = runner.invoke(cli_main.cli, ["backup", "run", "--path", str(tmp_path)])
+    exit_code = invoke_cli(cli_main.cli, ["backup", "run", "--path", str(tmp_path)])
 
-    assert result.exit_code == 0
+    assert exit_code == 0
     assert captured_options == [None]
     assert archive_info_calls == [(str(tmp_path), "archive-2026-02-23", "resolved-passphrase")]
     assert render_calls == [(str(tmp_path), archive_info_result)]
@@ -221,10 +219,9 @@ def test_backup_daily_accepts_repo_name(monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
 
-    runner = CliRunner()
-    result = runner.invoke(cli_main.cli, ["backup", "daily", "--name", "daily-repo"])
+    exit_code = invoke_cli(cli_main.cli, ["backup", "daily", "--name", "daily-repo"])
 
-    assert result.exit_code == 0
+    assert exit_code == 0
     assert get_repo_calls == [("daily-repo", None)]
     assert daily_backup_calls == [(fake_repo, None, True)]
 
@@ -246,30 +243,29 @@ def test_backup_daily_name_respects_no_s3_sync_and_passphrase(monkeypatch: pytes
 
     monkeypatch.setattr(cli_main, "Orchestrator", _FakeOrchestrator)
 
-    runner = CliRunner()
-    result = runner.invoke(
+    exit_code = invoke_cli(
         cli_main.cli,
         ["backup", "daily", "--name", "daily-repo", "--passphrase", "cli-passphrase", "--no-s3-sync"],
     )
 
-    assert result.exit_code == 0
+    assert exit_code == 0
     assert daily_backup_calls == [(fake_repo, "cli-passphrase", False)]
 
 
-def test_backup_daily_rejects_neither_name_nor_path() -> None:
-    runner = CliRunner()
-    result = runner.invoke(cli_main.cli, ["backup", "daily"])
+def test_backup_daily_rejects_neither_name_nor_path(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = invoke_cli(cli_main.cli, ["backup", "daily"])
+    captured = capsys.readouterr()
 
-    assert result.exit_code != 0
-    assert "Provide either --name or --path" in result.output
+    assert exit_code != 0
+    assert "Provide either --name or --path" in captured.out
 
 
-def test_backup_daily_rejects_both_name_and_path(tmp_path: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(
+def test_backup_daily_rejects_both_name_and_path(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = invoke_cli(
         cli_main.cli,
         ["backup", "daily", "--name", "my-repo", "--path", str(tmp_path)],
     )
+    captured = capsys.readouterr()
 
-    assert result.exit_code != 0
-    assert "mutually exclusive" in result.output
+    assert exit_code != 0
+    assert "mutually exclusive" in captured.out

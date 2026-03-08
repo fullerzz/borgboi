@@ -13,7 +13,7 @@ It layers a grouped CLI, YAML-based configuration, local metadata storage, and A
 - Syncs repositories to S3 and restores them when cloud mode is enabled.
 - Supports offline mode with local SQLite-backed metadata storage and no AWS dependency.
 - Stores repository passphrases in per-repo files under `~/.borgboi/passphrases/`.
-- Exposes both grouped subcommands and legacy flat command aliases for backward compatibility.
+- Exposes grouped subcommands for repository, backup, S3, exclusions, and config workflows.
 
 ## Prerequisites
 
@@ -119,8 +119,6 @@ The primary CLI is organized into grouped subcommands:
 - `s3` for sync, restore, and bucket stats
 - `exclusions` for managing backup exclusion files
 - `config` for displaying effective configuration
-
-Legacy flat commands such as `create-repo` and `daily-backup` are still available as compatibility aliases.
 
 ## Documentation
 
