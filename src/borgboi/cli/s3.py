@@ -73,9 +73,7 @@ def s3_restore(
         else:
             console.print(f"Repository found: [bold cyan]{repo_info.path}[/]")
 
-        from borgboi import orchestrator as old_orchestrator
-
-        old_orchestrator.restore_repo(repo_info, dry_run, force, ctx.offline)
+        ctx.orchestrator.restore_from_s3(repo_info, dry_run=dry_run, force=force)
     except Exception as error:
         print_error_and_exit(str(error), error=error)
 

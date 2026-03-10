@@ -195,6 +195,41 @@ def test_delete_repo_dry_run_skips_storage_delete(
     storage.delete.assert_not_called()
 
 
+def test_orchestrator_creates_default_s3_client_when_online(monkeypatch: pytest.MonkeyPatch) -> None:
+    created_configs: list[object] = []
+
+    class _FakeS3Client:
+        def __init__(self, config: object) -> None:
+            created_configs.append(config)
+
+    monkeypatch.setattr("borgboi.clients.s3_client.S3Client", _FakeS3Client)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=False),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, Mock()),
+    )
+
+    assert created_configs == [orchestrator.config.aws]
+    assert orchestrator.s3 is not None
+
+
+def test_orchestrator_skips_default_s3_client_when_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakeS3Client:
+        def __init__(self, config: object) -> None:
+            raise AssertionError("S3 client should not be created in offline mode")
+
+    monkeypatch.setattr("borgboi.clients.s3_client.S3Client", _FakeS3Client)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, Mock()),
+    )
+
+    assert orchestrator.s3 is None
+
+
 def test_daily_backup_runs_steps_and_syncs_when_enabled(output_handler: CollectingOutputHandler) -> None:
     repo = _build_repo()
     storage = Mock()
