@@ -150,7 +150,7 @@ Delete a repository from S3.
 - Prompts for confirmation unless `--dry-run` is used
 
 !!! warning "Current status"
-    The command is present in the CLI surface, but the Cyclopts migration kept it as a placeholder and it currently prints `S3 delete not yet implemented in new CLI`.
+    The command is present in the CLI surface, but the Cyclopts migration kept it as a placeholder and it currently prints `S3 delete for '<name>' not yet implemented (dry_run=<bool>)`.
 
 ### `s3 stats`
 
