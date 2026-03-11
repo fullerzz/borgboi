@@ -1,3 +1,56 @@
+## v1.18.0 (2026-03-11)
+
+### 🚀 Features
+
+- Migrate to cyclopts
+
+
+
+### 🐛 Bug Fixes
+
+- Add support for shell completion with cyclopts
+
+- Wire default s3 client for restore workflows
+
+
+
+### 💼 Other
+
+- Merge pull request #204 from fullerzz/cyclopts
+
+feat: Migrate to Cyclopts
+
+
+
+### 🚜 Refactor
+
+- Polish cyclopts CLI surface
+
+- **cli**: Improve lazy loading, reduce duplication, and fix minor issues
+
+
+
+### 📚 Documentation
+
+- Refresh CLI docs for Cyclopts migration
+
+
+
+### ⚡ Performance
+
+- **cli**: Implement lazy loading for cyclopts command registration
+
+
+
+### 🧪 Testing
+
+- Expand validator and CLI coverage
+
+- Cover storage backends and s3 client
+
+- Add orchestrator and migration coverage
+
+
 ## v1.17.3 (2026-03-07)
 
 ### 🐛 Bug Fixes
