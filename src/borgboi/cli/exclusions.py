@@ -1,104 +1,99 @@
 """Exclusions management commands for BorgBoi CLI."""
 
-import click
+from typing import Annotated
 
-from borgboi.cli.main import BorgBoiContext, pass_context
+from cyclopts import App, Parameter
+
+from borgboi.cli.main import ContextArg, print_error_and_exit
 from borgboi.rich_utils import console
 
-
-@click.group()
-def exclusions() -> None:
-    """Exclusions management commands.
-
-    Manage backup exclusion patterns for repositories.
-    """
-
-
-@exclusions.command("create")
-@click.option("--path", "-p", required=True, type=click.Path(exists=True), help="Repository path")
-@click.option(
-    "--source",
-    "-s",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False),
-    help="Source file with exclusion patterns",
+exclusions = App(
+    name="exclusions",
+    help="Exclusions management commands.\n\nCreate, inspect, add, and remove exclusion patterns.",
 )
-@pass_context
-def exclusions_create(ctx: BorgBoiContext, path: str, source: str) -> None:
+
+
+@exclusions.command(name="create")
+def exclusions_create(
+    *,
+    path: Annotated[str, Parameter(name=["--path", "-p"], help="Repository path")],
+    source: Annotated[str, Parameter(name=["--source", "-s"], help="Source file with exclusion patterns")],
+    ctx: ContextArg,
+) -> None:
     """Create an exclusions file for a repository."""
     try:
-        repo = ctx.orchestrator.get_repo(path=path)
-        excludes_path = ctx.orchestrator.create_exclusions(repo, source)
+        repo_info = ctx.orchestrator.get_repo(path=path)
+        excludes_path = ctx.orchestrator.create_exclusions(repo_info, source)
         console.print(f"Exclusions file created at [bold cyan]{excludes_path}[/]")
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
-@exclusions.command("show")
-@click.option("--name", "-n", required=True, type=str, help="Repository name")
-@pass_context
-def exclusions_show(ctx: BorgBoiContext, name: str) -> None:
+@exclusions.command(name="show")
+def exclusions_show(
+    *,
+    name: Annotated[str, Parameter(name=["--name", "-n"], help="Repository name")],
+    ctx: ContextArg,
+) -> None:
     """Show exclusion patterns for a repository."""
     from borgboi import rich_utils
 
     try:
-        repo = ctx.orchestrator.get_repo(name=name)
+        repo_info = ctx.orchestrator.get_repo(name=name)
+        candidates = [
+            ctx.config.borgboi_dir / f"{repo_info.name}_{ctx.config.excludes_filename}",
+            ctx.config.borgboi_dir / ctx.config.excludes_filename,
+        ]
 
-        repo_excludes_path = ctx.config.borgboi_dir / f"{repo.name}_{ctx.config.excludes_filename}"
-        default_excludes_path = ctx.config.borgboi_dir / ctx.config.excludes_filename
+        for candidate in candidates:
+            try:
+                rich_utils.render_excludes_file(candidate.as_posix())
+                return
+            except FileNotFoundError:
+                continue
 
-        if repo_excludes_path.exists():
-            excludes_path = repo_excludes_path
-        elif default_excludes_path.exists():
-            excludes_path = default_excludes_path
-        else:
-            console.print(f"[bold yellow]No exclusions file found for repository {name}[/]")
-            return
-
-        rich_utils.render_excludes_file(excludes_path.as_posix())
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+        console.print(f"[bold yellow]No exclusions file found for repository {name}[/]")
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
-@exclusions.command("add")
-@click.option("--name", "-n", required=True, type=str, help="Repository name")
-@click.option("--pattern", "-x", required=True, type=str, help="Exclusion pattern to add")
-@pass_context
-def exclusions_add(ctx: BorgBoiContext, name: str, pattern: str) -> None:
+@exclusions.command(name="add")
+def exclusions_add(
+    *,
+    name: Annotated[str, Parameter(name=["--name", "-n"], help="Repository name")],
+    pattern: Annotated[str, Parameter(name=["--pattern", "-x"], help="Exclusion pattern to add")],
+    ctx: ContextArg,
+) -> None:
     """Add an exclusion pattern to a repository."""
     from borgboi import rich_utils
 
     try:
-        repo = ctx.orchestrator.get_repo(name=name)
-        ctx.orchestrator.add_exclusion(repo, pattern)
+        repo_info = ctx.orchestrator.get_repo(name=name)
+        ctx.orchestrator.add_exclusion(repo_info, pattern)
 
-        # Show the updated file with the new pattern highlighted
-        excludes_path = ctx.config.borgboi_dir / f"{repo.name}_{ctx.config.excludes_filename}"
-        with excludes_path.open("r") as f:
-            line_count = sum(1 for _ in f)
+        excludes_path = ctx.config.borgboi_dir / f"{repo_info.name}_{ctx.config.excludes_filename}"
+        with excludes_path.open("r") as file_obj:
+            line_count = sum(1 for _ in file_obj)
         rich_utils.render_excludes_file(excludes_path.as_posix(), lines_to_highlight={line_count})
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
-@exclusions.command("remove")
-@click.option("--name", "-n", required=True, type=str, help="Repository name")
-@click.option("--line", "-l", required=True, type=int, help="Line number to remove (1-based)")
-@pass_context
-def exclusions_remove(ctx: BorgBoiContext, name: str, line: int) -> None:
+@exclusions.command(name="remove")
+def exclusions_remove(
+    *,
+    name: Annotated[str, Parameter(name=["--name", "-n"], help="Repository name")],
+    line: Annotated[int, Parameter(name=["--line", "-l"], help="Line number to remove (1-based)")],
+    ctx: ContextArg,
+) -> None:
     """Remove an exclusion pattern by line number."""
     from borgboi import rich_utils
 
     try:
-        repo = ctx.orchestrator.get_repo(name=name)
-        ctx.orchestrator.remove_exclusion(repo, line)
+        repo_info = ctx.orchestrator.get_repo(name=name)
+        ctx.orchestrator.remove_exclusion(repo_info, line)
 
-        # Show the updated file
-        excludes_path = ctx.config.borgboi_dir / f"{repo.name}_{ctx.config.excludes_filename}"
+        excludes_path = ctx.config.borgboi_dir / f"{repo_info.name}_{ctx.config.excludes_filename}"
         rich_utils.render_excludes_file(excludes_path.as_posix())
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)

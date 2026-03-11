@@ -1,75 +1,85 @@
+import importlib
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
 
 import pytest
-from click.testing import CliRunner
 
-from borgboi import orchestrator
-from borgboi.cli import cli
-from borgboi.models import BorgBoiRepo
+import borgboi.cli as cli_package
+from tests.cli_helpers import invoke_cli
 
-
-def test_help() -> None:
-    runner = CliRunner()
-    result = runner.invoke(cli, ["--help"])
-    assert result.exit_code == 0
-    assert result.stdout.startswith("Usage: cli [OPTIONS] COMMAND [ARGS]")
+cli_main = importlib.import_module("borgboi.cli.main")
 
 
-@pytest.mark.parametrize("offline_mode", [True, False])
-def test_create_repo(
+def test_help(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = invoke_cli(cli_main.cli, ["--help"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "repo" in captured.out
+    assert "backup" in captured.out
+    assert "config" in captured.out
+
+
+def test_version(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = invoke_cli(cli_main.cli, ["version"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert captured.out.startswith("borgboi ")
+
+
+def test_lazy_commands_are_importable() -> None:
+    for name in ("repo", "backup", "s3", "exclusions", "config"):
+        assert cli_main.app[name] is not None
+
+
+def test_package_exports_root_app() -> None:
+    assert cli_package.app is cli_main.app
+    assert cli_package.cli is cli_main.cli
+
+
+def test_repo_create(
     monkeypatch: pytest.MonkeyPatch,
     repo_storage_dir: Path,
     backup_target_dir: Path,
-    borg_repo: BorgBoiRepo,
-    offline_mode: bool,
 ) -> None:
-    def mock_create_borg_repo(*args: Any, **kwargs: Any) -> BorgBoiRepo:
-        return borg_repo
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
 
-    monkeypatch.setattr(orchestrator, "create_borg_repo", mock_create_borg_repo)
+        def create_repo(
+            self,
+            *,
+            path: str,
+            backup_target: str,
+            name: str,
+            passphrase: str | None = None,
+        ) -> object:
+            _ = backup_target, passphrase
+            return SimpleNamespace(path=path, name=name)
 
-    cmd_args = [
-        "create-repo",
-        "--repo-path",
-        str(repo_storage_dir),
-        "--backup-target",
-        str(backup_target_dir),
-    ]
-    if offline_mode:
-        cmd_args.append("--offline")
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
 
-    runner = CliRunner()
-    result = runner.invoke(
-        cli,
-        cmd_args,
-        input="BORG_PASSPHRASE\nTestRepo\n",
+    exit_code = invoke_cli(
+        cli_main.cli,
+        [
+            "repo",
+            "create",
+            "--path",
+            str(repo_storage_dir),
+            "--backup-target",
+            str(backup_target_dir),
+            "--name",
+            "test-repo",
+        ],
     )
-    assert result.exit_code == 0
-    assert "Created new Borg repo at" in result.stdout
+
+    assert exit_code == 0
 
 
-def test_delete_repo(repo_storage_dir: Path, borg_repo: BorgBoiRepo) -> None:
-    runner = CliRunner()
-    result = runner.invoke(cli, ["delete-repo", "--repo-path", str(repo_storage_dir)], input=borg_repo.name)
-    assert result.exit_code == 0
-    # assert "Repository deleted successfully" in result.stdout
-    # assert "Deleted repo from DynamoDB table" in result.stdout
+def test_root_offline_flag_is_accepted(capsys: pytest.CaptureFixture[str]) -> None:
+    exit_code = invoke_cli(cli_main.cli, ["--offline", "s3", "stats"])
+    captured = capsys.readouterr()
 
-
-def test_delete_archive(repo_storage_dir: Path, borg_repo: BorgBoiRepo) -> None:
-    from borgboi.clients import borg
-
-    # Create an archive to be deleted in this test
-    archive_name = borg._create_archive_title()
-    borg.create_archive(borg_repo.path, borg_repo.name, borg_repo.backup_target, archive_name)
-
-    runner = CliRunner()
-    deletion_confirm_input = f"{borg_repo.name}::{archive_name}"
-    result = runner.invoke(
-        cli,
-        ["delete-archive", "--repo-path", str(repo_storage_dir), "--archive-name", archive_name],
-        input=deletion_confirm_input,
-    )
-    assert result.exit_code == 0
-    # assert "Archive deleted successfully" in result.stdout
+    assert exit_code == 0
+    assert "offline mode" in captured.out.lower()

@@ -62,7 +62,7 @@ class Orchestrator:
         self.output = output_handler or DefaultOutputHandler()
         self.borg = borg_client or create_borg_client(config=self.config)
         self.storage = storage or self._create_default_storage()
-        self.s3: S3ClientInterface | None = s3_client
+        self.s3: S3ClientInterface | None = s3_client or self._create_default_s3_client()
 
     def _create_default_storage(self) -> RepositoryStorage:
         """Create the default storage backend based on configuration.
@@ -79,6 +79,15 @@ class Orchestrator:
             from borgboi.storage.dynamodb import DynamoDBStorage
 
             return DynamoDBStorage(config=self.config)
+
+    def _create_default_s3_client(self) -> S3ClientInterface | None:
+        """Create the default S3 client when cloud features are enabled."""
+        if self.config.offline:
+            return None
+
+        from borgboi.clients.s3_client import S3Client
+
+        return S3Client(config=self.config.aws)
 
     def _ensure_local_sqlite_initialized(self) -> None:
         """Initialize local SQLite storage and run migrations.
@@ -492,22 +501,30 @@ class Orchestrator:
         self,
         repo: BorgBoiRepo | str,
         dry_run: bool = False,
+        force: bool = False,
     ) -> None:
         """Restore a repository from S3.
 
         Args:
             repo: Repository or repository name
             dry_run: If True, only simulate restoration
+            force: If True, restore even if the repository exists locally
+
+        Raises:
+            ValidationError: If repository exists locally and force is not set
         """
-        _ = self._resolve_repo(repo)  # Validate repo exists
-        _ = dry_run  # Will be used in Phase 7
+        resolved_repo = self._resolve_repo(repo)
+
+        if not force and self._is_local(resolved_repo):
+            raise ValidationError("Repository already exists locally", field="repository")
 
         if self.s3 is None:
             self.output.on_log("warning", "S3 client not configured")
             return
 
-        # Will be implemented in Phase 7
-        self.output.on_log("info", "S3 restore not yet implemented in new orchestrator")
+        status = "Performing dry run of S3 restore..." if dry_run else "Restoring repo from S3..."
+        log_stream = self.s3.sync_from_bucket(resolved_repo.safe_path, resolved_repo.name, dry_run=dry_run)
+        render_command_with_fallback(self.output, status, "S3 restore completed successfully", log_stream)
 
     # Archive Operations
 

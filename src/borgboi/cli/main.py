@@ -1,30 +1,27 @@
-"""Main CLI group for BorgBoi.
+"""Main CLI app for BorgBoi."""
 
-This module provides the top-level CLI group and common options.
-"""
+from __future__ import annotations
 
+from collections.abc import Iterable
 from importlib.metadata import version as get_version
-from typing import Any
+from typing import TYPE_CHECKING, Annotated, Any, NoReturn
 
-import click
+import cyclopts
+from cyclopts import App, Parameter
+from rich.prompt import Confirm
 from rich.traceback import install
 
-from borgboi.config import Config, get_config
-from borgboi.core.orchestrator import Orchestrator
+if TYPE_CHECKING:
+    from borgboi.core.orchestrator import Orchestrator
 
-# Install rich traceback handler
-install(suppress=[click])
+from borgboi.config import Config, get_config
+from borgboi.rich_utils import console
+
+install(suppress=[cyclopts])
 
 
 class BorgBoiContext:
-    """Context object passed to all CLI commands.
-
-    Attributes:
-        orchestrator: The main orchestrator instance
-        config: Current configuration
-        offline: Whether running in offline mode
-        debug: Whether debug mode is enabled
-    """
+    """Shared context object for CLI commands."""
 
     def __init__(self, offline: bool = False, debug: bool = False) -> None:
         self.offline = offline
@@ -34,77 +31,90 @@ class BorgBoiContext:
 
     @property
     def orchestrator(self) -> Orchestrator:
-        """Get or create the orchestrator instance."""
+        from borgboi.core.orchestrator import Orchestrator
+
         if self._orchestrator is None:
             self._orchestrator = Orchestrator(config=self.config)
         return self._orchestrator
 
     @property
     def config(self) -> Config:
-        """Get or create the config instance."""
         if self._config is None:
             base_config = get_config()
-            # Override with CLI options
-            self._config = Config(
-                aws=base_config.aws,
-                borg=base_config.borg,
-                ui=base_config.ui,
-                offline=self.offline or base_config.offline,
-                debug=self.debug or base_config.debug,
+            self._config = base_config.model_copy(
+                update={
+                    "offline": self.offline or base_config.offline,
+                    "debug": self.debug or base_config.debug,
+                }
             )
         return self._config
 
 
-pass_context: Any = click.make_pass_decorator(BorgBoiContext)
+ContextArg = Annotated[BorgBoiContext, Parameter(parse=False)]
+MetaTokens = Annotated[str, Parameter(show=False, allow_leading_hyphen=True)]
 
 
-@click.group()
-@click.option("--offline", envvar="BORGBOI_OFFLINE", is_flag=True, help="Run in offline mode (no AWS)")
-@click.option("--debug", envvar="BORGBOI_DEBUG", is_flag=True, help="Enable debug output")
-@click.version_option()
-@click.pass_context
-def cli(ctx: click.Context, offline: bool, debug: bool) -> None:
-    """BorgBoi - Borg backup automation with AWS integration.
-
-    Use subcommands to manage repositories and backups:
-
-    \b
-      repo       - Repository management (create, list, info, delete)
-      backup     - Backup operations (run, daily, list, restore, delete)
-      s3         - S3 sync operations (sync, restore, delete)
-      exclusions - Manage backup exclusions
-      config     - Show configuration values
-
-    For backward compatibility, legacy commands (create-repo, daily-backup, etc.)
-    are still available as top-level commands.
-    """
-    ctx.obj = BorgBoiContext(offline=offline, debug=debug)
+def print_error_and_exit(message: str, *, error: Exception | None = None) -> NoReturn:
+    console.print(f"[bold red]Error:[/] {message}")
+    raise SystemExit(1) from error
 
 
-@cli.command()
+def confirm_action(prompt: str) -> bool:
+    return Confirm.ask(prompt, console=console, default=False)
+
+
+_VERSION = get_version("borgboi")
+
+app = App(
+    name="borgboi",
+    help=(
+        "BorgBoi - Borg backup automation with AWS integration.\n\n"
+        "Use subcommands to manage repositories and backups: repo, backup, s3, exclusions, config."
+    ),
+    version=_VERSION,
+)
+app.register_install_completion_command()  # NOTE: This modifies the user's shell rc file
+
+
+@app.meta.default
+def _launcher(
+    *tokens: MetaTokens,
+    offline: Annotated[
+        bool,
+        Parameter(name="--offline", env_var="BORGBOI_OFFLINE", negative="", help="Run in offline mode (no AWS)"),
+    ] = False,
+    debug: Annotated[
+        bool,
+        Parameter(name="--debug", env_var="BORGBOI_DEBUG", negative="", help="Enable debug output"),
+    ] = False,
+) -> Any:
+    ctx = BorgBoiContext(offline=offline, debug=debug)
+    command, bound, ignored = app.parse_args(tokens)
+    additional_kwargs: dict[str, Any] = {}
+
+    for parameter_name, annotation in ignored.items():
+        if annotation is BorgBoiContext:
+            additional_kwargs[parameter_name] = ctx
+
+    return command(*bound.args, **bound.kwargs, **additional_kwargs)
+
+
+@app.command(name="version")
 def version() -> None:
     """Display the installed borgboi version."""
-    click.echo(f"borgboi {get_version('borgboi')}")
+    console.print(f"borgboi {_VERSION}", highlight=False)
 
 
-def _register_commands() -> None:
-    """Import and register subcommands after cli definition to avoid circular imports."""
-    from borgboi.cli.backup import backup
-    from borgboi.cli.config import config
-    from borgboi.cli.exclusions import exclusions
-    from borgboi.cli.legacy import register_legacy_commands
-    from borgboi.cli.repo import repo
-    from borgboi.cli.s3 import s3
-
-    cli.add_command(repo)
-    cli.add_command(backup)
-    cli.add_command(s3)
-    cli.add_command(exclusions)
-    cli.add_command(config)
-    register_legacy_commands(cli)
+app.command("borgboi.cli.repo:repo")
+app.command("borgboi.cli.backup:backup")
+app.command("borgboi.cli.s3:s3")
+app.command("borgboi.cli.exclusions:exclusions")
+app.command("borgboi.cli.config:config")
 
 
-_register_commands()
+def cli(tokens: Iterable[str] | str | None = None, **kwargs: Any) -> Any:
+    """Invoke the BorgBoi CLI."""
+    return app.meta(tokens, **kwargs)
 
 
 def main() -> None:

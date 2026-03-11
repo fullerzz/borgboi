@@ -1,113 +1,127 @@
 """Repository management commands for BorgBoi CLI."""
 
-import click
+from typing import Annotated
 
-from borgboi.cli.main import BorgBoiContext, pass_context
+from cyclopts import App, Parameter
+
+from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
 from borgboi.rich_utils import console
 
-
-@click.group()
-def repo() -> None:
-    """Repository management commands.
-
-    Create, list, view, and delete Borg repositories.
-    """
+repo = App(
+    name="repo",
+    help="Repository management commands.\n\nCreate, inspect, list, and delete Borg repositories.",
+)
 
 
-@repo.command("create")
-@click.option("--path", "-p", required=True, type=click.Path(exists=False), help="Path to create repository")
-@click.option("--backup-target", "-b", required=True, type=click.Path(exists=True), help="Directory to back up")
-@click.option("--name", "-n", required=True, help="Repository name")
-@click.option("--passphrase", type=str, default=None, help="Passphrase (auto-generated if not provided)")
-@pass_context
-def repo_create(ctx: BorgBoiContext, path: str, backup_target: str, name: str, passphrase: str | None) -> None:
+@repo.command(name="create")
+def repo_create(
+    *,
+    path: Annotated[str, Parameter(name=["--path", "-p"], help="Path to create repository")],
+    backup_target: Annotated[str, Parameter(name=["--backup-target", "-b"], help="Directory to back up")],
+    name: Annotated[str, Parameter(name=["--name", "-n"], help="Repository name")],
+    passphrase: Annotated[
+        str | None,
+        Parameter(name="--passphrase", help="Passphrase (auto-generated if not provided)"),
+    ] = None,
+    ctx: ContextArg,
+) -> None:
     """Create a new Borg repository."""
     try:
-        repo = ctx.orchestrator.create_repo(path=path, backup_target=backup_target, name=name, passphrase=passphrase)
-        console.print(f"Created new Borg repo at [bold cyan]{repo.path}[/]")
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+        repo_info = ctx.orchestrator.create_repo(
+            path=path,
+            backup_target=backup_target,
+            name=name,
+            passphrase=passphrase,
+        )
+        console.print(f"Created new Borg repo at [bold cyan]{repo_info.path}[/]")
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
-@repo.command("list")
-@pass_context
-def repo_list(ctx: BorgBoiContext) -> None:
+@repo.command(name="list")
+def repo_list(*, ctx: ContextArg) -> None:
     """List all BorgBoi repositories."""
     from borgboi import rich_utils
 
     try:
         repos = ctx.orchestrator.list_repos()
         rich_utils.output_repos_table(repos)
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
-@repo.command("info")
-@click.option("--path", "-p", type=click.Path(exists=False), help="Repository path")
-@click.option("--name", "-n", type=str, help="Repository name")
-@click.option("--passphrase", type=str, default=None, help="Passphrase override")
-@click.option("--raw", is_flag=True, help="Show raw Borg output instead of formatted")
-@pass_context
-def repo_info(ctx: BorgBoiContext, path: str | None, name: str | None, passphrase: str | None, raw: bool) -> None:
+@repo.command(name="info")
+def repo_info(
+    *,
+    path: Annotated[str | None, Parameter(name=["--path", "-p"], help="Repository path")] = None,
+    name: Annotated[str | None, Parameter(name=["--name", "-n"], help="Repository name")] = None,
+    passphrase: Annotated[str | None, Parameter(name="--passphrase", help="Passphrase override")] = None,
+    raw: Annotated[
+        bool, Parameter(name="--raw", negative="", help="Show raw Borg output instead of formatted")
+    ] = False,
+    ctx: ContextArg,
+) -> None:
     """Show repository information."""
     from borgboi import rich_utils
 
     try:
-        repo = ctx.orchestrator.get_repo(name=name, path=path)
-        repo_info_data = ctx.orchestrator.get_repo_info(repo, passphrase=passphrase)
+        repo_info = ctx.orchestrator.get_repo(name=name, path=path)
+        repo_data = ctx.orchestrator.get_repo_info(repo_info, passphrase=passphrase)
 
         if raw:
-            console.print(repo_info_data)
-        else:
-            if repo.metadata:
-                rich_utils.output_repo_info(
-                    name=repo.name,
-                    total_size_gb=repo.metadata.cache.total_size_gb,
-                    total_csize_gb=repo.metadata.cache.total_csize_gb,
-                    unique_csize_gb=repo.metadata.cache.unique_csize_gb,
-                    encryption_mode=repo.metadata.encryption.mode,
-                    repo_id=repo.metadata.repository.id,
-                    repo_location=repo.metadata.repository.location,
-                    last_modified=repo.metadata.repository.last_modified,
-                )
-            else:
-                console.print(f"Repository: [bold cyan]{repo.name}[/]")
-                console.print(f"Path: {repo.path}")
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+            console.print(repo_data)
+            return
+
+        if repo_info.metadata:
+            rich_utils.output_repo_info(
+                name=repo_info.name,
+                total_size_gb=repo_info.metadata.cache.total_size_gb,
+                total_csize_gb=repo_info.metadata.cache.total_csize_gb,
+                unique_csize_gb=repo_info.metadata.cache.unique_csize_gb,
+                encryption_mode=repo_info.metadata.encryption.mode,
+                repo_id=repo_info.metadata.repository.id,
+                repo_location=repo_info.metadata.repository.location,
+                last_modified=repo_info.metadata.repository.last_modified,
+            )
+            return
+
+        console.print(f"Repository: [bold cyan]{repo_info.name}[/]")
+        console.print(f"Path: {repo_info.path}")
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
-@repo.command("delete")
-@click.option("--path", "-p", type=click.Path(exists=False), help="Repository path")
-@click.option("--name", "-n", type=str, help="Repository name")
-@click.option("--dry-run", is_flag=True, help="Simulate deletion without making changes")
-@click.option("--passphrase", type=str, default=None, help="Passphrase override")
-@click.option("--delete-from-s3", is_flag=True, help="Also delete from S3")
-@pass_context
+@repo.command(name="delete")
 def repo_delete(
-    ctx: BorgBoiContext,
-    path: str | None,
-    name: str | None,
-    dry_run: bool,
-    passphrase: str | None,
-    delete_from_s3: bool,
+    *,
+    path: Annotated[str | None, Parameter(name=["--path", "-p"], help="Repository path")] = None,
+    name: Annotated[str | None, Parameter(name=["--name", "-n"], help="Repository name")] = None,
+    dry_run: Annotated[
+        bool, Parameter(name="--dry-run", negative="", help="Simulate deletion without making changes")
+    ] = False,
+    passphrase: Annotated[str | None, Parameter(name="--passphrase", help="Passphrase override")] = None,
+    delete_from_s3: Annotated[
+        bool,
+        Parameter(name="--delete-from-s3", negative="", help="Also delete from S3"),
+    ] = False,
+    ctx: ContextArg,
 ) -> None:
     """Delete a Borg repository."""
-    if not dry_run and not click.confirm("Are you sure you want to delete this repository?"):
+    if not dry_run and not confirm_action("Are you sure you want to delete this repository?"):
         console.print("Aborted.")
         return
 
     try:
         ctx.orchestrator.delete_repo(
-            name=name, path=path, dry_run=dry_run, delete_from_s3=delete_from_s3, passphrase=passphrase
+            name=name,
+            path=path,
+            dry_run=dry_run,
+            delete_from_s3=delete_from_s3,
+            passphrase=passphrase,
         )
-        if not dry_run:
-            console.print("[bold green]Repository deleted successfully[/]")
-        else:
+        if dry_run:
             console.print("[bold yellow]Dry run completed - no changes made[/]")
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+        else:
+            console.print("[bold green]Repository deleted successfully[/]")
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)

@@ -1,10 +1,25 @@
 # BorgBoi Commands
 
 !!! info "CLI Structure"
-    BorgBoi uses a hierarchical CLI with subcommand groups: `repo`, `backup`, `s3`, `exclusions`, and `config`. Legacy flat commands (like `create-repo`, `daily-backup`) are still available for backward compatibility.
+    BorgBoi uses a Cyclopts-powered CLI with subcommand groups: `repo`, `backup`, `s3`, `exclusions`, `config`, and the root `version` command.
 
 !!! info "Offline Mode"
-    All commands support an `--offline` flag (or `BORGBOI_OFFLINE` environment variable) that enables offline mode. In offline mode, BorgBoi stores repository metadata locally in `~/.borgboi/.borgboi_metadata/` instead of using AWS DynamoDB and S3 services.
+    All commands support root-level `--offline` and `--debug` flags. `--offline` can also be enabled with `BORGBOI_OFFLINE`. In offline mode, BorgBoi stores repository metadata locally in `~/.borgboi/.database/borgboi.db` instead of using AWS DynamoDB and S3 services.
+
+!!! tip "Use generated help"
+    Run `bb --help` or `bb <group> <command> --help` to view the current help output generated directly from the Cyclopts app.
+
+---
+
+## Root Commands
+
+### `version`
+
+Print the installed BorgBoi version.
+
+```sh
+bb version
+```
 
 ---
 
@@ -12,61 +27,37 @@
 
 ### `repo create`
 
-```text
-Usage: bb repo create [OPTIONS]
+Create a new Borg repository.
 
-  Create a new Borg repository.
+- Required: `--path/-p`, `--backup-target/-b`, `--name/-n`
+- Optional: `--passphrase`
 
-Options:
-  -p, --path PATH           Path to create repository  [required]
-  -b, --backup-target PATH  Directory to back up  [required]
-  -n, --name TEXT           Repository name  [required]
-  --passphrase TEXT         Passphrase (auto-generated if not provided)
-
+```sh
+bb repo create --path /opt/borg-repos/docs \
+    --backup-target ~/Documents \
+    --name my-docs-backup
 ```
 
 ### `repo list`
 
-```text
-Usage: bb repo list [OPTIONS]
-
-  List all BorgBoi repositories.
-
-```
-
-!!! warning "Offline Mode Limitation"
-    The `repo list` command is not yet implemented in offline mode. Use `repo info` to access individual repositories by name or path in offline mode.
+List all BorgBoi repositories.
 
 ### `repo info`
 
-```text
-Usage: bb repo info [OPTIONS]
+Show repository information.
 
-  Show repository information.
+- Target the repository with `--name/-n` or `--path/-p`
+- Optional: `--passphrase`, `--raw`
 
-Options:
-  -p, --path PATH      Repository path
-  -n, --name TEXT      Repository name
-  --passphrase TEXT    Passphrase override
-  --raw                Show raw Borg output instead of formatted
-
-```
+`--raw` prints Borg's raw repository info output instead of BorgBoi's formatted summary.
 
 ### `repo delete`
 
-```text
-Usage: bb repo delete [OPTIONS]
+Delete a Borg repository.
 
-  Delete a Borg repository.
-
-Options:
-  -p, --path PATH      Repository path
-  -n, --name TEXT      Repository name
-  --dry-run            Simulate deletion without making changes
-  --passphrase TEXT    Passphrase override
-  --delete-from-s3     Also delete from S3
-
-```
+- Target the repository with `--name/-n` or `--path/-p`
+- Optional: `--dry-run`, `--passphrase`, `--delete-from-s3`
+- Prompts for confirmation unless `--dry-run` is used
 
 ---
 
@@ -74,17 +65,12 @@ Options:
 
 ### `backup run`
 
-```text
-Usage: bb backup run [OPTIONS]
+Create a new backup archive.
 
-  Create a new backup archive.
+- Target the repository with `--name/-n` or `--path/-p`
+- Optional: `--passphrase`, `--no-json`
 
-Options:
-  -p, --path PATH      Repository path
-  -n, --name TEXT      Repository name
-  --passphrase TEXT    Passphrase override
-
-```
+By default, BorgBoi uses Borg JSON logging so it can render a post-backup summary table. `--no-json` disables that and streams Borg's native output instead.
 
 !!! info "Exclude File Resolution"
     Backup commands (`backup run` and `backup daily`) resolve exclusion files in this order:
@@ -96,79 +82,47 @@ Options:
 
 ### `backup daily`
 
-```text
-Usage: bb backup daily [OPTIONS]
+Perform the daily workflow: create an archive, prune old archives, compact the repo, and sync to S3.
 
-  Perform daily backup with prune and compact.
+- Requires exactly one of `--name/-n` or `--path/-p`
+- Optional: `--passphrase`, `--no-s3-sync`
 
-Options:
-  -p, --path PATH      Repository path
-  -n, --name TEXT      Repository name
-  --passphrase TEXT    Passphrase override
-  --no-s3-sync         Skip S3 sync after backup
-
-```
-
-Provide either `--path` or `--name` to select the repository.
+`--no-s3-sync` keeps the local backup workflow but skips the final S3 sync step.
 
 ### `backup list`
 
-```text
-Usage: bb backup list [OPTIONS]
+List archives in a repository.
 
-  List archives in a repository.
+- Target the repository with `--name/-n` or `--path/-p`
+- Optional: `--passphrase`
 
-Options:
-  -p, --path PATH      Repository path
-  -n, --name TEXT      Repository name
-  --passphrase TEXT    Passphrase override
-
-```
+Archives are shown newest-first.
 
 ### `backup contents`
 
-```text
-Usage: bb backup contents [OPTIONS]
+List contents of an archive.
 
-  List contents of an archive.
+- Required: `--archive/-a`
+- Target the repository with `--name/-n` or `--path/-p`
+- Optional: `--output/-o` (defaults to `stdout`), `--passphrase`
 
-Options:
-  -p, --path PATH      Repository path
-  -n, --name TEXT      Repository name
-  -a, --archive TEXT   Archive name  [required]
-  -o, --output TEXT    Output file path or 'stdout'  [default: stdout]
-  --passphrase TEXT    Passphrase override
-
-```
+When `--output` points to a file, BorgBoi writes the archive paths there instead of printing them.
 
 ### `backup restore`
 
-```text
-Usage: bb backup restore [OPTIONS]
+Restore an archive into the current working directory.
 
-  Restore an archive to the current directory.
-
-Options:
-  -p, --path PATH      Repository path  [required]
-  -a, --archive TEXT   Archive name to restore  [required]
-  --passphrase TEXT    Passphrase override
-
-```
+- Required: `--path/-p`, `--archive/-a`
+- Optional: `--passphrase`
+- Prompts for confirmation before extraction
 
 ### `backup delete`
 
-```text
-Usage: bb backup delete [OPTIONS]
+Delete an archive from a repository.
 
-  Delete an archive from a repository.
-
-Options:
-  -p, --path PATH      Repository path  [required]
-  -a, --archive TEXT   Archive name to delete  [required]
-  --dry-run            Simulate deletion without making changes
-  --passphrase TEXT    Passphrase override
-
-```
+- Required: `--path/-p`, `--archive/-a`
+- Optional: `--dry-run`, `--passphrase`
+- Prompts for confirmation unless `--dry-run` is used
 
 ---
 
@@ -176,66 +130,33 @@ Options:
 
 ### `s3 sync`
 
-```text
-Usage: bb s3 sync [OPTIONS]
+Sync a repository to S3.
 
-  Sync a repository to S3.
-
-Options:
-  -p, --path PATH      Repository path
-  -n, --name TEXT      Repository name
-
-```
+- Target the repository with `--name/-n` or `--path/-p`
 
 ### `s3 restore`
 
-```text
-Usage: bb s3 restore [OPTIONS]
+Restore a repository from S3.
 
-  Restore a repository from S3.
-
-Options:
-  -p, --path PATH      Repository path
-  -n, --name TEXT      Repository name
-  --dry-run            Simulate restoration without making changes
-  --force              Force restore even if repository exists locally
-
-```
+- Target the repository with `--name/-n` or `--path/-p`
+- Optional: `--dry-run`, `--force`
 
 ### `s3 delete`
 
-```text
-Usage: bb s3 delete [OPTIONS]
+Delete a repository from S3.
 
-  Delete a repository from S3.
+- Required: `--name/-n`
+- Optional: `--dry-run`
+- Prompts for confirmation unless `--dry-run` is used
 
-Options:
-  -n, --name TEXT      Repository name  [required]
-  --dry-run            Simulate deletion without making changes
-
-```
+!!! warning "Current status"
+    The command is present in the CLI surface, but the Cyclopts migration kept it as a placeholder and it currently prints `S3 delete not yet implemented in new CLI`.
 
 ### `s3 stats`
 
-```text
-Usage: bb s3 stats
+Show general S3 bucket storage metrics and class composition.
 
-  Show general S3 bucket storage metrics and class composition.
-
-  Displays total bucket size, total object count, and a storage class breakdown
-  including Intelligent-Tiering tiers (FA/IA/AIA/AA/DAA) when available.
-  Values are sourced from AWS/S3 CloudWatch daily storage metrics.
-
-  Also includes inventory-based metadata for estimated upcoming
-  Intelligent-Tiering FA->IA transitions in the next 7 days.
-
-  Note: This forecast requires an enabled S3 Inventory configuration that
-  includes optional fields: Size, StorageClass,
-  IntelligentTieringAccessTier, and either LastAccessDate (preferred)
-  or LastModifiedDate (fallback). The first inventory delivery can take up to
-  48 hours after configuration.
-
-```
+The output includes total bucket size, total object count, storage class breakdown, and Intelligent-Tiering transition estimates when S3 Inventory data is available.
 
 ---
 
@@ -243,54 +164,29 @@ Usage: bb s3 stats
 
 ### `exclusions create`
 
-```text
-Usage: bb exclusions create [OPTIONS]
+Create an exclusions file for a repository.
 
-  Create an exclusions file for a repository.
-
-Options:
-  -p, --path PATH      Repository path  [required]
-  -s, --source FILE    Source file with exclusion patterns  [required]
-
-```
+- Required: `--path/-p`, `--source/-s`
 
 ### `exclusions show`
 
-```text
-Usage: bb exclusions show [OPTIONS]
+Show exclusion patterns for a repository.
 
-  Show exclusion patterns for a repository.
+- Required: `--name/-n`
 
-Options:
-  -n, --name TEXT      Repository name  [required]
-
-```
+The command prefers a repository-specific exclusions file and falls back to the shared default file when present.
 
 ### `exclusions add`
 
-```text
-Usage: bb exclusions add [OPTIONS]
+Add an exclusion pattern to a repository.
 
-  Add an exclusion pattern to a repository.
-
-Options:
-  -n, --name TEXT      Repository name  [required]
-  -x, --pattern TEXT   Exclusion pattern to add  [required]
-
-```
+- Required: `--name/-n`, `--pattern/-x`
 
 ### `exclusions remove`
 
-```text
-Usage: bb exclusions remove [OPTIONS]
+Remove an exclusion pattern by line number.
 
-  Remove an exclusion pattern by line number.
-
-Options:
-  -n, --name TEXT      Repository name  [required]
-  -l, --line INTEGER   Line number to remove (1-based)  [required]
-
-```
+- Required: `--name/-n`, `--line/-l`
 
 ---
 
@@ -298,61 +194,10 @@ Options:
 
 ### `config show`
 
-```text
-Usage: bb config show [OPTIONS]
+Display the current BorgBoi configuration.
 
-  Display the current BorgBoi configuration.
+- Optional: `--path/-p`, `--format/-f {yaml,json,tree}`, `--pretty-print`, `--no-pretty-print`
 
-Options:
-  -p, --path PATH           Custom path for the configuration file
-  -f, --format [yaml|json|tree]
-                            Output format  [default: yaml]
-  --pretty-print/--no-pretty-print
-                            Pretty print output using rich  [default: pretty-print]
-
-```
+`tree` renders a Rich tree view. Plain YAML/JSON can be forced with `--no-pretty-print`. When environment variables override config values, BorgBoi highlights those overrides in the tree view and adds `_env_overrides` to JSON output.
 
 ---
-
-## Utility Commands
-
-### `migrate-passphrases`
-
-```text
-Usage: bb migrate-passphrases [OPTIONS]
-
-  Migrate repository passphrases from database to secure file storage.
-
-  Passphrases are migrated to ~/.borgboi/passphrases/{repo-name}.key
-  with 0o600 permissions.
-
-Options:
-  -n, --repo-name TEXT   Specific repo to migrate (migrates all if omitted)
-  --offline              Enable offline mode (no AWS services)
-
-```
-
----
-
-## Legacy Commands
-
-!!! note "Backward Compatibility"
-    The following legacy commands are still available for backward compatibility but are deprecated. Consider using the new hierarchical commands above.
-
-| Legacy Command | New Command |
-|----------------|-------------|
-| `create-repo` | `repo create` |
-| `list-repos` | `repo list` |
-| `get-repo` | `repo info` |
-| `repo-info` | `repo info` |
-| `delete-repo` | `repo delete` |
-| `daily-backup` | `backup daily` |
-| `list-archives` | `backup list` |
-| `list-archive-contents` | `backup contents` |
-| `extract-archive` | `backup restore` |
-| `delete-archive` | `backup delete` |
-| `restore-repo` | `s3 restore` |
-| `create-exclusions` | `exclusions create` |
-| `append-excludes` | `exclusions add` |
-| `modify-excludes` | `exclusions remove` |
-| `export-repo-key` | *(no new equivalent)* |

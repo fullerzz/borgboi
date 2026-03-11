@@ -1,100 +1,107 @@
 """S3 sync commands for BorgBoi CLI."""
 
-import click
+from typing import Annotated
 
-from borgboi.cli.main import BorgBoiContext, pass_context
+from cyclopts import App, Parameter
+
+from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
 from borgboi.rich_utils import console
 
-
-@click.group()
-def s3() -> None:
-    """S3 synchronization commands.
-
-    Sync repositories with AWS S3 for cloud backup.
-    """
+s3 = App(
+    name="s3",
+    help="S3 synchronization commands.\n\nSync repositories to AWS S3 and inspect bucket stats.",
+)
 
 
-@s3.command("sync")
-@click.option("--path", "-p", type=click.Path(exists=True), help="Repository path")
-@click.option("--name", "-n", type=str, help="Repository name")
-@pass_context
-def s3_sync(ctx: BorgBoiContext, path: str | None, name: str | None) -> None:
+@s3.command(name="sync")
+def s3_sync(
+    *,
+    path: Annotated[str | None, Parameter(name=["--path", "-p"], help="Repository path")] = None,
+    name: Annotated[str | None, Parameter(name=["--name", "-n"], help="Repository name")] = None,
+    ctx: ContextArg,
+) -> None:
     """Sync a repository to S3."""
     if ctx.offline:
         console.print("[bold yellow]S3 sync is not available in offline mode[/]")
         return
 
     try:
-        repo = ctx.orchestrator.get_repo(name=name, path=path)
+        repo_info = ctx.orchestrator.get_repo(name=name, path=path)
 
-        # Use the old s3 module for now
         from borgboi import rich_utils
-        from borgboi.clients import s3
+        from borgboi.clients import s3 as s3_client
         from borgboi.lib.colors import COLOR_HEX
 
         rich_utils.render_cmd_output_lines(
             "Syncing repo with S3 bucket",
             "S3 sync completed successfully",
-            s3.sync_with_s3(repo.path, repo.name, cfg=ctx.config),
+            s3_client.sync_with_s3(repo_info.path, repo_info.name, cfg=ctx.config),
             spinner="arrow",
             ruler_color=COLOR_HEX.green,
         )
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
-@s3.command("restore")
-@click.option("--path", "-p", type=click.Path(exists=False), help="Repository path")
-@click.option("--name", "-n", type=str, help="Repository name")
-@click.option("--dry-run", is_flag=True, help="Simulate restoration without making changes")
-@click.option("--force", is_flag=True, help="Force restore even if repository exists locally")
-@pass_context
-def s3_restore(ctx: BorgBoiContext, path: str | None, name: str | None, dry_run: bool, force: bool) -> None:
+@s3.command(name="restore")
+def s3_restore(
+    *,
+    path: Annotated[str | None, Parameter(name=["--path", "-p"], help="Repository path")] = None,
+    name: Annotated[str | None, Parameter(name=["--name", "-n"], help="Repository name")] = None,
+    dry_run: Annotated[
+        bool,
+        Parameter(name="--dry-run", negative="", help="Simulate restoration without making changes"),
+    ] = False,
+    force: Annotated[
+        bool,
+        Parameter(name="--force", negative="", help="Force restore even if repository exists locally"),
+    ] = False,
+    ctx: ContextArg,
+) -> None:
     """Restore a repository from S3."""
     if ctx.offline:
         console.print("[bold yellow]S3 restore is not available in offline mode[/]")
         return
 
     try:
-        repo = ctx.orchestrator.get_repo(name=name, path=path)
+        repo_info = ctx.orchestrator.get_repo(name=name, path=path)
 
-        if repo.metadata and repo.metadata.cache:
+        if repo_info.metadata and repo_info.metadata.cache:
             console.print(
-                f"Repository found: [bold cyan]{repo.path} - Total size: {repo.metadata.cache.total_size_gb} GB[/]"
+                f"Repository found: [bold cyan]{repo_info.path} - Total size: {repo_info.metadata.cache.total_size_gb} GB[/]"
             )
         else:
-            console.print(f"Repository found: [bold cyan]{repo.path}[/]")
+            console.print(f"Repository found: [bold cyan]{repo_info.path}[/]")
 
-        # Use old orchestrator for now
-        from borgboi import orchestrator as old_orch
-
-        old_orch.restore_repo(repo, dry_run, force, ctx.offline)
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+        ctx.orchestrator.restore_from_s3(repo_info, dry_run=dry_run, force=force)
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
-@s3.command("delete")
-@click.option("--name", "-n", required=True, type=str, help="Repository name")
-@click.option("--dry-run", is_flag=True, help="Simulate deletion without making changes")
-@click.confirmation_option(prompt="Are you sure you want to delete this repository from S3?")
-@pass_context
-def s3_delete(ctx: BorgBoiContext, name: str, dry_run: bool) -> None:
+@s3.command(name="delete")
+def s3_delete(
+    *,
+    name: Annotated[str, Parameter(name=["--name", "-n"], help="Repository name")],
+    dry_run: Annotated[
+        bool, Parameter(name="--dry-run", negative="", help="Simulate deletion without making changes")
+    ] = False,
+    ctx: ContextArg,
+) -> None:
     """Delete a repository from S3."""
-    _ = name, dry_run  # Will be used when S3 client is implemented
-
     if ctx.offline:
         console.print("[bold yellow]S3 delete is not available in offline mode[/]")
         return
 
-    console.print("[bold yellow]S3 delete not yet implemented in new CLI[/]")
-    # Will be implemented when S3 client class is complete
+    if not confirm_action("Are you sure you want to delete this repository from S3?"):
+        console.print("Aborted.")
+        return
+
+    # TODO: Implement S3 deletion via ctx.orchestrator
+    console.print(f"[bold yellow]S3 delete for '{name}' not yet implemented (dry_run={dry_run})[/]")
 
 
-@s3.command("stats")
-@pass_context
-def s3_stats(ctx: BorgBoiContext) -> None:
+@s3.command(name="stats")
+def s3_stats(*, ctx: ContextArg) -> None:
     """Show S3 bucket storage metrics and class composition."""
     if ctx.offline:
         console.print("[bold yellow]S3 stats are not available in offline mode[/]")
@@ -106,6 +113,5 @@ def s3_stats(ctx: BorgBoiContext) -> None:
 
         stats = s3_client.get_bucket_stats(cfg=ctx.config)
         rich_utils.output_s3_bucket_stats(stats)
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1) from e
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
