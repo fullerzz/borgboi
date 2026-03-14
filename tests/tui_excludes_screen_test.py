@@ -1,7 +1,7 @@
 import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from textual.widgets import Static, Tabs, TextArea
 
@@ -9,6 +9,7 @@ from borgboi.config import Config
 from borgboi.models import BorgBoiRepo
 from borgboi.tui.app import BorgBoiApp
 from borgboi.tui.excludes_screen import (
+    _EDITING_STATUS,
     DefaultExcludesScreen,
     load_default_excludes_document,
     load_repo_excludes_document,
@@ -129,5 +130,243 @@ def test_tui_can_open_switch_and_close_excludes_screen(
 
             await pilot.press("escape")
             assert not isinstance(app.screen, DefaultExcludesScreen)
+
+    asyncio.run(run_test())
+
+
+def _build_excludes_app(
+    cfg: Config,
+    repos: list[BorgBoiRepo] | None = None,
+) -> BorgBoiApp:
+    """Build a BorgBoiApp wired to the given config and repos."""
+    return BorgBoiApp(
+        config=cfg,
+        orchestrator=cast(
+            Any,
+            SimpleNamespace(list_repos=Mock(return_value=repos or [build_repo("alpha")])),
+        ),
+    )
+
+
+def test_tui_edit_save_writes_file_to_disk(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+    excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    excludes_path.write_text("*.tmp\n")
+
+    app = _build_excludes_app(cfg)
+
+    async def run_test() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("e")
+            assert isinstance(app.screen, DefaultExcludesScreen)
+
+            viewer = app.screen.query_one("#default-excludes-viewer", TextArea)
+            assert viewer.read_only is True
+
+            # Enter edit mode
+            await pilot.press("ctrl+e")
+            assert viewer.read_only is False
+            assert app.screen._editing is True
+
+            # Replace content
+            viewer.load_text("*.tmp\n.cache/\n")
+
+            # Save
+            await pilot.press("ctrl+s")
+            assert viewer.read_only is True
+            assert app.screen._editing is False
+
+            # Verify file on disk
+            assert excludes_path.read_text() == "*.tmp\n.cache/\n"
+
+    asyncio.run(run_test())
+
+
+def test_tui_edit_cancel_reverts_content(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+    excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    excludes_path.write_text("*.tmp\n")
+
+    app = _build_excludes_app(cfg)
+
+    async def run_test() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("e")
+            assert isinstance(app.screen, DefaultExcludesScreen)
+
+            viewer = app.screen.query_one("#default-excludes-viewer", TextArea)
+
+            # Enter edit mode and modify
+            await pilot.press("ctrl+e")
+            viewer.load_text("CHANGED\n")
+            assert viewer.text == "CHANGED\n"
+
+            # Cancel with escape
+            await pilot.press("escape")
+            assert viewer.read_only is True
+            assert app.screen._editing is False
+            assert viewer.text == "*.tmp\n"
+
+            # File on disk unchanged
+            assert excludes_path.read_text() == "*.tmp\n"
+
+    asyncio.run(run_test())
+
+
+def test_tui_edit_creates_nonexistent_file(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+    repo_excludes_path = cfg.borgboi_dir / f"alpha_{cfg.excludes_filename}"
+    cfg.borgboi_dir.mkdir(parents=True, exist_ok=True)
+    assert not repo_excludes_path.exists()
+
+    app = _build_excludes_app(cfg)
+
+    async def run_test() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("e")
+            assert isinstance(app.screen, DefaultExcludesScreen)
+
+            # Switch to repo tab
+            tabs = app.screen.query_one("#default-excludes-tabs", Tabs)
+            await pilot.press("right")
+            assert tabs.active_tab is not None
+            assert tabs.active_tab.id == "repo-1"
+
+            viewer = app.screen.query_one("#default-excludes-viewer", TextArea)
+
+            # Enter edit mode on non-existent file
+            await pilot.press("ctrl+e")
+            assert viewer.read_only is False
+            assert viewer.text == ""  # Cleared for editing
+
+            # Type content and save
+            viewer.load_text("node_modules/\n")
+            await pilot.press("ctrl+s")
+
+            # File should now exist
+            assert repo_excludes_path.exists()
+            assert repo_excludes_path.read_text() == "node_modules/\n"
+
+    asyncio.run(run_test())
+
+
+def test_tui_tab_switch_while_editing_discards_changes(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+    default_excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    repo_excludes_path = cfg.borgboi_dir / f"alpha_{cfg.excludes_filename}"
+    default_excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    default_excludes_path.write_text("*.tmp\n")
+    repo_excludes_path.write_text("node_modules/\n")
+
+    app = _build_excludes_app(cfg)
+
+    async def run_test() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("e")
+            assert isinstance(app.screen, DefaultExcludesScreen)
+
+            viewer = app.screen.query_one("#default-excludes-viewer", TextArea)
+
+            # Enter edit mode on default tab
+            await pilot.press("ctrl+e")
+            viewer.load_text("UNSAVED\n")
+
+            # Switch tabs programmatically — should discard edits and exit edit mode
+            tabs = app.screen.query_one("#default-excludes-tabs", Tabs)
+            tabs.active = "repo-1"
+            await pilot.pause()
+            assert app.screen._editing is False
+            assert viewer.read_only is True
+            assert viewer.text == "node_modules/\n"
+
+            # Original file unchanged
+            assert default_excludes_path.read_text() == "*.tmp\n"
+
+    asyncio.run(run_test())
+
+
+def test_tui_save_failure_keeps_editing_and_notifies(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+    excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    excludes_path.write_text("*.tmp\n")
+
+    app = _build_excludes_app(cfg)
+
+    async def run_test() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("e")
+            assert isinstance(app.screen, DefaultExcludesScreen)
+
+            viewer = app.screen.query_one("#default-excludes-viewer", TextArea)
+
+            # Enter edit mode and modify
+            await pilot.press("ctrl+e")
+            viewer.load_text("*.tmp\n.cache/\n")
+
+            # Make write_text raise OSError
+            with patch.object(type(excludes_path), "write_text", side_effect=OSError("Permission denied")):
+                await pilot.press("ctrl+s")
+
+            # Should still be in edit mode
+            assert app.screen._editing is True
+            assert viewer.read_only is False
+            assert viewer.text == "*.tmp\n.cache/\n"
+
+            # File on disk unchanged
+            assert excludes_path.read_text() == "*.tmp\n"
+
+    asyncio.run(run_test())
+
+
+def test_tui_edit_status_shows_editing_indicator(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+    excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    excludes_path.write_text("*.tmp\n")
+
+    app = _build_excludes_app(cfg)
+
+    async def run_test() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("e")
+            assert isinstance(app.screen, DefaultExcludesScreen)
+
+            status = app.screen.query_one("#default-excludes-status", Static)
+            original_status = cast(Any, status).content
+
+            # Enter edit mode
+            await pilot.press("ctrl+e")
+            assert _EDITING_STATUS in cast(Any, status).content
+
+            # Exit edit mode
+            await pilot.press("escape")
+            assert cast(Any, status).content == original_status
 
     asyncio.run(run_test())

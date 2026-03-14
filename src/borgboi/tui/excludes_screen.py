@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from borgboi.config import Config
     from borgboi.models import BorgBoiRepo
 
+_EDITING_STATUS = "(editing)"
+
 
 @dataclass(frozen=True, slots=True)
 class ExcludesDocument:
@@ -143,11 +145,13 @@ def load_excludes_documents(config: Config | None, repos: Sequence[BorgBoiRepo])
 
 
 class DefaultExcludesScreen(Screen[None]):
-    """Screen for viewing shared and repo-specific excludes files."""
+    """Screen for viewing and editing shared and repo-specific excludes files."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("escape", "app.pop_screen", "Back"),
-        Binding("e", "app.pop_screen", "Back"),
+        Binding("escape", "cancel_or_back", "Back"),
+        Binding("e", "back", "Back"),
+        Binding("ctrl+e", "toggle_edit", "Edit", priority=True),
+        Binding("ctrl+s", "save", "Save", priority=True),
     ]
 
     def __init__(
@@ -157,8 +161,21 @@ class DefaultExcludesScreen(Screen[None]):
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
-        self._documents = load_excludes_documents(config, repos or [])
+        self._config = config
+        self._repos: Sequence[BorgBoiRepo] = repos or []
+        self._documents = load_excludes_documents(config, self._repos)
         self._documents_by_tab_id = {document.tab_id: document for document in self._documents}
+        self._editing = False
+        self._original_body = ""
+
+    @property
+    def _active_document(self) -> ExcludesDocument | None:
+        """Return the document for the currently active tab."""
+        tabs = self.query_one("#default-excludes-tabs", Tabs)
+        tab = tabs.active_tab
+        if tab is None or tab.id is None:
+            return None
+        return self._documents_by_tab_id.get(tab.id)
 
     @override
     def compose(self) -> ComposeResult:
@@ -190,14 +207,117 @@ class DefaultExcludesScreen(Screen[None]):
         if event.tab is None or event.tab.id is None:
             return
 
+        if self._editing:
+            self._reset_edit_state()
+
         document = self._documents_by_tab_id[event.tab.id]
         self._show_document(document)
+
+    def action_toggle_edit(self) -> None:
+        """Toggle between read-only and edit mode."""
+        if self._editing:
+            self._cancel_edit()
+        else:
+            self._enter_edit_mode()
+
+    def action_save(self) -> None:
+        """Save the current TextArea content to disk."""
+        if not self._editing:
+            return
+
+        document = self._active_document
+        if document is None or document.path is None:
+            self.notify("Cannot save: no file path available", severity="error")
+            return
+
+        content = self.query_one("#default-excludes-viewer", TextArea).text
+
+        try:
+            document.path.parent.mkdir(parents=True, exist_ok=True)
+            document.path.write_text(content)
+        except OSError as exc:
+            self.notify(f"Save failed: {exc}", severity="error")
+            return
+
+        self._reload_documents()
+        self._reset_edit_state()
+
+        reloaded = self._active_document
+        if reloaded is not None:
+            self._show_document(reloaded)
+
+        self.notify(f"Saved {document.path.name}", severity="information")
+
+    def action_back(self) -> None:
+        """Go back to the main screen (only available when not editing)."""
+        _ = self.app.pop_screen()
+
+    def action_cancel_or_back(self) -> None:
+        """Cancel editing or go back to the main screen."""
+        if self._editing:
+            self._cancel_edit()
+        else:
+            _ = self.app.pop_screen()
+
+    def _cancel_edit(self) -> None:
+        """Exit edit mode and restore the current document."""
+        self._reset_edit_state()
+        document = self._active_document
+        if document is not None:
+            self._show_document(document)
+
+    def _enter_edit_mode(self) -> None:
+        """Switch to edit mode for the active document."""
+        document = self._active_document
+        if document is None or document.path is None:
+            self.notify("Cannot edit: no file path available", severity="error")
+            return
+
+        viewer = self.query_one("#default-excludes-viewer", TextArea)
+        self._editing = True
+        self._original_body = viewer.text
+
+        if not document.exists:
+            viewer.load_text("")
+
+        viewer.read_only = False
+        viewer.add_class("-editing")
+        viewer.focus()
+
+        self.query_one("#default-excludes-status", Static).update(f"{document.status} {_EDITING_STATUS}")
+        self.refresh_bindings()
+
+    def _reset_edit_state(self) -> None:
+        """Reset editing flags and viewer styling without modifying TextArea content."""
+        viewer = self.query_one("#default-excludes-viewer", TextArea)
+        viewer.read_only = True
+        viewer.remove_class("-editing")
+
+        self._editing = False
+        self._original_body = ""
+
+        self.query_one("#default-excludes-tabs", Tabs).focus()
+        self.refresh_bindings()
 
     def _show_document(self, document: ExcludesDocument) -> None:
         """Render an excludes document in the viewer area."""
         self.query_one("#default-excludes-status", Static).update(document.status)
         self.query_one("#default-excludes-path", Static).update(self._path_label(document))
         self.query_one("#default-excludes-viewer", TextArea).load_text(document.body)
+
+    def _reload_documents(self) -> None:
+        """Reload all documents from disk."""
+        self._documents = load_excludes_documents(self._config, self._repos)
+        self._documents_by_tab_id = {document.tab_id: document for document in self._documents}
+
+    @override
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Control binding visibility based on editing state."""
+        if action == "save":
+            return self._editing
+        if action == "back":
+            return not self._editing
+        return True
 
     def _path_label(self, document: ExcludesDocument) -> str:
         """Build a display label for an excludes path."""

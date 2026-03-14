@@ -127,3 +127,7 @@ CollapsibleTitle:hover {
 #default-excludes-viewer.-read-only {
     background: #181825;
 }
+
+#default-excludes-viewer.-editing {
+    border: round #a6e3a1;
+}
