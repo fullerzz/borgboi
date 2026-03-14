@@ -112,6 +112,15 @@ app.command("borgboi.cli.exclusions:exclusions")
 app.command("borgboi.cli.config:config")
 
 
+@app.command(name="tui")
+def tui(*, ctx: ContextArg) -> None:
+    """Launch the interactive TUI."""
+    from borgboi.tui import BorgBoiApp
+
+    tui_app = BorgBoiApp(config=ctx.config)
+    tui_app.run()
+
+
 def cli(tokens: Iterable[str] | str | None = None, **kwargs: Any) -> Any:
     """Invoke the BorgBoi CLI."""
     return app.meta(tokens, **kwargs)

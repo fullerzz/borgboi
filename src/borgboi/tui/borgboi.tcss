@@ -1,0 +1,39 @@
+/* BorgBoi TUI — Catppuccin Mocha theme */
+
+Screen {
+    background: #1e1e2e;
+}
+
+Header {
+    background: #313244;
+    color: #cdd6f4;
+}
+
+Footer {
+    background: #313244;
+    color: #cdd6f4;
+}
+
+DataTable {
+    height: 1fr;
+    background: #1e1e2e;
+}
+
+DataTable > .datatable--header {
+    background: #45475a;
+    color: #89b4fa;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #585b70;
+    color: #cdd6f4;
+}
+
+DataTable > .datatable--even-row {
+    background: #181825;
+}
+
+DataTable > .datatable--odd-row {
+    background: #1e1e2e;
+}
