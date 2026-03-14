@@ -92,6 +92,21 @@ CollapsibleTitle:hover {
     padding-bottom: 1;
 }
 
+#default-excludes-tabs {
+    padding-bottom: 1;
+}
+
+#default-excludes-tabs Tab {
+    background: #313244;
+    color: #cdd6f4;
+}
+
+#default-excludes-tabs Tab.-active {
+    background: #89b4fa;
+    color: #1e1e2e;
+    text-style: bold;
+}
+
 #default-excludes-status {
     color: #89b4fa;
     padding-bottom: 1;

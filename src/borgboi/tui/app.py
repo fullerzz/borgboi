@@ -15,6 +15,8 @@ from borgboi.tui.config_panel import ConfigPanel
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
 
 if TYPE_CHECKING:
+    from textual.screen import Screen
+
     from borgboi.config import Config
     from borgboi.core.orchestrator import Orchestrator
     from borgboi.models import BorgBoiRepo
@@ -39,7 +41,8 @@ class BorgBoiApp(App[None]):
         super().__init__()
         self._config = config
         self._orchestrator = orchestrator
-        self._main_screen = None
+        self._main_screen: Screen[object] | None = None
+        self._repos: list[BorgBoiRepo] = []
 
     @property
     def orchestrator(self) -> Orchestrator:
@@ -80,6 +83,7 @@ class BorgBoiApp(App[None]):
             self.call_from_thread(self._on_load_error, e)
 
     def _populate_table(self, repos: list[BorgBoiRepo]) -> None:
+        self._repos = repos
         table = self.query_one("#repos-table", DataTable)
         table.clear()
         for repo in repos:
@@ -112,4 +116,4 @@ class BorgBoiApp(App[None]):
         self._load_repos()
 
     def action_show_default_excludes(self) -> None:
-        self.push_screen(DefaultExcludesScreen(config=self._config))
+        _ = self.push_screen(DefaultExcludesScreen(config=self._config, repos=self._repos))
