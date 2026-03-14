@@ -14,8 +14,12 @@ Footer {
     color: #cdd6f4;
 }
 
-DataTable {
+#main-content {
     height: 1fr;
+}
+
+DataTable {
+    width: 3fr;
     background: #1e1e2e;
 }
 
@@ -36,4 +40,42 @@ DataTable > .datatable--even-row {
 
 DataTable > .datatable--odd-row {
     background: #1e1e2e;
+}
+
+#config-panel {
+    width: 1fr;
+    max-width: 50;
+    background: #181825;
+    border-left: tall #313244;
+    padding: 1 2;
+}
+
+#config-panel-title {
+    background: transparent;
+    color: #cba6f7;
+    text-style: bold;
+    text-align: center;
+    padding-bottom: 1;
+}
+
+#config-panel Static {
+    background: transparent;
+    color: #cdd6f4;
+}
+
+Collapsible {
+    background: #181825;
+    border-bottom: hkey #313244;
+    padding-bottom: 1;
+}
+
+CollapsibleTitle {
+    background: #313244;
+    color: #89b4fa;
+    text-style: bold;
+    padding: 0 1;
+}
+
+CollapsibleTitle:hover {
+    background: #45475a;
 }

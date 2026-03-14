@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING, ClassVar, override
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
+from textual.containers import Horizontal
 from textual.widgets import DataTable, Footer, Header
 
 from borgboi.lib.utils import format_last_backup, format_repo_size
+from borgboi.tui.config_panel import ConfigPanel
 
 if TYPE_CHECKING:
     from borgboi.config import Config
@@ -24,6 +26,7 @@ class BorgBoiApp(App[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
+        Binding("c", "toggle_config", "Config"),
     ]
 
     def __init__(
@@ -46,7 +49,9 @@ class BorgBoiApp(App[None]):
     @override
     def compose(self) -> ComposeResult:
         yield Header()
-        yield DataTable(id="repos-table")
+        with Horizontal(id="main-content"):
+            yield DataTable(id="repos-table")
+            yield ConfigPanel(config=self._config)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -88,6 +93,10 @@ class BorgBoiApp(App[None]):
         table = self.query_one("#repos-table", DataTable)
         table.loading = False
         self.notify(str(error), severity="error", title="Failed to load repos")
+
+    def action_toggle_config(self) -> None:
+        panel = self.query_one("#config-panel", ConfigPanel)
+        panel.display = not panel.display
 
     def action_refresh(self) -> None:
         table = self.query_one("#repos-table", DataTable)
