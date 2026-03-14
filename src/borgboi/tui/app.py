@@ -12,6 +12,7 @@ from textual.widgets import DataTable, Footer, Header
 
 from borgboi.lib.utils import format_last_backup, format_repo_size
 from borgboi.tui.config_panel import ConfigPanel
+from borgboi.tui.excludes_screen import DefaultExcludesScreen
 
 if TYPE_CHECKING:
     from borgboi.config import Config
@@ -27,6 +28,7 @@ class BorgBoiApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
         Binding("c", "toggle_config", "Config"),
+        Binding("e", "show_default_excludes", "Excludes"),
     ]
 
     def __init__(
@@ -37,6 +39,7 @@ class BorgBoiApp(App[None]):
         super().__init__()
         self._config = config
         self._orchestrator = orchestrator
+        self._main_screen = None
 
     @property
     def orchestrator(self) -> Orchestrator:
@@ -55,6 +58,7 @@ class BorgBoiApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        self._main_screen = self.screen
         table = self.query_one("#repos-table", DataTable)
         table.add_columns(
             "Name",
@@ -95,10 +99,17 @@ class BorgBoiApp(App[None]):
         self.notify(str(error), severity="error", title="Failed to load repos")
 
     def action_toggle_config(self) -> None:
+        if self.screen is not self._main_screen:
+            return
         panel = self.query_one("#config-panel", ConfigPanel)
         panel.display = not panel.display
 
     def action_refresh(self) -> None:
+        if self.screen is not self._main_screen:
+            return
         table = self.query_one("#repos-table", DataTable)
         table.loading = True
         self._load_repos()
+
+    def action_show_default_excludes(self) -> None:
+        self.push_screen(DefaultExcludesScreen(config=self._config))

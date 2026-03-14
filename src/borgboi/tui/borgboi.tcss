@@ -79,3 +79,36 @@ CollapsibleTitle {
 CollapsibleTitle:hover {
     background: #45475a;
 }
+
+#default-excludes-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#default-excludes-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#default-excludes-status {
+    color: #89b4fa;
+    padding-bottom: 1;
+}
+
+#default-excludes-path {
+    color: #bac2de;
+    padding-bottom: 1;
+}
+
+#default-excludes-viewer {
+    height: 1fr;
+    border: round #313244;
+    background: #181825;
+    color: #cdd6f4;
+}
+
+#default-excludes-viewer.-read-only {
+    background: #181825;
+}
