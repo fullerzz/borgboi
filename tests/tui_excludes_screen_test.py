@@ -1,9 +1,8 @@
 import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import Mock, patch
 
-from textual.widgets import Static, Tabs, TextArea
+from textual.widgets import Link, Static, Tabs, TextArea
 
 from borgboi.config import Config
 from borgboi.models import BorgBoiRepo
@@ -97,7 +96,7 @@ def test_tui_can_open_switch_and_close_excludes_screen(
 
     app = BorgBoiApp(
         config=cfg,
-        orchestrator=cast(Any, SimpleNamespace(list_repos=Mock(return_value=[build_repo("alpha")]))),
+        orchestrator=cast(Any, SimpleNamespace(list_repos=lambda: [build_repo("alpha")])),
     )
 
     async def run_test() -> None:
@@ -107,10 +106,13 @@ def test_tui_can_open_switch_and_close_excludes_screen(
             assert isinstance(app.screen, DefaultExcludesScreen)
 
             tabs = app.screen.query_one("#default-excludes-tabs", Tabs)
+            help_link = app.screen.query_one("#default-excludes-help-link", Link)
             viewer = app.screen.query_one("#default-excludes-viewer", TextArea)
             status = app.screen.query_one("#default-excludes-status", Static)
 
             assert viewer.read_only is True
+            assert help_link.text == "Exclude pattern help (Borg docs)"
+            assert help_link.url == "https://borgbackup.readthedocs.io/en/stable/usage/help.html"
             assert tabs.active_tab is not None
             assert tabs.active_tab.id == "default-excludes"
             assert viewer.text == "*.tmp\n.cache/\n"
@@ -134,6 +136,40 @@ def test_tui_can_open_switch_and_close_excludes_screen(
     asyncio.run(run_test())
 
 
+def test_tui_excludes_help_link_activation_opens_docs(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    cfg = Config(offline=True)
+    excludes_path = cfg.borgboi_dir / cfg.excludes_filename
+    excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    excludes_path.write_text("*.tmp\n")
+
+    app = _build_excludes_app(cfg)
+    opened_urls: list[tuple[str, bool]] = []
+
+    def open_url(url: str, *, new_tab: bool = True) -> None:
+        opened_urls.append((url, new_tab))
+
+    monkeypatch.setattr(app, "open_url", open_url)
+
+    async def run_test() -> None:
+        async with app.run_test() as pilot:
+            await pilot.press("e")
+
+            assert isinstance(app.screen, DefaultExcludesScreen)
+
+            help_link = app.screen.query_one("#default-excludes-help-link", Link)
+            help_link.focus()
+
+            await pilot.press("enter")
+
+            assert opened_urls == [("https://borgbackup.readthedocs.io/en/stable/usage/help.html", True)]
+
+    asyncio.run(run_test())
+
+
 def _build_excludes_app(
     cfg: Config,
     repos: list[BorgBoiRepo] | None = None,
@@ -143,7 +179,7 @@ def _build_excludes_app(
         config=cfg,
         orchestrator=cast(
             Any,
-            SimpleNamespace(list_repos=Mock(return_value=repos or [build_repo("alpha")])),
+            SimpleNamespace(list_repos=lambda: repos or [build_repo("alpha")]),
         ),
     )
 
@@ -327,8 +363,11 @@ def test_tui_save_failure_keeps_editing_and_notifies(
             viewer.load_text("*.tmp\n.cache/\n")
 
             # Make write_text raise OSError
-            with patch.object(type(excludes_path), "write_text", side_effect=OSError("Permission denied")):
-                await pilot.press("ctrl+s")
+            def fail_write_text(*args: Any, **kwargs: Any) -> None:
+                raise OSError("Permission denied")
+
+            monkeypatch.setattr(type(excludes_path), "write_text", fail_write_text)
+            await pilot.press("ctrl+s")
 
             # Should still be in edit mode
             assert app.screen._editing is True

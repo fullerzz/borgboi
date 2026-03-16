@@ -11,13 +11,14 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
 from textual.screen import Screen
-from textual.widgets import Footer, Header, Static, Tab, Tabs, TextArea
+from textual.widgets import Footer, Header, Link, Static, Tab, Tabs, TextArea
 
 if TYPE_CHECKING:
     from borgboi.config import Config
     from borgboi.models import BorgBoiRepo
 
 _EDITING_STATUS = "(editing)"
+_EXCLUDES_HELP_URL = "https://borgbackup.readthedocs.io/en/stable/usage/help.html"
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +197,7 @@ class DefaultExcludesScreen(Screen[None]):
             )
             yield Static(document.status, id="default-excludes-status")
             yield Static(self._path_label(document), id="default-excludes-path")
+            yield Link("Exclude pattern help (Borg docs)", url=_EXCLUDES_HELP_URL, id="default-excludes-help-link")
             yield viewer
         yield Footer()
 
