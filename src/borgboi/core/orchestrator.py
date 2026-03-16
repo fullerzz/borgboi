@@ -13,9 +13,10 @@ from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.clients.borg_client import BorgClient, create_borg_client
 from borgboi.clients.s3_client import S3ClientInterface
 from borgboi.config import Config, get_config
-from borgboi.core.errors import StorageError, ValidationError
+from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
 from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
 from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, render_command_with_fallback
+from borgboi.core.validator import Validator
 from borgboi.lib.passphrase import (
     generate_secure_passphrase,
     migrate_repo_passphrase,
@@ -201,6 +202,95 @@ class Orchestrator:
         self.storage.save(repo)
         self.output.on_log("info", f"Created new Borg repo at {repo.path}")
 
+        return repo
+
+    def import_repo(
+        self,
+        path: str,
+        backup_target: str,
+        name: str,
+        passphrase: str | None = None,
+    ) -> BorgBoiRepo:
+        """Import an existing Borg repository into BorgBoi.
+
+        Args:
+            path: Path to an existing Borg repository
+            backup_target: Path to the directory this repository should back up
+            name: Unique name for the repository
+            passphrase: Optional passphrase override
+
+        Returns:
+            The imported repository
+
+        Raises:
+            ValidationError: If parameters are invalid or the repo cannot be accessed
+            StorageError: If passphrase or repository metadata cannot be saved
+        """
+        normalized_name = name.strip()
+        Validator.validate_repo_name(normalized_name)
+
+        normalized_repo_path = self._normalize_existing_directory_path(path, field="path", label="Repository path")
+        normalized_backup_target = self._normalize_existing_directory_path(
+            backup_target,
+            field="backup_target",
+            label="Backup target path",
+        )
+
+        self._ensure_repo_name_available(normalized_name)
+        self._ensure_repo_path_available(normalized_repo_path)
+
+        resolved_passphrase = resolve_passphrase(
+            repo_name=normalized_name,
+            cli_passphrase=passphrase,
+            allow_env_fallback=True,
+        )
+
+        try:
+            repo_info = self.borg.info(normalized_repo_path, passphrase=resolved_passphrase)
+        except Exception as error:
+            raise ValidationError(
+                f"Unable to access Borg repository at {normalized_repo_path}: {error}",
+                field="path",
+                value=normalized_repo_path,
+            ) from error
+
+        passphrase_file_path: Path | None = None
+        if resolved_passphrase is not None:
+            try:
+                passphrase_file_path = save_passphrase_to_file(normalized_name, resolved_passphrase)
+            except OSError as error:
+                raise StorageError(
+                    f"Failed to save passphrase for repository {normalized_name}: {error}",
+                    operation="save_passphrase",
+                    cause=error,
+                ) from error
+            self.output.on_log("info", f"Passphrase saved to: {passphrase_file_path}")
+
+        repo = BorgBoiRepo(
+            path=normalized_repo_path,
+            backup_target=normalized_backup_target,
+            name=normalized_name,
+            hostname=socket.gethostname(),
+            os_platform=system(),
+            metadata=repo_info,
+            passphrase=None,
+            passphrase_file_path=passphrase_file_path.as_posix() if passphrase_file_path else None,
+            passphrase_migrated=True,
+        )
+
+        try:
+            self.storage.save(repo)
+        except Exception as error:
+            self._cleanup_import_passphrase_file(passphrase_file_path, normalized_name)
+            if isinstance(error, StorageError):
+                raise
+            raise StorageError(
+                f"Failed to save repository {normalized_name}: {error}",
+                operation="save",
+                cause=error,
+            ) from error
+
+        self.output.on_log("info", f"Imported existing Borg repo at {repo.path}")
         return repo
 
     def delete_repo(
@@ -699,6 +789,52 @@ class Orchestrator:
         if isinstance(repo, str):
             return self.get_repo(name=repo)
         return repo
+
+    def _normalize_existing_directory_path(self, path: str, *, field: str, label: str) -> str:
+        """Normalize an existing directory path for safe comparisons and storage."""
+        normalized_path = path.strip()
+        if not normalized_path:
+            raise ValidationError(f"{label} cannot be empty", field=field)
+
+        path_obj = Path(normalized_path).expanduser()
+        if not path_obj.exists():
+            raise ValidationError(f"{label} does not exist: {normalized_path}", field=field, value=normalized_path)
+        if not path_obj.is_dir():
+            raise ValidationError(f"{label} is not a directory: {normalized_path}", field=field, value=normalized_path)
+
+        try:
+            return path_obj.resolve(strict=True).as_posix()
+        except OSError as error:
+            raise ValidationError(
+                f"Unable to resolve {label.lower()}: {normalized_path}", field=field, value=normalized_path
+            ) from error
+
+    def _ensure_repo_name_available(self, name: str) -> None:
+        """Ensure a repository name is not already registered."""
+        if self.storage.exists(name):
+            raise ValidationError(f"Repository name '{name}' is already registered", field="name", value=name)
+
+    def _ensure_repo_path_available(self, path: str) -> None:
+        """Ensure a repository path is not already registered on this host."""
+        try:
+            self.storage.get_by_path(path, hostname=socket.gethostname())
+        except RepositoryNotFoundError:
+            return
+
+        raise ValidationError(f"Repository path is already registered: {path}", field="path", value=path)
+
+    def _cleanup_import_passphrase_file(self, passphrase_file_path: Path | None, repo_name: str) -> None:
+        """Remove a newly created passphrase file when import persistence fails."""
+        if passphrase_file_path is None:
+            return
+
+        try:
+            passphrase_file_path.unlink(missing_ok=True)
+        except OSError as error:
+            self.output.on_log(
+                "warning",
+                f"Failed to clean up passphrase file for repo '{repo_name}': {error}",
+            )
 
     def _is_local(self, repo: BorgBoiRepo) -> bool:
         """Check if a repository is on the local machine.

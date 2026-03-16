@@ -38,6 +38,31 @@ def repo_create(
         print_error_and_exit(str(error), error=error)
 
 
+@repo.command(name="import")
+def repo_import(
+    *,
+    path: Annotated[str, Parameter(name=["--path", "-p"], help="Path to existing repository")],
+    backup_target: Annotated[str, Parameter(name=["--backup-target", "-b"], help="Directory to back up")],
+    name: Annotated[str, Parameter(name=["--name", "-n"], help="Repository name")],
+    passphrase: Annotated[
+        str | None,
+        Parameter(name="--passphrase", help="Passphrase override for encrypted repositories"),
+    ] = None,
+    ctx: ContextArg,
+) -> None:
+    """Import an existing Borg repository into BorgBoi."""
+    try:
+        repo_info = ctx.orchestrator.import_repo(
+            path=path,
+            backup_target=backup_target,
+            name=name,
+            passphrase=passphrase,
+        )
+        console.print(f"Imported existing Borg repo at [bold cyan]{repo_info.path}[/]")
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
+
+
 @repo.command(name="list")
 def repo_list(*, ctx: ContextArg) -> None:
     """List all BorgBoi repositories."""

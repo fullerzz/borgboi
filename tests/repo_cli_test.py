@@ -7,6 +7,39 @@ import pytest
 from borgboi.cli import repo as repo_module
 
 
+def test_repo_import_calls_orchestrator_and_prints_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = SimpleNamespace(path="/repo/imported", name="repo-one")
+    orchestrator = SimpleNamespace(import_repo=Mock(return_value=repo))
+    ctx = SimpleNamespace(orchestrator=orchestrator)
+    console_print = Mock()
+
+    monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
+
+    repo_module.repo_import(path="/repo/imported", backup_target="/backup/source", name="repo-one", ctx=cast(Any, ctx))
+
+    orchestrator.import_repo.assert_called_once_with(
+        path="/repo/imported",
+        backup_target="/backup/source",
+        name="repo-one",
+        passphrase=None,
+    )
+    console_print.assert_called_once_with("Imported existing Borg repo at [bold cyan]/repo/imported[/]")
+
+
+def test_repo_import_routes_errors_to_print_error_and_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = SimpleNamespace(orchestrator=SimpleNamespace(import_repo=Mock(side_effect=RuntimeError("cannot import"))))
+
+    def fail(message: str, *, error: Exception | None = None) -> None:
+        raise AssertionError((message, error))
+
+    monkeypatch.setattr(repo_module, "print_error_and_exit", fail)
+
+    with pytest.raises(AssertionError, match="cannot import"):
+        repo_module.repo_import(
+            path="/repo/imported", backup_target="/backup/source", name="repo-one", ctx=cast(Any, ctx)
+        )
+
+
 def test_repo_list_renders_repos_table(monkeypatch: pytest.MonkeyPatch) -> None:
     repo = SimpleNamespace(name="repo-one")
     orchestrator = SimpleNamespace(list_repos=Mock(return_value=[repo]))
@@ -39,7 +72,7 @@ def test_repo_info_raw_prints_raw_repo_data(monkeypatch: pytest.MonkeyPatch) -> 
     ctx = SimpleNamespace(orchestrator=orchestrator)
     console_print = Mock()
 
-    monkeypatch.setattr(repo_module.console, "print", console_print)
+    monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
 
     repo_module.repo_info(name="repo-one", raw=True, ctx=cast(Any, ctx))
 
@@ -80,7 +113,7 @@ def test_repo_info_without_metadata_prints_basic_name_and_path(monkeypatch: pyte
     ctx = SimpleNamespace(orchestrator=orchestrator)
     console_print = Mock()
 
-    monkeypatch.setattr(repo_module.console, "print", console_print)
+    monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
 
     repo_module.repo_info(name="repo-one", ctx=cast(Any, ctx))
 
@@ -108,7 +141,7 @@ def test_repo_delete_aborts_when_confirmation_declined(monkeypatch: pytest.Monke
     console_print = Mock()
 
     monkeypatch.setattr(repo_module, "confirm_action", lambda prompt: False)
-    monkeypatch.setattr(repo_module.console, "print", console_print)
+    monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
 
     repo_module.repo_delete(name="repo-one", ctx=cast(Any, ctx))
 
@@ -123,7 +156,7 @@ def test_repo_delete_skips_confirmation_for_dry_run(monkeypatch: pytest.MonkeyPa
     console_print = Mock()
 
     monkeypatch.setattr(repo_module, "confirm_action", confirm_mock)
-    monkeypatch.setattr(repo_module.console, "print", console_print)
+    monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
 
     repo_module.repo_delete(name="repo-one", dry_run=True, ctx=cast(Any, ctx))
 
@@ -145,7 +178,7 @@ def test_repo_delete_prints_success_message_after_real_delete(monkeypatch: pytes
     console_print = Mock()
 
     monkeypatch.setattr(repo_module, "confirm_action", lambda prompt: True)
-    monkeypatch.setattr(repo_module.console, "print", console_print)
+    monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
 
     repo_module.repo_delete(name="repo-one", delete_from_s3=True, passphrase=test_passphrase, ctx=cast(Any, ctx))
 

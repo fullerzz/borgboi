@@ -38,6 +38,21 @@ bb repo create --path /opt/borg-repos/docs \
     --name my-docs-backup
 ```
 
+### `repo import`
+
+Register an existing Borg repository with BorgBoi.
+
+- Required: `--path/-p`, `--backup-target/-b`, `--name/-n`
+- Optional: `--passphrase`
+
+```sh
+bb repo import --path /opt/borg-repos/docs \
+    --backup-target ~/Documents \
+    --name my-docs-backup
+```
+
+This command validates the existing repository with `borg info`, stores the passphrase in BorgBoi's secure passphrase directory when one is available, and writes the repository metadata without reinitializing the repo.
+
 ### `repo list`
 
 List all BorgBoi repositories.
