@@ -6,6 +6,7 @@ backup operations using dependency injection for testability.
 
 import shutil
 import socket
+import tempfile
 from pathlib import Path
 from platform import system
 
@@ -253,6 +254,9 @@ class Orchestrator:
                 field="path",
                 value=normalized_repo_path,
             ) from error
+
+        if repo_info is not None and repo_info.encryption.mode != "none":
+            self._verify_repokey_accessible(normalized_repo_path, resolved_passphrase)
 
         passphrase_file_path: Path | None = None
         if resolved_passphrase is not None:
@@ -822,6 +826,23 @@ class Orchestrator:
             return
 
         raise ValidationError(f"Repository path is already registered: {path}", field="path", value=path)
+
+    def _verify_repokey_accessible(self, repo_path: str, passphrase: str | None) -> None:
+        """Verify that the repository encryption key can be exported.
+
+        Raises:
+            ValidationError: If the key cannot be exported
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            export_path = Path(tmpdir) / "key-verify.txt"
+            try:
+                self.borg.export_key(repo_path, export_path, paper=True, passphrase=passphrase)
+            except Exception as error:
+                raise ValidationError(
+                    f"Repository encryption key is not accessible at {repo_path}: {error}",
+                    field="path",
+                    value=repo_path,
+                ) from error
 
     def _cleanup_import_passphrase_file(self, passphrase_file_path: Path | None, repo_name: str) -> None:
         """Remove a newly created passphrase file when import persistence fails."""
