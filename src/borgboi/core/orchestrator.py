@@ -255,11 +255,12 @@ class Orchestrator:
                 value=normalized_repo_path,
             ) from error
 
-        if repo_info is not None and repo_info.encryption.mode != "none":
+        is_encrypted = repo_info is not None and repo_info.encryption.mode != "none"
+        if is_encrypted:
             self._verify_repokey_accessible(normalized_repo_path, resolved_passphrase)
 
         passphrase_file_path: Path | None = None
-        if resolved_passphrase is not None:
+        if resolved_passphrase is not None and is_encrypted:
             try:
                 passphrase_file_path = save_passphrase_to_file(normalized_name, resolved_passphrase)
             except OSError as error:
