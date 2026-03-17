@@ -27,6 +27,9 @@ It contains the following features:
 bb --help
 bb repo --help
 
+# Enable shell completion (optional but recommended)
+bb --install-completion
+
 # Create a new repository
 bb repo create --path /opt/borg-repos/docs \
     --backup-target ~/Documents \

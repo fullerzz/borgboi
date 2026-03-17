@@ -17,6 +17,16 @@ Additionally, **BorgBackup** needs to be installed on your system for BorgBoi to
 
 Read installation methods here: [https://borgbackup.readthedocs.io/en/stable/installation.html](https://borgbackup.readthedocs.io/en/stable/installation.html).
 
+## Shell Completion
+
+BorgBoi supports shell completion for its CLI. To enable it, run:
+
+```sh
+bb --install-completion
+```
+
+This modifies your shell RC file (`.bashrc`, `.zshrc`, etc.) to source the completion script. After restarting your shell (or sourcing your RC file), you'll have tab-completion for all commands and options.
+
 ## Provision AWS Resources
 
 For BorgBoi to function properly in online mode, it requires an S3 bucket and DynamoDB table.
