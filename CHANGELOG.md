@@ -1,3 +1,42 @@
+## v1.19.0 (2026-03-17)
+
+### 🚀 Features
+
+- Implement repo import command to import existing borg repositories (#208)
+
+
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Lock file maintenance (#203)
+
+- Preserve passphrase files on import failure
+
+
+
+### 💼 Other
+
+- Merge pull request #209 from fullerzz/dev
+
+New Repo Import Command, Doc Updates, and Dependency Updates
+
+
+
+### 📚 Documentation
+
+- Correct command output in docs
+
+- Add info on shell completion
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies (#205)
+
+- Add permissions config to workflow
+
+
 ## v1.18.0 (2026-03-11)
 
 ### 🚀 Features
