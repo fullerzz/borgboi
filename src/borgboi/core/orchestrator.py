@@ -260,8 +260,14 @@ class Orchestrator:
             self._verify_repokey_accessible(normalized_repo_path, resolved_passphrase)
 
         passphrase_file_path: Path | None = None
+        previous_passphrase: str | None = None
         if resolved_passphrase is not None and is_encrypted:
             try:
+                from borgboi.lib.passphrase import get_passphrase_file_path
+
+                existing_path = get_passphrase_file_path(normalized_name)
+                if existing_path.exists():
+                    previous_passphrase = existing_path.read_text(encoding="utf-8")
                 passphrase_file_path = save_passphrase_to_file(normalized_name, resolved_passphrase)
             except OSError as error:
                 raise StorageError(
@@ -286,7 +292,7 @@ class Orchestrator:
         try:
             self.storage.save(repo)
         except Exception as error:
-            self._cleanup_import_passphrase_file(passphrase_file_path, normalized_name)
+            self._cleanup_import_passphrase_file(passphrase_file_path, normalized_name, previous_passphrase)
             if isinstance(error, StorageError):
                 raise
             raise StorageError(
@@ -845,13 +851,26 @@ class Orchestrator:
                     value=repo_path,
                 ) from error
 
-    def _cleanup_import_passphrase_file(self, passphrase_file_path: Path | None, repo_name: str) -> None:
-        """Remove a newly created passphrase file when import persistence fails."""
+    def _cleanup_import_passphrase_file(
+        self,
+        passphrase_file_path: Path | None,
+        repo_name: str,
+        previous_passphrase: str | None = None,
+    ) -> None:
+        """Restore or remove a passphrase file when import persistence fails.
+
+        If a passphrase file existed before the import, its contents are restored.
+        Otherwise the newly created file is deleted.
+        """
         if passphrase_file_path is None:
             return
 
         try:
-            passphrase_file_path.unlink(missing_ok=True)
+            if previous_passphrase is not None:
+                passphrase_file_path.write_text(previous_passphrase, encoding="utf-8")
+                passphrase_file_path.chmod(0o600)
+            else:
+                passphrase_file_path.unlink(missing_ok=True)
         except OSError as error:
             self.output.on_log(
                 "warning",

@@ -452,6 +452,48 @@ def test_import_repo_cleans_up_passphrase_file_when_storage_save_fails(
     assert passphrase_file.exists() is False
 
 
+def test_import_repo_restores_existing_passphrase_file_when_storage_save_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    passphrase_file = tmp_path / "repo-one.key"
+    passphrase_file.write_text("original-secret", encoding="utf-8")
+    passphrase_file.chmod(0o600)
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    storage.save.side_effect = RuntimeError("db unavailable")
+    borg_client = Mock()
+    borg_client.info.return_value = _build_repo_info(encryption_mode="repokey")
+
+    def _save_passphrase(name: str, passphrase: str) -> Path:
+        del name, passphrase
+        passphrase_file.write_text("new-secret", encoding="utf-8")
+        return passphrase_file
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "provided-passphrase")
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", _save_passphrase)
+    monkeypatch.setattr("borgboi.lib.passphrase.get_passphrase_file_path", lambda repo_name: passphrase_file)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(StorageError, match="Failed to save repository repo-one"):
+        orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    assert passphrase_file.read_text(encoding="utf-8") == "original-secret"
+    assert passphrase_file.stat().st_mode & 0o777 == 0o600
+
+
 def test_delete_repo_rejects_remote_repository(output_handler: CollectingOutputHandler) -> None:
     remote_repo = _build_repo(hostname="remote-host")
     storage = Mock()
