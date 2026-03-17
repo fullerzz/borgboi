@@ -38,6 +38,21 @@ bb repo create --path /opt/borg-repos/docs \
     --name my-docs-backup
 ```
 
+### `repo import`
+
+Register an existing Borg repository with BorgBoi.
+
+- Required: `--path/-p`, `--backup-target/-b`, `--name/-n`
+- Optional: `--passphrase`
+
+```sh
+bb repo import --path /opt/borg-repos/docs \
+    --backup-target ~/Documents \
+    --name my-docs-backup
+```
+
+This command validates the existing repository with `borg info`, stores the passphrase in BorgBoi's secure passphrase directory when one is available, and writes the repository metadata without reinitializing the repo.
+
 ### `repo list`
 
 List all BorgBoi repositories.
@@ -150,7 +165,7 @@ Delete a repository from S3.
 - Prompts for confirmation unless `--dry-run` is used
 
 !!! warning "Current status"
-    The command is present in the CLI surface, but the Cyclopts migration kept it as a placeholder and it currently prints `S3 delete not yet implemented in new CLI`.
+    The command is present in the CLI surface, but the Cyclopts migration kept it as a placeholder and it currently prints `S3 delete for '<name>' not yet implemented (dry_run=<bool>)`.
 
 ### `s3 stats`
 

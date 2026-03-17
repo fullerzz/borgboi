@@ -7,11 +7,31 @@ from unittest.mock import Mock
 
 import pytest
 
+from borgboi.clients.borg import Encryption, RepoCache, RepoInfo, Repository, Stats
 from borgboi.config import Config
-from borgboi.core.errors import ValidationError
+from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
 from borgboi.core.orchestrator import Orchestrator
 from borgboi.core.output import CollectingOutputHandler
 from borgboi.models import BorgBoiRepo
+
+
+def _build_repo_info(encryption_mode: str = "repokey") -> RepoInfo:
+    return RepoInfo(
+        cache=RepoCache(
+            path="/cache",
+            stats=Stats(
+                total_chunks=1,
+                total_csize=1024,
+                total_size=2048,
+                total_unique_chunks=1,
+                unique_csize=512,
+                unique_size=1024,
+            ),
+        ),
+        encryption=Encryption(mode=encryption_mode),
+        repository=Repository(id="abc123", last_modified="2026-01-01T00:00:00", location="/repo"),
+        security_dir="/security",
+    )
 
 
 def _build_repo(name: str = "repo-one", hostname: str | None = None, passphrase: str | None = None) -> BorgBoiRepo:
@@ -124,6 +144,354 @@ def test_create_repo_rejects_file_path(
 
     with pytest.raises(ValidationError, match="is a file"):
         orchestrator.create_repo(repo_file.as_posix(), "/backup/source", "repo-one")
+
+
+def test_import_repo_saves_existing_repo_metadata_and_passphrase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    passphrase_file = tmp_path / "repo-one.key"
+    resolved_passphrase = "provided-passphrase"  # noqa: S105
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    borg_client = Mock()
+    borg_client.info.return_value = _build_repo_info(encryption_mode="repokey")
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: resolved_passphrase)
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", lambda name, passphrase: passphrase_file)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    imported_repo = orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    storage.exists.assert_called_once_with("repo-one")
+    storage.get_by_path.assert_called_once_with(repo_path.resolve().as_posix(), hostname=socket.gethostname())
+    borg_client.info.assert_called_once_with(repo_path.resolve().as_posix(), passphrase=resolved_passphrase)
+    storage.save.assert_called_once_with(imported_repo)
+    assert imported_repo.path == repo_path.resolve().as_posix()
+    assert imported_repo.backup_target == backup_target.resolve().as_posix()
+    assert imported_repo.metadata is not None
+    assert imported_repo.passphrase is None
+    assert imported_repo.passphrase_file_path == passphrase_file.as_posix()
+    assert imported_repo.passphrase_migrated is True
+
+
+def test_import_repo_rejects_duplicate_name(
+    tmp_path: Path,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    storage = Mock()
+    storage.exists.return_value = True
+    borg_client = Mock()
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(ValidationError, match="already registered"):
+        orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    storage.get_by_path.assert_not_called()
+    borg_client.info.assert_not_called()
+    storage.save.assert_not_called()
+
+
+def test_import_repo_rejects_duplicate_path(
+    tmp_path: Path,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.return_value = _build_repo(name="existing-repo")
+    borg_client = Mock()
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(ValidationError, match="already registered"):
+        orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    borg_client.info.assert_not_called()
+    storage.save.assert_not_called()
+
+
+def test_import_repo_surfaces_borg_validation_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    borg_client = Mock()
+    borg_client.info.side_effect = RuntimeError("wrong passphrase")
+    save_passphrase = Mock()
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "provided-passphrase")
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", save_passphrase)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(ValidationError, match="Unable to access Borg repository"):
+        orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    save_passphrase.assert_not_called()
+    storage.save.assert_not_called()
+
+
+def test_import_repo_verifies_repokey_for_encrypted_repo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    passphrase_file = tmp_path / "repo-one.key"
+    resolved_passphrase = "provided-passphrase"  # noqa: S105
+
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    borg_client = Mock()
+    borg_client.info.return_value = _build_repo_info(encryption_mode="repokey")
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: resolved_passphrase)
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", lambda name, passphrase: passphrase_file)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    borg_client.export_key.assert_called_once()
+    call_args = borg_client.export_key.call_args
+    assert call_args.args[0] == repo_path.resolve().as_posix()
+    assert call_args.kwargs["paper"] is True
+    assert call_args.kwargs["passphrase"] == resolved_passphrase
+
+
+def test_import_repo_rejects_inaccessible_repokey(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    borg_client = Mock()
+    borg_client.info.return_value = _build_repo_info(encryption_mode="repokey")
+    borg_client.export_key.side_effect = RuntimeError("key not found")
+    save_passphrase = Mock()
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "provided-passphrase")
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", save_passphrase)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(ValidationError, match="Repository encryption key is not accessible"):
+        orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    save_passphrase.assert_not_called()
+    storage.save.assert_not_called()
+
+
+def test_import_repo_skips_repokey_check_for_unencrypted_repo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    passphrase_file = tmp_path / "repo-one.key"
+
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    borg_client = Mock()
+    borg_client.info.return_value = _build_repo_info(encryption_mode="none")
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: None)
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", lambda name, passphrase: passphrase_file)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    borg_client.export_key.assert_not_called()
+
+
+def test_import_repo_skips_passphrase_save_for_unencrypted_repo_with_ambient_passphrase(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    """Regression: BORG_PASSPHRASE set for another repo must not cause a passphrase file for an unencrypted import."""
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    save_passphrase = Mock()
+
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    borg_client = Mock()
+    borg_client.info.return_value = _build_repo_info(encryption_mode="none")
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "ambient-secret")
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", save_passphrase)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    imported_repo = orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    save_passphrase.assert_not_called()
+    assert imported_repo.passphrase_file_path is None
+    assert imported_repo.passphrase is None
+    borg_client.export_key.assert_not_called()
+
+
+def test_import_repo_cleans_up_passphrase_file_when_storage_save_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    passphrase_file = tmp_path / "repo-one.key"
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    storage.save.side_effect = RuntimeError("db unavailable")
+    borg_client = Mock()
+    borg_client.info.return_value = _build_repo_info(encryption_mode="repokey")
+
+    def _save_passphrase(name: str, passphrase: str) -> Path:
+        del name, passphrase
+        passphrase_file.write_text("secret", encoding="utf-8")
+        return passphrase_file
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "provided-passphrase")
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", _save_passphrase)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(StorageError, match="Failed to save repository repo-one"):
+        orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    assert passphrase_file.exists() is False
+
+
+def test_import_repo_restores_existing_passphrase_file_when_storage_save_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    passphrase_file = tmp_path / "repo-one.key"
+    passphrase_file.write_text("original-secret", encoding="utf-8")
+    passphrase_file.chmod(0o600)
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    storage.save.side_effect = RuntimeError("db unavailable")
+    borg_client = Mock()
+    borg_client.info.return_value = _build_repo_info(encryption_mode="repokey")
+
+    def _save_passphrase(name: str, passphrase: str) -> Path:
+        del name, passphrase
+        passphrase_file.write_text("new-secret", encoding="utf-8")
+        return passphrase_file
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "provided-passphrase")
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", _save_passphrase)
+    monkeypatch.setattr("borgboi.lib.passphrase.get_passphrase_file_path", lambda repo_name: passphrase_file)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(StorageError, match="Failed to save repository repo-one"):
+        orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    assert passphrase_file.read_text(encoding="utf-8") == "original-secret"
+    assert passphrase_file.stat().st_mode & 0o777 == 0o600
 
 
 def test_delete_repo_rejects_remote_repository(output_handler: CollectingOutputHandler) -> None:
