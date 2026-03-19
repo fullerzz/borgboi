@@ -25,6 +25,15 @@
       "groupName": "CI dependencies",
       "semanticCommitScope": "ci-deps",
       "semanticCommitType": "ci"
+    },
+    {
+      "matchManagers": [
+        "terraform"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ],
+      "enabled": false
     }
   ],
   "lockFileMaintenance": {
