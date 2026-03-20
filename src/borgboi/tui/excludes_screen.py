@@ -167,7 +167,6 @@ class DefaultExcludesScreen(Screen[None]):
         self._documents = load_excludes_documents(config, self._repos)
         self._documents_by_tab_id = {document.tab_id: document for document in self._documents}
         self._editing = False
-        self._original_body = ""
 
     @property
     def _active_document(self) -> ExcludesDocument | None:
@@ -277,7 +276,6 @@ class DefaultExcludesScreen(Screen[None]):
 
         viewer = self.query_one("#default-excludes-viewer", TextArea)
         self._editing = True
-        self._original_body = viewer.text
 
         if not document.exists:
             viewer.load_text("")
@@ -296,7 +294,6 @@ class DefaultExcludesScreen(Screen[None]):
         viewer.remove_class("-editing")
 
         self._editing = False
-        self._original_body = ""
 
         self.query_one("#default-excludes-tabs", Tabs).focus()
         self.refresh_bindings()
