@@ -122,9 +122,7 @@ def format_repo_size(metadata: RepoInfo | None) -> str:
     """Format a repo's deduplicated size for display."""
     if metadata is None:
         return "Unknown"
-    if metadata.cache.unique_csize_gb != "0.00":
-        return f"{metadata.cache.unique_csize_gb} GB"
-    return "Unknown"
+    return f"{metadata.cache.unique_csize_gb} GB"
 
 
 def format_duration_seconds(seconds: Any) -> str:
