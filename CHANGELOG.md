@@ -1,3 +1,56 @@
+## v1.20.0 (2026-03-20)
+
+### 🚀 Features
+
+- Add initial Textual TUI scaffold ([a4e2201](https://github.com/fullerzz/borgboi/commit/a4e2201ab2b0c9ac54bf1007ac92a06cceacff31))
+
+- Add TUI config sidebar ([743d332](https://github.com/fullerzz/borgboi/commit/743d332c556ff632178831aaec1bb82c131de3ad))
+
+- Add TUI default excludes viewer ([dca4c69](https://github.com/fullerzz/borgboi/commit/dca4c69c8a3b5ebd6ada6ad3493a71b1446c3348))
+
+- Add tabbed TUI excludes viewer ([47725cf](https://github.com/fullerzz/borgboi/commit/47725cfabfb45d95640514132575f037b9f88caf))
+
+
+
+### 🐛 Bug Fixes
+
+- Handle OSError in TUI excludes save to prevent crash ([07bbc33](https://github.com/fullerzz/borgboi/commit/07bbc3397d880b78bbd8f602f46cd3128497d410))
+
+- Add clickable link to borg help docs in excludes TUI screen ([f53aea9](https://github.com/fullerzz/borgboi/commit/f53aea9801bf0b1936668fcd09047d55b5910568))
+
+- Store DataTable reference to prevent crash when excludes screen is open during repo load ([6d7f942](https://github.com/fullerzz/borgboi/commit/6d7f942f6388686c8c71e7c9057d94f7373af508))
+
+- Always display repo size when metadata is available ([4c7fd55](https://github.com/fullerzz/borgboi/commit/4c7fd553a27be9dbccf042a3eee24ec5a0bdaac8))
+
+
+
+### 💼 Other
+
+- Merge pull request #211 from fullerzz/textual-tui
+
+Introduce TUI Command ([00860d4](https://github.com/fullerzz/borgboi/commit/00860d4fc3e9b76c4b3c4e1312e11f1edceaa388))
+
+- Merge pull request #212 from fullerzz/dev
+
+TUI Command, Renovate Config, and Doc Updates ([b38490f](https://github.com/fullerzz/borgboi/commit/b38490fad291fa8ee7e974f195c213f5cfa75e1e))
+
+
+
+### 📚 Documentation
+
+- Update docs with tui info ([24b2f43](https://github.com/fullerzz/borgboi/commit/24b2f438ed4ae393b4752597c33a80dad443fb55))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **renovate**: Fix duplicate renovate PRs for opentofu providers ([c89cab9](https://github.com/fullerzz/borgboi/commit/c89cab9d26eee0212d1dcd56c6ab5f0de1c6939f))
+
+- Clean up unused var ([3d34965](https://github.com/fullerzz/borgboi/commit/3d34965327cd5f46588b0e6a313f9fe09be7c284))
+
+- **git-cliff**: Update changelog config to include commit ids ([853f61f](https://github.com/fullerzz/borgboi/commit/853f61fd7b122b9332b89839f620afc4d536f138))
+
+
 ## v1.19.0 (2026-03-17)
 
 ### 🚀 Features
