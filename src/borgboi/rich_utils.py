@@ -18,6 +18,7 @@ from borgboi.clients.utils.borg_logs import (
     parse_borg_log_stream,
 )
 from borgboi.lib.colors import COLOR_HEX, PYGMENTS_STYLES
+from borgboi.lib.utils import format_last_backup, format_repo_size
 from borgboi.models import BorgBoiRepo
 
 if TYPE_CHECKING:
@@ -99,17 +100,17 @@ def output_repos_table(repos: list[BorgBoiRepo]) -> None:
         local_path = f"[bold {COLOR_HEX.blue}]{repo.path}[/]"
         env_var_name = f"[bold green]{repo.hostname}[/]"
         backup_target = f"[bold {COLOR_HEX.mauve}]{repo.backup_target}[/]"
+        last_backup_str = format_last_backup(repo.last_backup)
         if repo.last_backup:
-            archive_date = f"[bold {COLOR_HEX.yellow}]{repo.last_backup.strftime('%a %b %d, %Y')}[/]"
+            archive_date = f"[bold {COLOR_HEX.yellow}]{last_backup_str}[/]"
         else:
-            archive_date = f"[italic {COLOR_HEX.red}]Never[/]"
+            archive_date = f"[italic {COLOR_HEX.red}]{last_backup_str}[/]"
 
-        if repo.metadata is None:
-            size = f"🤷[italic {COLOR_HEX.red}]Unknown[/]"
-        elif repo.metadata.cache.unique_csize_gb != 0.0:
-            size = f"[{COLOR_HEX.peach}]{repo.metadata.cache.unique_csize_gb} GB[/]"
+        size_str = format_repo_size(repo.metadata)
+        if size_str == "Unknown":
+            size = f"🤷[italic {COLOR_HEX.red}]{size_str}[/]"
         else:
-            size = f"🤷[italic {COLOR_HEX.red}]Unknown[/]"
+            size = f"[{COLOR_HEX.peach}]{size_str}[/]"
 
         table.add_row(name, local_path, env_var_name, archive_date, size, backup_target)
     console.print(table)
