@@ -53,6 +53,7 @@ You can inspect the current Cyclopts-generated help output at any time with:
 
 ```sh
 bb --help
+bb tui --help
 bb repo --help
 bb backup run --help
 ```
@@ -108,6 +109,36 @@ Configuration can be overridden using environment variables with the `BORGBOI_` 
 ### AWS Credentials
 
 **Before running BorgBoi in online mode, make sure the shell BorgBoi runs in has access to [AWS credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-authentication.html) with sufficient permissions for the DynamoDB table and S3 bucket.**
+
+## Launch the TUI
+
+Start the interactive terminal UI with:
+
+```sh
+bb tui
+```
+
+The TUI uses the same effective configuration as the CLI, including `--offline`, `--debug`, and `BORGBOI_*` environment variable overrides.
+
+On the main screen, BorgBoi shows a repository table with each repo's name, local path, hostname, last archive, size, and backup target.
+
+### Main TUI Keys
+
+- `q` quits the application
+- `r` refreshes the repository list
+- `c` toggles the configuration sidebar
+- `e` opens the excludes viewer and editor
+
+### Excludes Viewer Keys
+
+Inside the excludes screen:
+
+- Left and right arrow keys switch between the shared default excludes file and repo-specific tabs
+- `Ctrl+E` enters or exits edit mode for the active file
+- `Ctrl+S` saves the active file to disk
+- `Esc` cancels editing or returns to the main screen
+
+If a repo-specific excludes file does not exist, the screen shows that BorgBoi falls back to the shared default file. You can still create the missing file directly from the TUI by entering edit mode and saving it.
 
 ## Offline Mode
 

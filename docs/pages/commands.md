@@ -1,7 +1,7 @@
 # BorgBoi Commands
 
 !!! info "CLI Structure"
-    BorgBoi uses a Cyclopts-powered CLI with subcommand groups: `repo`, `backup`, `s3`, `exclusions`, `config`, and the root `version` command.
+    BorgBoi uses a Cyclopts-powered CLI with subcommand groups: `repo`, `backup`, `s3`, `exclusions`, `config`, plus root commands including `tui` and `version`.
 
 !!! info "Offline Mode"
     All commands support root-level `--offline` and `--debug` flags. `--offline` can also be enabled with `BORGBOI_OFFLINE`. In offline mode, BorgBoi stores repository metadata locally in `~/.borgboi/.database/borgboi.db` instead of using AWS DynamoDB and S3 services.
@@ -12,6 +12,33 @@
 ---
 
 ## Root Commands
+
+### `tui`
+
+Launch the interactive Textual TUI.
+
+- Optional: `--offline`, `--debug`
+
+```sh
+bb tui
+```
+
+The main screen shows a repository table and a collapsible config sidebar.
+
+Main-screen keys:
+
+- `q`: quit the app
+- `r`: refresh the repository list
+- `c`: toggle the config sidebar
+- `e`: open the excludes viewer
+
+In the excludes viewer:
+
+- The first tab is the shared default excludes file, followed by one tab per managed repo
+- Repo tabs indicate when BorgBoi falls back to the shared default excludes file
+- `Ctrl+E` toggles edit mode for the active excludes file
+- `Ctrl+S` saves changes directly to the active excludes file under the resolved BorgBoi home directory
+- `Esc` cancels editing or returns to the main screen
 
 ### `version`
 

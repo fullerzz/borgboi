@@ -11,6 +11,9 @@ BorgBoi loads configuration from:
 3. `BORGBOI_*` environment variable overrides
 4. CLI flags for `--offline` and `--debug` (for command execution)
 
+!!! info "TUI uses the same effective config"
+    `bb tui` reads the same merged configuration as the CLI. The config sidebar renders the effective values, and the excludes editor resolves file locations from the active BorgBoi home directory (for example `~/.borgboi/excludes.txt` and `~/.borgboi/{repo-name}_excludes.txt`).
+
 !!! info "Config file location"
     BorgBoi resolves the home directory in this order:
 

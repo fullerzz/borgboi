@@ -9,7 +9,7 @@
 
 ## What is BorgBoi?
 
-BorgBoi is a thin wrapper around the BorgBackup tool that I will refer to as Borg from here on out.
+BorgBoi is a thin wrapper around the BorgBackup tool that adds both a scriptable CLI and an interactive terminal dashboard.
 
 It contains the following features:
 
@@ -17,7 +17,8 @@ It contains the following features:
 * Metadata about your Borg repositories is stored in DynamoDB (or locally in offline mode)
 * Borg repositories are synced with S3 to enable cloud backups and archive restoration from other systems
 * **Offline mode** support for users who prefer not to use AWS services
-* **Cyclopts-powered CLI** with rich help output, global root flags, and organized subcommands (`repo`, `backup`, `s3`, `exclusions`, `config`, `version`)
+* **Cyclopts-powered CLI** with rich help output, global root flags, and organized subcommands (`repo`, `backup`, `s3`, `exclusions`, `config`, `tui`, `version`)
+* **Textual TUI** for browsing repositories, opening a live config sidebar, and managing excludes files without leaving the terminal
 * **Secure passphrase management** with file-based storage and auto-generation
 
 ## Quick Start
@@ -26,6 +27,9 @@ It contains the following features:
 # Explore the generated CLI help
 bb --help
 bb repo --help
+
+# Launch the interactive TUI
+bb tui
 
 # Enable shell completion (optional but recommended)
 bb --install-completion
@@ -67,5 +71,7 @@ Read installation methods here: [https://borgbackup.readthedocs.io/en/stable/ins
 ## GitHub Repo
 
 [https://github.com/fullerzz/borgboi](https://github.com/fullerzz/borgboi)
+
+For the interactive terminal workflow, see the [TUI guide](pages/tui.md).
 
 ![BorgBoi Logo](images/borgboi_logo.svg){ loading=lazy }
