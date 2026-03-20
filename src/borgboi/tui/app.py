@@ -43,6 +43,7 @@ class BorgBoiApp(App[None]):
         self._orchestrator = orchestrator
         self._main_screen: Screen[object] | None = None
         self._repos: list[BorgBoiRepo] = []
+        self._repos_table: DataTable[str] | None = None
 
     @property
     def orchestrator(self) -> Orchestrator:
@@ -62,7 +63,7 @@ class BorgBoiApp(App[None]):
 
     def on_mount(self) -> None:
         self._main_screen = self.screen
-        table = self.query_one("#repos-table", DataTable)
+        self._repos_table = table = self.query_one("#repos-table", DataTable)
         table.add_columns(
             "Name",
             "Local Path",
@@ -84,7 +85,9 @@ class BorgBoiApp(App[None]):
 
     def _populate_table(self, repos: list[BorgBoiRepo]) -> None:
         self._repos = repos
-        table = self.query_one("#repos-table", DataTable)
+        table = self._repos_table
+        if table is None:
+            return
         table.clear()
         for repo in repos:
             table.add_row(
@@ -98,7 +101,9 @@ class BorgBoiApp(App[None]):
         table.loading = False
 
     def _on_load_error(self, error: Exception) -> None:
-        table = self.query_one("#repos-table", DataTable)
+        table = self._repos_table
+        if table is None:
+            return
         table.loading = False
         self.notify(str(error), severity="error", title="Failed to load repos")
 
@@ -111,8 +116,9 @@ class BorgBoiApp(App[None]):
     def action_refresh(self) -> None:
         if self.screen is not self._main_screen:
             return
-        table = self.query_one("#repos-table", DataTable)
-        table.loading = True
+        if self._repos_table is None:
+            return
+        self._repos_table.loading = True
         self._load_repos()
 
     def action_show_default_excludes(self) -> None:
