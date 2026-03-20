@@ -1,8 +1,14 @@
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from borgboi.clients.borg import RepoInfo
 
 ARCHIVE_NAME_FORMAT = "%Y-%m-%d_%H:%M:%S"
+BACKUP_DATE_FORMAT = "%a %b %d, %Y"
 
 
 def create_archive_name() -> str:
@@ -103,6 +109,20 @@ def format_iso_timestamp(value: Any) -> str:
     except ValueError:
         return value
     return parsed.strftime("%a, %Y-%m-%d %H:%M:%S")
+
+
+def format_last_backup(last_backup: datetime | None) -> str:
+    """Format a last-backup datetime for display."""
+    if last_backup:
+        return last_backup.strftime(BACKUP_DATE_FORMAT)
+    return "Never"
+
+
+def format_repo_size(metadata: RepoInfo | None) -> str:
+    """Format a repo's deduplicated size for display."""
+    if metadata is None:
+        return "Unknown"
+    return f"{metadata.cache.unique_csize_gb} GB"
 
 
 def format_duration_seconds(seconds: Any) -> str:

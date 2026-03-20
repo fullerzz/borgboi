@@ -1,8 +1,8 @@
 # BorgBoi 👦🏼
 
-BorgBoi is a CLI wrapper around [BorgBackup](https://borgbackup.readthedocs.io/en/stable/index.html) for managing repositories, running recurring backups, and optionally syncing Borg repositories to AWS S3.
+BorgBoi is a CLI and TUI wrapper around [BorgBackup](https://borgbackup.readthedocs.io/en/stable/index.html) for managing repositories, running recurring backups, and optionally syncing Borg repositories to AWS S3.
 
-It layers a grouped CLI, YAML-based configuration, local metadata storage, and AWS integration on top of Borg so routine backup workflows are easier to run and inspect.
+It layers a grouped CLI, a Textual TUI, YAML-based configuration, local metadata storage, and AWS integration on top of Borg so routine backup workflows are easier to run and inspect.
 
 <img src="docs/images/borgboi_logo.svg" alt="BorgBoi logo" width="400" />
 
@@ -14,6 +14,7 @@ It layers a grouped CLI, YAML-based configuration, local metadata storage, and A
 - Supports offline mode with local SQLite-backed metadata storage and no AWS dependency.
 - Stores repository passphrases in per-repo files under `~/.borgboi/passphrases/`.
 - Exposes a Cyclopts-powered CLI with grouped subcommands for repository, backup, S3, exclusions, and config workflows.
+- Includes a Textual TUI for browsing repositories, toggling a config sidebar, and viewing or editing shared and repo-specific excludes files.
 
 ## Prerequisites
 
@@ -47,6 +48,12 @@ Explore the generated help and version output:
 ```bash
 bb --help
 bb version
+```
+
+Launch the interactive dashboard:
+
+```bash
+bb tui
 ```
 
 Create a repository:
@@ -120,18 +127,19 @@ BorgBoi loads configuration from `~/.borgboi/config.yaml` and environment variab
 
 Use `bb config show --format tree` to inspect the merged effective configuration.
 
-## Command Groups
+## Command Surface
 
-The primary CLI is organized into grouped subcommands:
+The primary command surface includes grouped subcommands plus root commands:
 
 - `repo` for repository lifecycle operations
 - `backup` for archive creation, listing, restore, and deletion
 - `s3` for sync, restore, and bucket stats
 - `exclusions` for managing backup exclusion files
 - `config` for displaying effective configuration
+- `tui` for the interactive Textual dashboard
 - `version` for printing the installed BorgBoi version
 
-Every command also inherits the root-level `--offline` and `--debug` flags. Use `bb --help` or `bb <group> <command> --help` to inspect the current Cyclopts-generated help output.
+Every command also inherits the root-level `--offline` and `--debug` flags. Use `bb --help`, `bb tui --help`, or `bb <group> <command> --help` to inspect the current Cyclopts-generated help output.
 
 ## Documentation
 
@@ -140,6 +148,7 @@ Primary documentation is published at [fullerzz.github.io/borgboi](https://fulle
 - [Docs Home](https://fullerzz.github.io/borgboi/)
 - [Getting Started](https://fullerzz.github.io/borgboi/pages/getting-started/)
 - [Commands Reference](https://fullerzz.github.io/borgboi/pages/commands/)
+- [TUI Guide](https://fullerzz.github.io/borgboi/pages/tui/)
 - [User Configuration](https://fullerzz.github.io/borgboi/pages/user-configuration/)
 - [SQLite Database](https://fullerzz.github.io/borgboi/pages/sqlite-database/)
 

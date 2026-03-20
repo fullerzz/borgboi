@@ -9,6 +9,7 @@ nav = [
     { "Overview" = "index.md" },
     { "Getting Started" = "pages/getting-started.md" },
     { "Commands" = "pages/commands.md" },
+    { "TUI" = "pages/tui.md" },
     { "Importing Existing Repos" = "pages/importing-existing-repos.md" },
     { "User Configuration" = "pages/user-configuration.md" },
     { "SQLite Database" = "pages/sqlite-database.md" },

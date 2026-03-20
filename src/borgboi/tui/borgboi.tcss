@@ -1,0 +1,138 @@
+/* BorgBoi TUI — Catppuccin Mocha theme */
+
+Screen {
+    background: #1e1e2e;
+}
+
+Header {
+    background: #313244;
+    color: #cdd6f4;
+}
+
+Footer {
+    background: #313244;
+    color: #cdd6f4;
+}
+
+#main-content {
+    height: 1fr;
+}
+
+DataTable {
+    width: 3fr;
+    background: #1e1e2e;
+}
+
+DataTable > .datatable--header {
+    background: #45475a;
+    color: #89b4fa;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #585b70;
+    color: #cdd6f4;
+}
+
+DataTable > .datatable--even-row {
+    background: #181825;
+}
+
+DataTable > .datatable--odd-row {
+    background: #1e1e2e;
+}
+
+#config-panel {
+    width: 1fr;
+    max-width: 50;
+    background: #181825;
+    border-left: tall #313244;
+    padding: 1 2;
+}
+
+#config-panel-title {
+    background: transparent;
+    color: #cba6f7;
+    text-style: bold;
+    text-align: center;
+    padding-bottom: 1;
+}
+
+#config-panel Static {
+    background: transparent;
+    color: #cdd6f4;
+}
+
+Collapsible {
+    background: #181825;
+    border-bottom: hkey #313244;
+    padding-bottom: 1;
+}
+
+CollapsibleTitle {
+    background: #313244;
+    color: #89b4fa;
+    text-style: bold;
+    padding: 0 1;
+}
+
+CollapsibleTitle:hover {
+    background: #45475a;
+}
+
+#default-excludes-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#default-excludes-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#default-excludes-tabs {
+    padding-bottom: 1;
+}
+
+#default-excludes-tabs Tab {
+    background: #313244;
+    color: #cdd6f4;
+}
+
+#default-excludes-tabs Tab.-active {
+    background: #89b4fa;
+    color: #1e1e2e;
+    text-style: bold;
+}
+
+#default-excludes-status {
+    color: #89b4fa;
+    padding-bottom: 1;
+}
+
+#default-excludes-path {
+    color: #bac2de;
+    padding-bottom: 1;
+}
+
+#default-excludes-help-link {
+    color: #f9e2af;
+    padding-bottom: 1;
+}
+
+#default-excludes-viewer {
+    height: 1fr;
+    border: round #313244;
+    background: #181825;
+    color: #cdd6f4;
+}
+
+#default-excludes-viewer.-read-only {
+    background: #181825;
+}
+
+#default-excludes-viewer.-editing {
+    border: round #a6e3a1;
+}

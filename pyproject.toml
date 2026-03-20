@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml>=6.0",
     "rich>=13.9.4",
     "sqlalchemy>=2.0",
+    "textual[syntax]>=8.1.1",
 ]
 
 [project.scripts]
@@ -45,6 +46,7 @@ dev = [
     "pytest-sugar>=1.0.0",
     "ruff>=0.8.6",
     "rust-just>=1.39.0",
+    "textual-dev>=1.8.0",
     "ty>=0.0.1a12",
     "types-pyyaml>=6.0.12",
 ]
@@ -102,7 +104,7 @@ warn_required_dynamic_aliases = true
 
 [tool.ruff]
 include = ["src/**", "tests/**"]
-exclude = ["tests/data/*.txt"]
+exclude = ["tests/data/*.txt", "**/*.tcss"]
 line-length = 120
 indent-width = 4
 
