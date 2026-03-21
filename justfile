@@ -35,7 +35,7 @@ _start-dmypy:
 
 # run mypy type checker
 mypy: _start-dmypy
-    uv run dmypy check src/borgboi
+    uv run dmypy check src/ tests/ scripts/
 
 # run ty type checker
 ty:

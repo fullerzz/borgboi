@@ -1,7 +1,9 @@
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from textual.widgets import Link, Static, Tabs, TextArea
 
 from borgboi.config import Config
@@ -27,8 +29,8 @@ def build_repo(name: str) -> BorgBoiRepo:
 
 
 def test_load_default_excludes_document_reads_shared_file(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -45,8 +47,8 @@ def test_load_default_excludes_document_reads_shared_file(
 
 
 def test_load_default_excludes_document_returns_missing_state(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -62,8 +64,8 @@ def test_load_default_excludes_document_returns_missing_state(
 
 
 def test_load_repo_excludes_document_returns_fallback_state(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -83,8 +85,8 @@ def test_load_repo_excludes_document_returns_fallback_state(
 
 
 def test_tui_can_open_switch_and_close_excludes_screen(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -137,8 +139,8 @@ def test_tui_can_open_switch_and_close_excludes_screen(
 
 
 def test_tui_excludes_help_link_activation_opens_docs(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -185,8 +187,8 @@ def _build_excludes_app(
 
 
 def test_tui_edit_save_writes_file_to_disk(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -224,8 +226,8 @@ def test_tui_edit_save_writes_file_to_disk(
 
 
 def test_tui_edit_cancel_reverts_content(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -260,8 +262,8 @@ def test_tui_edit_cancel_reverts_content(
 
 
 def test_tui_edit_creates_nonexistent_file(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -301,8 +303,8 @@ def test_tui_edit_creates_nonexistent_file(
 
 
 def test_tui_tab_switch_while_editing_discards_changes(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -340,8 +342,8 @@ def test_tui_tab_switch_while_editing_discards_changes(
 
 
 def test_tui_save_failure_keeps_editing_and_notifies(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
@@ -381,8 +383,8 @@ def test_tui_save_failure_keeps_editing_and_notifies(
 
 
 def test_tui_edit_status_shows_editing_indicator(
-    monkeypatch,
-    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
     cfg = Config(offline=True)
