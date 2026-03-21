@@ -12,6 +12,7 @@ from textual.widgets import DataTable, Footer, Header
 
 from borgboi.lib.utils import format_last_backup, format_repo_size
 from borgboi.tui.config_panel import ConfigPanel
+from borgboi.tui.daily_backup_screen import DailyBackupScreen
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
 
 if TYPE_CHECKING:
@@ -31,6 +32,7 @@ class BorgBoiApp(App[None]):
         Binding("r", "refresh", "Refresh"),
         Binding("c", "toggle_config", "Config"),
         Binding("e", "show_default_excludes", "Excludes"),
+        Binding("b", "daily_backup", "Backup"),
     ]
 
     def __init__(
@@ -123,3 +125,8 @@ class BorgBoiApp(App[None]):
 
     def action_show_default_excludes(self) -> None:
         _ = self.push_screen(DefaultExcludesScreen(config=self._config, repos=self._repos))
+
+    def action_daily_backup(self) -> None:
+        if self.screen is not self._main_screen:
+            return
+        _ = self.push_screen(DailyBackupScreen(orchestrator=self.orchestrator))
