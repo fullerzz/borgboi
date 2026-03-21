@@ -240,6 +240,7 @@ class DailyBackupScreen(Screen[None]):
                 yield Switch(value=not self._is_offline, id="daily-backup-s3-switch", disabled=self._is_offline)
                 yield Static("", id="daily-backup-spacer")
                 yield Button("Start Backup", id="daily-backup-start", variant="primary", disabled=True)
+                yield Button("Clear Log", id="daily-backup-clear", variant="default", disabled=True)
             yield RichLog(id="daily-backup-log", markup=True, max_lines=5000)
         yield Footer()
 
@@ -277,8 +278,15 @@ class DailyBackupScreen(Screen[None]):
         else:
             switch.disabled = not enabled
         self.query_one("#daily-backup-start", Button).disabled = not enabled
+        if not enabled:
+            self.query_one("#daily-backup-clear", Button).disabled = True
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "daily-backup-clear":
+            log = self.query_one("#daily-backup-log", RichLog)
+            log.clear()
+            event.button.disabled = True
+            return
         if event.button.id != "daily-backup-start":
             return
         if self._backup_running:
@@ -329,11 +337,13 @@ class DailyBackupScreen(Screen[None]):
     def _on_backup_complete(self) -> None:
         self._backup_running = False
         self._set_controls_enabled(True)
+        self.query_one("#daily-backup-clear", Button).disabled = False
         self.notify("Daily backup completed successfully.", severity="information")
 
     def _on_backup_failed(self, message: str) -> None:
         self._backup_running = False
         self._set_controls_enabled(True)
+        self.query_one("#daily-backup-clear", Button).disabled = False
         self.notify(f"Backup failed: {message}", severity="error")
 
     @override
