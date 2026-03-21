@@ -82,3 +82,7 @@ snapshot-trim *args:
 # update snapshot repr formatting without value changes
 snapshot-update *args:
     uv run pytest --inline-snapshot=update {{ args }}
+
+# run the TUI in dev mode to enable connecting to textual console debugger
+dev-tui:
+    uv run textual run --dev src/borgboi/cli/main.py tui
