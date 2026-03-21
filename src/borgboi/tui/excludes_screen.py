@@ -179,6 +179,7 @@ class DefaultExcludesScreen(Screen[None]):
 
     @override
     def compose(self) -> ComposeResult:
+        """Build the screen layout with tabs for each excludes document, a viewer, and help link."""
         document = self._documents[0]
         viewer = TextArea(document.body, id="default-excludes-viewer")
         viewer.read_only = True
@@ -201,6 +202,7 @@ class DefaultExcludesScreen(Screen[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Focus the tab bar when the screen is first mounted."""
         self.query_one("#default-excludes-tabs", Tabs).focus()
 
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
