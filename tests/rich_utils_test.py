@@ -1,8 +1,10 @@
+import pytest
+
 from borgboi import rich_utils
 from borgboi.core import output as output_module
 
 
-def test_render_cmd_output_lines_reuses_default_output_handler(monkeypatch) -> None:
+def test_render_cmd_output_lines_reuses_default_output_handler(monkeypatch: pytest.MonkeyPatch) -> None:
     created: list[object] = []
     rendered: list[tuple[str, str, list[str], str, str]] = []
 

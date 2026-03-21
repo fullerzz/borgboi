@@ -51,7 +51,7 @@ class BorgBoiContext:
 
 
 ContextArg = Annotated[BorgBoiContext, Parameter(parse=False)]
-MetaTokens = Annotated[str, Parameter(show=False, allow_leading_hyphen=True)]
+MetaTokens = Annotated[str, Parameter(show=False, allow_leading_hyphen=True)]  # pyright: ignore[reportCallIssue]
 
 
 def print_error_and_exit(message: str, *, error: Exception | None = None) -> NoReturn:
