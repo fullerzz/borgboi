@@ -171,7 +171,7 @@ def render_command_with_fallback(
 
     section = getattr(output, "section", None)
     section_context = section(status, success_msg) if callable(section) else nullcontext()
-    with section_context:
+    with section_context:  # pyright: ignore[reportGeneralTypeIssues]
         for line in log_stream:
             output.on_stderr(line)
 

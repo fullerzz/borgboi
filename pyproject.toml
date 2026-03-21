@@ -50,9 +50,7 @@ dev = [
     "ty>=0.0.1a12",
     "types-pyyaml>=6.0.12",
 ]
-docs = [
-    "zensical>=0.0.24",
-]
+docs = ["zensical>=0.0.24"]
 
 [tool.uv]
 default-groups = ["dev", "docs"]
@@ -96,6 +94,11 @@ enable_error_code = [
     "mutable-override",
     "exhaustive-match",
 ]
+
+[[tool.mypy.overrides]]
+module = ["borgboi.cli.exclusions", "borgboi.clients.s3_client"]
+no_implicit_reexport = false
+
 
 [tool.pydantic-mypy]
 init_forbid_extra = true
