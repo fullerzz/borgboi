@@ -238,6 +238,7 @@ class DailyBackupScreen(Screen[None]):
                 )
                 yield Label("Sync to S3", id="daily-backup-s3-label")
                 yield Switch(value=not self._is_offline, id="daily-backup-s3-switch", disabled=self._is_offline)
+                yield Static("", id="daily-backup-spacer")
                 yield Button("Start Backup", id="daily-backup-start", variant="primary", disabled=True)
             yield RichLog(id="daily-backup-log", markup=True, max_lines=5000)
         yield Footer()
