@@ -136,3 +136,48 @@ CollapsibleTitle:hover {
 #default-excludes-viewer.-editing {
     border: round #a6e3a1;
 }
+
+/* Daily Backup screen */
+
+#daily-backup-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#daily-backup-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#daily-backup-controls {
+    height: auto;
+    padding-bottom: 1;
+    align: left middle;
+}
+
+#daily-backup-select {
+    width: 40;
+    margin-right: 2;
+}
+
+#daily-backup-s3-label {
+    padding: 1 1 0 0;
+    color: #cdd6f4;
+}
+
+#daily-backup-s3-switch {
+    margin-right: 2;
+}
+
+#daily-backup-start {
+    margin-left: 1;
+}
+
+#daily-backup-log {
+    height: 1fr;
+    border: round #313244;
+    background: #181825;
+    color: #cdd6f4;
+}
