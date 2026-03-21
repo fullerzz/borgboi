@@ -171,8 +171,12 @@ CollapsibleTitle:hover {
     margin-right: 2;
 }
 
+#daily-backup-spacer {
+    width: 1fr;
+}
+
 #daily-backup-start {
-    margin-left: 1;
+    margin-left: 0;
 }
 
 #daily-backup-log {
