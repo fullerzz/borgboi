@@ -49,6 +49,7 @@ class BorgBoiApp(App[None]):
 
     @property
     def orchestrator(self) -> Orchestrator:
+        """Return the shared orchestrator, constructing it lazily if not provided at init."""
         if self._orchestrator is None:
             from borgboi.core.orchestrator import Orchestrator
 
@@ -57,6 +58,7 @@ class BorgBoiApp(App[None]):
 
     @override
     def compose(self) -> ComposeResult:
+        """Build the main screen layout with header, repos table, config panel, and footer."""
         yield Header()
         with Horizontal(id="main-content"):
             yield DataTable(id="repos-table")
@@ -64,6 +66,7 @@ class BorgBoiApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Initialise the repos table columns and trigger the initial data load."""
         self._main_screen = self.screen
         self._repos_table = table = self.query_one("#repos-table", DataTable)
         table.add_columns(
@@ -110,12 +113,14 @@ class BorgBoiApp(App[None]):
         self.notify(str(error), severity="error", title="Failed to load repos")
 
     def action_toggle_config(self) -> None:
+        """Toggle visibility of the config panel sidebar."""
         if self.screen is not self._main_screen:
             return
         panel = self.query_one("#config-panel", ConfigPanel)
         panel.display = not panel.display
 
     def action_refresh(self) -> None:
+        """Reload the repos table from storage."""
         if self.screen is not self._main_screen:
             return
         if self._repos_table is None:
@@ -124,9 +129,11 @@ class BorgBoiApp(App[None]):
         self._load_repos()
 
     def action_show_default_excludes(self) -> None:
+        """Push the excludes viewer screen."""
         _ = self.push_screen(DefaultExcludesScreen(config=self._config, repos=self._repos))
 
     def action_daily_backup(self) -> None:
+        """Push the daily backup screen."""
         if self.screen is not self._main_screen:
             return
         _ = self.push_screen(DailyBackupScreen(orchestrator=self.orchestrator))

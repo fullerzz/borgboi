@@ -49,6 +49,7 @@ class TuiOutputHandler:
     # -- BaseOutputHandler protocol ------------------------------------------
 
     def on_progress(self, current: int, total: int, info: str | None = None) -> None:
+        """Write a progress update line to the log."""
         if total > 0:
             percent = (current / total) * 100
             msg = f"Progress: {current}/{total} ({percent:.1f}%)"
@@ -59,6 +60,7 @@ class TuiOutputHandler:
         self._write(Text(msg, style="cyan"))
 
     def on_log(self, level: str, message: str, **_kwargs: Any) -> None:
+        """Write a log message to the log widget, styled by severity level."""
         style_map = {
             "debug": "dim",
             "info": "",
@@ -69,6 +71,7 @@ class TuiOutputHandler:
         self._write(Text(message, style=style) if style else Text(message))
 
     def on_file_status(self, status: str, path: str) -> None:
+        """Write a file status entry to the log, colour-coded by status character."""
         status_styles = {
             "A": "green",
             "M": "yellow",
@@ -83,9 +86,11 @@ class TuiOutputHandler:
         self._write(text)
 
     def on_stdout(self, line: str) -> None:
+        """Write a raw stdout line to the log."""
         self._write(line.rstrip())
 
     def on_stderr(self, line: str) -> None:
+        """Parse a stderr line as a structured Borg log event and render it appropriately."""
         cleaned_line = line.rstrip()
         if not cleaned_line:
             return
@@ -108,6 +113,7 @@ class TuiOutputHandler:
             self._render_log_message(event)
 
     def on_stats(self, stats: dict[str, Any]) -> None:
+        """Write a statistics block to the log."""
         self._write(Text("--- Statistics ---", style="bold #cba6f7"))
         for key, value in stats.items():
             self._write(f"  {key}: {value}")
@@ -193,6 +199,7 @@ class TuiOutputHandler:
         spinner: str = "point",
         ruler_color: str = "#74c7ec",
     ) -> None:
+        """Stream a command's stderr output to the log, bracketed by status and success rulers."""
         self._write(Text(f"--- {status} ---", style=f"bold {ruler_color}"))
         for line in log_stream:
             self.on_stderr(line)
@@ -200,6 +207,7 @@ class TuiOutputHandler:
 
     @contextmanager
     def section(self, status: str, success_msg: str) -> Generator[None]:
+        """Context manager that writes opening and closing ruler lines around a block of log output."""
         self._write(Text(f"--- {status} ---", style="bold #74c7ec"))
         yield
         self._write(Text(f"--- {success_msg} ---", style="bold green"))
@@ -227,6 +235,7 @@ class DailyBackupScreen(Screen[None]):
 
     @override
     def compose(self) -> ComposeResult:
+        """Build the screen layout with header, repo selector, S3 toggle, action buttons, and log widget."""
         yield Header()
         with Vertical(id="daily-backup-screen"):
             yield Static("Daily Backup", id="daily-backup-title")
@@ -245,6 +254,7 @@ class DailyBackupScreen(Screen[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        """Trigger repo loading when the screen is first mounted."""
         self.query_one("#daily-backup-select", Select).loading = True
         self._load_repos()
 
@@ -282,6 +292,7 @@ class DailyBackupScreen(Screen[None]):
             self.query_one("#daily-backup-clear", Button).disabled = True
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle Start Backup and Clear Log button presses."""
         if event.button.id == "daily-backup-clear":
             log = self.query_one("#daily-backup-log", RichLog)
             log.clear()
@@ -348,7 +359,9 @@ class DailyBackupScreen(Screen[None]):
 
     @override
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Prevent the back action while a backup is in progress."""
         return not (action == "back" and self._backup_running)
 
     def action_back(self) -> None:
+        """Pop this screen and return to the previous screen."""
         _ = self.app.pop_screen()

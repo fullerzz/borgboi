@@ -46,6 +46,7 @@ class ConfigPanel(VerticalScroll):
 
     @override
     def compose(self) -> ComposeResult:
+        """Build the config panel with collapsible sections for each config group."""
         yield Static(
             "[bold #cba6f7]Configuration[/]",
             id="config-panel-title",
