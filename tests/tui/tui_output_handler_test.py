@@ -322,3 +322,25 @@ def test_archive_progress_finished_hides_bar() -> None:
 
     assert _has_setattr_call(cft_calls, progress_bar, "display", False)
     assert any("Archive write complete" in (t.plain if isinstance(t, Text) else t) for t in written)
+
+
+def test_archive_progress_shows_bar_while_active() -> None:
+    handler, _, progress_bar, cft_calls = _make_handler_with_progress()
+    log_line = '{"type":"archive_progress","finished":false,"path":"/some/file.txt","time":"2026-01-01T00:00:00"}'
+
+    handler.on_stderr(log_line)
+
+    assert _has_setattr_call(cft_calls, progress_bar, "display", True)
+
+
+def test_render_command_defers_archive_progress_hide_until_command_finishes() -> None:
+    handler, _, progress_bar, cft_calls = _make_handler_with_progress()
+    log_lines = [
+        '{"type":"archive_progress","finished":false,"time":"2026-01-01T00:00:00"}\n',
+        '{"type":"archive_progress","finished":true,"time":"2026-01-01T00:00:00"}\n',
+    ]
+
+    handler.render_command("Creating", "Create done", log_lines)
+
+    hide_calls = [call_args for call_args in cft_calls if call_args == (setattr, progress_bar, "display", False)]
+    assert len(hide_calls) == 1

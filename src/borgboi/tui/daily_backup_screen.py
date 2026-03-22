@@ -43,6 +43,7 @@ class TuiOutputHandler:
         self._app = app
         self._log = log
         self._progress_bar = progress_bar
+        self._command_progress_active = False
 
     def _write(self, text: str | Text) -> None:
         self._app.call_from_thread(self._log.write, text)
@@ -156,8 +157,11 @@ class TuiOutputHandler:
     def _render_archive_progress(self, event: ArchiveProgress) -> None:
         if event.finished:
             self._write(Text("Archive write complete", style="bold green"))
-            self._hide_progress()
+            if not self._command_progress_active:
+                self._hide_progress()
             return
+
+        self._show_progress()
 
         details: list[str] = []
         if event.path:
@@ -210,6 +214,8 @@ class TuiOutputHandler:
                     bar.update(total=total, progress=progress)
 
                 self._app.call_from_thread(_show_and_update)
+        elif not event.finished:
+            self._show_progress()
 
         self.on_progress(
             current=event.current or 0,
@@ -223,7 +229,8 @@ class TuiOutputHandler:
             text.append("  ", style="green")
             text.append(f" {operation} complete")
             self._write(text)
-            self._hide_progress()
+            if not self._command_progress_active:
+                self._hide_progress()
 
     def _render_log_message(self, event: LogMessage) -> None:
         message = event.message.strip()
@@ -247,23 +254,31 @@ class TuiOutputHandler:
         ruler_color: str = "#74c7ec",
     ) -> None:
         """Stream a command's stderr output to the log, bracketed by status and success rulers."""
-        self._reset_progress(indeterminate=True)
-        self._show_progress()
-        self._write(Text(f"--- {status} ---", style=f"bold {ruler_color}"))
-        for line in log_stream:
-            self.on_stderr(line)
-        self._write(Text(f"--- {success_msg} ---", style="bold green"))
-        self._hide_progress()
+        self._command_progress_active = True
+        try:
+            self._reset_progress(indeterminate=True)
+            self._show_progress()
+            self._write(Text(f"--- {status} ---", style=f"bold {ruler_color}"))
+            for line in log_stream:
+                self.on_stderr(line)
+            self._write(Text(f"--- {success_msg} ---", style="bold green"))
+        finally:
+            self._command_progress_active = False
+            self._hide_progress()
 
     @contextmanager
     def section(self, status: str, success_msg: str) -> Generator[None]:
         """Context manager that writes opening and closing ruler lines around a block of log output."""
+        self._command_progress_active = True
         self._reset_progress(indeterminate=True)
         self._show_progress()
         self._write(Text(f"--- {status} ---", style="bold #74c7ec"))
-        yield
-        self._write(Text(f"--- {success_msg} ---", style="bold green"))
-        self._hide_progress()
+        try:
+            yield
+        finally:
+            self._write(Text(f"--- {success_msg} ---", style="bold green"))
+            self._command_progress_active = False
+            self._hide_progress()
 
 
 class DailyBackupScreen(Screen[None]):

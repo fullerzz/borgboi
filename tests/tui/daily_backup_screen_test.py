@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Generator
 from types import SimpleNamespace
 from typing import Any, cast, override
@@ -209,4 +210,38 @@ async def test_progress_bar_hidden_after_backup_fails(tui_config_with_excludes: 
         await pilot.pause()
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        assert progress_bar.display is False
+
+
+async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_config_with_excludes: Config) -> None:
+    repo = build_repo("alpha")
+
+    class _StreamingBorg(FakeBorg):
+        @override
+        def create(self, repo_path: str, backup_target: str, **_kwargs: Any) -> Generator[str]:
+            self.create_calls.append(f"{repo_path}:{backup_target}")
+            yield (
+                '{"type":"archive_progress","finished":false,"path":"/some/file.txt","time":"2026-01-01T00:00:00"}\n'
+            )
+            yield '{"type":"archive_progress","finished":true,"time":"2026-01-01T00:00:00"}\n'
+            time.sleep(0.5)
+            yield (
+                '{"type":"log_message","name":"borg.output.stats","levelname":"INFO",'
+                '"message":"Repository: /repo","time":"2026-01-01T00:00:00"}\n'
+            )
+
+    app, _, _ = _build_daily_backup_app(tui_config_with_excludes, [repo], borg=_StreamingBorg())
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        select = screen.query_one("#daily-backup-select", Select)
+        select.value = repo.name
+        await pilot.click("#daily-backup-start")
+        await pilot.pause(0.2)
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        assert progress_bar.display is True
+
+        await pilot.pause(0.5)
         assert progress_bar.display is False
