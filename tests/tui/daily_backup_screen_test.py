@@ -4,7 +4,7 @@ from collections.abc import Generator
 from types import SimpleNamespace
 from typing import Any, cast, override
 
-from textual.widgets import Button, RichLog, Select, Switch
+from textual.widgets import Button, ProgressBar, RichLog, Select, Switch
 
 from borgboi.config import Config
 from borgboi.models import BorgBoiRepo
@@ -159,3 +159,54 @@ async def test_load_repos_error_disables_start_button(tui_config: Config) -> Non
 
         start_button = screen.query_one("#daily-backup-start", Button)
         assert start_button.disabled is True
+
+
+# -- ProgressBar tests -------------------------------------------------------
+
+
+async def test_progress_bar_hidden_initially(tui_config_with_excludes: Config) -> None:
+    app, _, _ = _build_daily_backup_app(tui_config_with_excludes)
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        assert progress_bar.display is False
+
+
+async def test_progress_bar_hidden_after_backup_completes(tui_config_with_excludes: Config) -> None:
+    repo = build_repo("alpha")
+    app, _, _ = _build_daily_backup_app(tui_config_with_excludes, [repo])
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        select = screen.query_one("#daily-backup-select", Select)
+        select.value = repo.name
+        await pilot.click("#daily-backup-start")
+        await pilot.pause()
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        assert progress_bar.display is False
+
+
+async def test_progress_bar_hidden_after_backup_fails(tui_config_with_excludes: Config) -> None:
+    repo = build_repo("alpha")
+
+    class _FailingBorg(FakeBorg):
+        @override
+        def create(self, repo_path: str, backup_target: str, **_kwargs: Any) -> Generator[str]:
+            raise RuntimeError("borg exploded")
+
+    app, _, _ = _build_daily_backup_app(tui_config_with_excludes, [repo], borg=_FailingBorg())
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        select = screen.query_one("#daily-backup-select", Select)
+        select.value = repo.name
+        await pilot.click("#daily-backup-start")
+        await pilot.pause()
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        assert progress_bar.display is False

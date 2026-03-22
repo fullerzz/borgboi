@@ -12,7 +12,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Label, RichLog, Select, Static, Switch
+from textual.widgets import Button, Footer, Header, Label, ProgressBar, RichLog, Select, Static, Switch
 
 from borgboi.clients.utils.borg_logs import (
     ArchiveProgress,
@@ -39,12 +39,45 @@ class TuiOutputHandler:
     is safe to use from a ``@work(thread=True)`` worker.
     """
 
-    def __init__(self, app: App[Any], log: RichLog) -> None:
+    def __init__(self, app: App[Any], log: RichLog, progress_bar: ProgressBar | None = None) -> None:
         self._app = app
         self._log = log
+        self._progress_bar = progress_bar
 
     def _write(self, text: str | Text) -> None:
         self._app.call_from_thread(self._log.write, text)
+
+    # -- ProgressBar helpers (thread-safe) ------------------------------------
+
+    def _show_progress(self) -> None:
+        if self._progress_bar is None:
+            return
+        self._app.call_from_thread(setattr, self._progress_bar, "display", True)
+
+    def _hide_progress(self) -> None:
+        if self._progress_bar is None:
+            return
+        self._app.call_from_thread(setattr, self._progress_bar, "display", False)
+
+    def _reset_progress(self, *, indeterminate: bool = False) -> None:
+        if self._progress_bar is None:
+            return
+        bar = self._progress_bar
+
+        def _do_reset() -> None:
+            bar.update(total=None if indeterminate else 100, progress=0)
+
+        self._app.call_from_thread(_do_reset)
+
+    def _update_progress_bar(self, *, total: int, progress: float) -> None:
+        if self._progress_bar is None:
+            return
+        bar = self._progress_bar
+
+        def _do_update() -> None:
+            bar.update(total=total, progress=progress)
+
+        self._app.call_from_thread(_do_update)
 
     # -- BaseOutputHandler protocol ------------------------------------------
 
@@ -123,6 +156,7 @@ class TuiOutputHandler:
     def _render_archive_progress(self, event: ArchiveProgress) -> None:
         if event.finished:
             self._write(Text("Archive write complete", style="bold green"))
+            self._hide_progress()
             return
 
         details: list[str] = []
@@ -165,6 +199,18 @@ class TuiOutputHandler:
         if event.info:
             info_parts.extend(event.info)
 
+        if event.total and event.total > 0 and not event.finished:
+            bar = self._progress_bar
+            if bar is not None:
+                total = event.total
+                progress = float(event.current or 0)
+
+                def _show_and_update() -> None:
+                    bar.display = True
+                    bar.update(total=total, progress=progress)
+
+                self._app.call_from_thread(_show_and_update)
+
         self.on_progress(
             current=event.current or 0,
             total=event.total or 0,
@@ -177,6 +223,7 @@ class TuiOutputHandler:
             text.append("  ", style="green")
             text.append(f" {operation} complete")
             self._write(text)
+            self._hide_progress()
 
     def _render_log_message(self, event: LogMessage) -> None:
         message = event.message.strip()
@@ -200,17 +247,23 @@ class TuiOutputHandler:
         ruler_color: str = "#74c7ec",
     ) -> None:
         """Stream a command's stderr output to the log, bracketed by status and success rulers."""
+        self._reset_progress(indeterminate=True)
+        self._show_progress()
         self._write(Text(f"--- {status} ---", style=f"bold {ruler_color}"))
         for line in log_stream:
             self.on_stderr(line)
         self._write(Text(f"--- {success_msg} ---", style="bold green"))
+        self._hide_progress()
 
     @contextmanager
     def section(self, status: str, success_msg: str) -> Generator[None]:
         """Context manager that writes opening and closing ruler lines around a block of log output."""
+        self._reset_progress(indeterminate=True)
+        self._show_progress()
         self._write(Text(f"--- {status} ---", style="bold #74c7ec"))
         yield
         self._write(Text(f"--- {success_msg} ---", style="bold green"))
+        self._hide_progress()
 
 
 class DailyBackupScreen(Screen[None]):
@@ -250,6 +303,7 @@ class DailyBackupScreen(Screen[None]):
                 yield Static("", id="daily-backup-spacer")
                 yield Button("Start Backup", id="daily-backup-start", variant="primary", disabled=True)
                 yield Button("Clear Log", id="daily-backup-clear", variant="default", disabled=True)
+            yield ProgressBar(total=None, show_eta=False, id="daily-backup-progress")
             yield RichLog(id="daily-backup-log", markup=True, max_lines=5000)
         yield Footer()
 
@@ -296,6 +350,7 @@ class DailyBackupScreen(Screen[None]):
         if event.button.id == "daily-backup-clear":
             log = self.query_one("#daily-backup-log", RichLog)
             log.clear()
+            self.query_one("#daily-backup-progress", ProgressBar).display = False
             event.button.disabled = True
             return
         if event.button.id != "daily-backup-start":
@@ -317,16 +372,17 @@ class DailyBackupScreen(Screen[None]):
         sync_to_s3 = self.query_one("#daily-backup-s3-switch", Switch).value
         log = self.query_one("#daily-backup-log", RichLog)
         log.clear()
+        progress_bar = self.query_one("#daily-backup-progress", ProgressBar)
 
         self._backup_running = True
         self._set_controls_enabled(False)
-        self._run_daily_backup(repo, sync_to_s3, log)
+        self._run_daily_backup(repo, sync_to_s3, log, progress_bar)
 
     @work(thread=True, exclusive=True)
-    def _run_daily_backup(self, repo: BorgBoiRepo, sync_to_s3: bool, log: RichLog) -> None:
+    def _run_daily_backup(self, repo: BorgBoiRepo, sync_to_s3: bool, log: RichLog, progress_bar: ProgressBar) -> None:
         from borgboi.core.orchestrator import Orchestrator
 
-        output_handler = TuiOutputHandler(self.app, log)
+        output_handler = TuiOutputHandler(self.app, log, progress_bar=progress_bar)
 
         try:
             orch = self._orchestrator
@@ -342,6 +398,8 @@ class DailyBackupScreen(Screen[None]):
             output_handler.on_log("error", f"Error: {e}")
             self.app.call_from_thread(self._on_backup_failed, str(e))
             return
+        finally:
+            self.app.call_from_thread(setattr, progress_bar, "display", False)
 
         self.app.call_from_thread(self._on_backup_complete)
 
