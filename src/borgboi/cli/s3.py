@@ -27,18 +27,7 @@ def s3_sync(
 
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
-
-        from borgboi import rich_utils
-        from borgboi.clients import s3 as s3_client
-        from borgboi.lib.colors import COLOR_HEX
-
-        rich_utils.render_cmd_output_lines(
-            "Syncing repo with S3 bucket",
-            "S3 sync completed successfully",
-            s3_client.sync_with_s3(repo_info.path, repo_info.name, cfg=ctx.config),
-            spinner="arrow",
-            ruler_color=COLOR_HEX.green,
-        )
+        ctx.orchestrator.sync_to_s3(repo_info)
     except Exception as error:
         print_error_and_exit(str(error), error=error)
 
