@@ -336,13 +336,14 @@ class Orchestrator:
         for line in self.borg.delete(repo.path, dry_run=dry_run, passphrase=resolved_passphrase):
             self.output.on_stderr(line)
 
-        if delete_from_s3:
-            self.delete_from_s3(repo, dry_run=dry_run)
-
         if not dry_run:
             self.storage.delete(repo.name)
             self._delete_excludes_file(repo.name)
 
+        if delete_from_s3:
+            self.delete_from_s3(repo, dry_run=dry_run)
+
+        if not dry_run:
             self.output.on_log("info", f"Deleted repository {repo.name}")
 
     def get_repo(

@@ -623,6 +623,41 @@ def test_delete_repo_can_simulate_s3_delete_during_dry_run(
     storage.delete.assert_not_called()
 
 
+def test_delete_repo_cleans_up_local_state_when_s3_delete_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo = _build_repo()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    borg_client.delete.return_value = iter(["deleted line"])
+    cfg = Config(offline=False)
+    excludes_path = cfg.borgboi_dir / f"{repo.name}_{cfg.excludes_filename}"
+    excludes_path.write_text("*.tmp\n", encoding="utf-8")
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "resolved-passphrase")
+
+    orchestrator = Orchestrator(
+        config=cfg,
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        s3_client=cast(Any, Mock()),
+        output_handler=output_handler,
+    )
+
+    def raise_s3_delete_error(repo_obj: BorgBoiRepo, dry_run: bool = False) -> None:
+        raise RuntimeError("s3 delete failed")
+
+    monkeypatch.setattr(orchestrator, "delete_from_s3", raise_s3_delete_error)
+
+    with pytest.raises(RuntimeError, match="s3 delete failed"):
+        orchestrator.delete_repo(name=repo.name, delete_from_s3=True)
+
+    storage.delete.assert_called_once_with(repo.name)
+    assert excludes_path.exists() is False
+
+
 def test_orchestrator_creates_default_s3_client_when_online(monkeypatch: pytest.MonkeyPatch) -> None:
     created_configs: list[object] = []
 
