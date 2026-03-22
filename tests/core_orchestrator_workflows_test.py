@@ -12,6 +12,7 @@ from borgboi.config import Config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
 from borgboi.core.orchestrator import Orchestrator
 from borgboi.core.output import CollectingOutputHandler
+from borgboi.lib.colors import COLOR_HEX
 from borgboi.models import BorgBoiRepo
 
 
@@ -50,6 +51,37 @@ def _build_repo(name: str = "repo-one", hostname: str | None = None, passphrase:
 @pytest.fixture
 def output_handler() -> CollectingOutputHandler:
     return CollectingOutputHandler()
+
+
+class RecordingOutputHandler(CollectingOutputHandler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.render_calls: list[dict[str, Any]] = []
+
+    def render_command(
+        self,
+        status: str,
+        success_msg: str,
+        log_stream: Any,
+        *,
+        spinner: str = "point",
+        ruler_color: str = "#74c7ec",
+    ) -> None:
+        self.render_calls.append(
+            {
+                "status": status,
+                "success_msg": success_msg,
+                "spinner": spinner,
+                "ruler_color": ruler_color,
+            }
+        )
+        super().render_command(
+            status,
+            success_msg,
+            log_stream,
+            spinner=spinner,
+            ruler_color=ruler_color,
+        )
 
 
 def test_create_repo_generates_passphrase_and_saves_repo(
@@ -563,6 +595,34 @@ def test_delete_repo_dry_run_skips_storage_delete(
     storage.delete.assert_not_called()
 
 
+def test_delete_repo_can_simulate_s3_delete_during_dry_run(
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo = _build_repo()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    borg_client.delete.return_value = iter(["dry-run line"])
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "resolved-passphrase")
+
+    orchestrator = Orchestrator(
+        config=Config(offline=False),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        s3_client=cast(Any, Mock()),
+        output_handler=output_handler,
+    )
+    delete_from_s3 = Mock()
+    monkeypatch.setattr(orchestrator, "delete_from_s3", delete_from_s3)
+
+    orchestrator.delete_repo(name=repo.name, dry_run=True, delete_from_s3=True)
+
+    delete_from_s3.assert_called_once_with(repo, dry_run=True)
+    storage.delete.assert_not_called()
+
+
 def test_orchestrator_creates_default_s3_client_when_online(monkeypatch: pytest.MonkeyPatch) -> None:
     created_configs: list[object] = []
 
@@ -596,6 +656,66 @@ def test_orchestrator_skips_default_s3_client_when_offline(monkeypatch: pytest.M
     )
 
     assert orchestrator.s3 is None
+
+
+def test_sync_to_s3_renders_with_expected_rich_style() -> None:
+    repo = _build_repo()
+    storage = Mock()
+    s3_client = Mock()
+    s3_client.sync_to_bucket.return_value = iter(["upload line"])
+    output_handler = RecordingOutputHandler()
+
+    orchestrator = Orchestrator(
+        config=Config(offline=False),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, storage),
+        s3_client=cast(Any, s3_client),
+        output_handler=output_handler,
+    )
+
+    orchestrator.sync_to_s3(repo)
+
+    s3_client.sync_to_bucket.assert_called_once_with(repo.safe_path, repo.name)
+    assert output_handler.render_calls == [
+        {
+            "status": "Syncing repo with S3 bucket",
+            "success_msg": "S3 sync completed successfully",
+            "spinner": "arrow",
+            "ruler_color": COLOR_HEX.green,
+        }
+    ]
+    assert output_handler.stderr_lines == ["upload line"]
+    assert any(message == "S3 sync completed successfully" for _, message, _ in output_handler.log_messages)
+
+
+def test_delete_from_s3_renders_with_expected_rich_style() -> None:
+    repo = _build_repo()
+    storage = Mock()
+    s3_client = Mock()
+    s3_client.delete_from_bucket.return_value = iter(["(dryrun) delete line"])
+    output_handler = RecordingOutputHandler()
+
+    orchestrator = Orchestrator(
+        config=Config(offline=False),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, storage),
+        s3_client=cast(Any, s3_client),
+        output_handler=output_handler,
+    )
+
+    orchestrator.delete_from_s3(repo, dry_run=True)
+
+    s3_client.delete_from_bucket.assert_called_once_with(repo.name, dry_run=True)
+    assert output_handler.render_calls == [
+        {
+            "status": "Performing dry run of S3 delete...",
+            "success_msg": "S3 delete dry run completed successfully",
+            "spinner": "arrow",
+            "ruler_color": COLOR_HEX.red,
+        }
+    ]
+    assert output_handler.stderr_lines == ["(dryrun) delete line"]
+    assert any(message == "S3 delete dry run completed successfully" for _, message, _ in output_handler.log_messages)
 
 
 def test_daily_backup_runs_steps_and_syncs_when_enabled(output_handler: CollectingOutputHandler) -> None:

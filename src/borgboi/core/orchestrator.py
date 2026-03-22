@@ -336,17 +336,12 @@ class Orchestrator:
         for line in self.borg.delete(repo.path, dry_run=dry_run, passphrase=resolved_passphrase):
             self.output.on_stderr(line)
 
+        if delete_from_s3:
+            self.delete_from_s3(repo, dry_run=dry_run)
+
         if not dry_run:
-            # Delete from storage
             self.storage.delete(repo.name)
-
-            # Delete exclusions file
             self._delete_excludes_file(repo.name)
-
-            # Delete from S3 if requested
-            if delete_from_s3 and self.s3:
-                # S3 deletion will be implemented in Phase 7
-                pass
 
             self.output.on_log("info", f"Deleted repository {repo.name}")
 
@@ -581,22 +576,62 @@ class Orchestrator:
 
         self.output.on_log("info", "Compacting completed")
 
-    # S3 Workflows (stubs for Phase 7)
-
     def sync_to_s3(self, repo: BorgBoiRepo | str) -> None:
         """Sync a repository to S3.
 
         Args:
             repo: Repository or repository name
         """
-        _ = self._resolve_repo(repo)  # Validate repo exists
+        from borgboi.lib.colors import COLOR_HEX
+
+        resolved_repo = self._resolve_repo(repo)
 
         if self.s3 is None:
             self.output.on_log("warning", "S3 client not configured")
             return
 
-        # Will be implemented in Phase 7
-        self.output.on_log("info", "S3 sync not yet implemented in new orchestrator")
+        log_stream = self.s3.sync_to_bucket(resolved_repo.safe_path, resolved_repo.name)
+        render_command_with_fallback(
+            self.output,
+            "Syncing repo with S3 bucket",
+            "S3 sync completed successfully",
+            log_stream,
+            spinner="arrow",
+            ruler_color=COLOR_HEX.green,
+        )
+        self.output.on_log("info", "S3 sync completed successfully", repo=resolved_repo.name)
+
+    def delete_from_s3(
+        self,
+        repo: BorgBoiRepo | str,
+        dry_run: bool = False,
+    ) -> None:
+        """Delete a repository from S3.
+
+        Args:
+            repo: Repository or repository name
+            dry_run: If True, only simulate deletion
+        """
+        from borgboi.lib.colors import COLOR_HEX
+
+        resolved_repo = self._resolve_repo(repo)
+
+        if self.s3 is None:
+            self.output.on_log("warning", "S3 client not configured")
+            return
+
+        status = "Performing dry run of S3 delete..." if dry_run else "Deleting repo from S3..."
+        success_msg = "S3 delete dry run completed successfully" if dry_run else "S3 delete completed successfully"
+        log_stream = self.s3.delete_from_bucket(resolved_repo.name, dry_run=dry_run)
+        render_command_with_fallback(
+            self.output,
+            status,
+            success_msg,
+            log_stream,
+            spinner="arrow",
+            ruler_color=COLOR_HEX.red,
+        )
+        self.output.on_log("info", success_msg, repo=resolved_repo.name)
 
     def restore_from_s3(
         self,

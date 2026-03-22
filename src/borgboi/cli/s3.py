@@ -96,8 +96,14 @@ def s3_delete(
         console.print("Aborted.")
         return
 
-    # TODO: Implement S3 deletion via ctx.orchestrator
-    console.print(f"[bold yellow]S3 delete for '{name}' not yet implemented (dry_run={dry_run})[/]")
+    try:
+        ctx.orchestrator.delete_from_s3(name, dry_run=dry_run)
+        if dry_run:
+            console.print("[bold yellow]Dry run completed - no changes made[/]")
+        else:
+            console.print("[bold green]Repository deleted from S3 successfully[/]")
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
 @s3.command(name="stats")

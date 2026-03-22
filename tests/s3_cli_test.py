@@ -1,5 +1,7 @@
 from datetime import UTC, datetime
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import Mock
 
 import pytest
 from rich.panel import Panel
@@ -7,6 +9,7 @@ from rich.table import Table
 
 from borgboi import rich_utils
 from borgboi.cli import cli
+from borgboi.cli import s3 as s3_module
 from borgboi.clients import s3 as s3_client
 from tests.cli_helpers import invoke_cli
 
@@ -93,3 +96,17 @@ def test_s3_delete_aborts_cleanly_when_confirmation_is_declined(
 
     assert exit_code == 0
     assert "Aborted." in captured.out
+
+
+def test_s3_delete_calls_orchestrator_and_prints_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    orchestrator = SimpleNamespace(delete_from_s3=Mock())
+    ctx = SimpleNamespace(offline=False, orchestrator=orchestrator)
+    console_print = Mock()
+
+    monkeypatch.setattr(s3_module, "confirm_action", lambda prompt: True)
+    monkeypatch.setattr("borgboi.cli.s3.console.print", console_print)
+
+    s3_module.s3_delete(name="repo-one", ctx=cast(Any, ctx))
+
+    orchestrator.delete_from_s3.assert_called_once_with("repo-one", dry_run=False)
+    console_print.assert_called_once_with("[bold green]Repository deleted from S3 successfully[/]")
