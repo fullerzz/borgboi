@@ -1,3 +1,10 @@
+## v1.21.0 (2026-03-24)
+
+### 🚀 Features
+
+- Implement S3 sync and delete workflows in the orchestrator (#213) ([1a1137d](https://github.com/fullerzz/borgboi/commit/1a1137dec810efb3914321c69f18143ba0bc9a02))
+
+
 ## v1.20.0 (2026-03-20)
 
 ### 🚀 Features
