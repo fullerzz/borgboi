@@ -27,18 +27,7 @@ def s3_sync(
 
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
-
-        from borgboi import rich_utils
-        from borgboi.clients import s3 as s3_client
-        from borgboi.lib.colors import COLOR_HEX
-
-        rich_utils.render_cmd_output_lines(
-            "Syncing repo with S3 bucket",
-            "S3 sync completed successfully",
-            s3_client.sync_with_s3(repo_info.path, repo_info.name, cfg=ctx.config),
-            spinner="arrow",
-            ruler_color=COLOR_HEX.green,
-        )
+        ctx.orchestrator.sync_to_s3(repo_info)
     except Exception as error:
         print_error_and_exit(str(error), error=error)
 
@@ -96,8 +85,14 @@ def s3_delete(
         console.print("Aborted.")
         return
 
-    # TODO: Implement S3 deletion via ctx.orchestrator
-    console.print(f"[bold yellow]S3 delete for '{name}' not yet implemented (dry_run={dry_run})[/]")
+    try:
+        ctx.orchestrator.delete_from_s3(name, dry_run=dry_run)
+        if dry_run:
+            console.print("[bold yellow]Dry run completed - no changes made[/]")
+        else:
+            console.print("[bold green]Repository deleted from S3 successfully[/]")
+    except Exception as error:
+        print_error_and_exit(str(error), error=error)
 
 
 @s3.command(name="stats")
