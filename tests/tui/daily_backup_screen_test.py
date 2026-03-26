@@ -165,17 +165,19 @@ async def test_load_repos_error_disables_start_button(tui_config: Config) -> Non
 # -- ProgressBar tests -------------------------------------------------------
 
 
-async def test_progress_bar_hidden_initially(tui_config_with_excludes: Config) -> None:
+async def test_progress_bar_visible_initially(tui_config_with_excludes: Config) -> None:
     app, _, _ = _build_daily_backup_app(tui_config_with_excludes)
 
     async with app.run_test() as pilot:
         screen = await _open_daily_backup_screen(app, pilot)
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
-        assert progress_bar.display is False
+        assert progress_bar.display is True
+        assert progress_bar.total == 100
+        assert progress_bar.progress == 0
 
 
-async def test_progress_bar_hidden_after_backup_completes(tui_config_with_excludes: Config) -> None:
+async def test_progress_bar_remains_visible_after_backup_completes(tui_config_with_excludes: Config) -> None:
     repo = build_repo("alpha")
     app, _, _ = _build_daily_backup_app(tui_config_with_excludes, [repo])
 
@@ -188,10 +190,10 @@ async def test_progress_bar_hidden_after_backup_completes(tui_config_with_exclud
         await pilot.pause()
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
-        assert progress_bar.display is False
+        assert progress_bar.display is True
 
 
-async def test_progress_bar_hidden_after_backup_fails(tui_config_with_excludes: Config) -> None:
+async def test_progress_bar_remains_visible_after_backup_fails(tui_config_with_excludes: Config) -> None:
     repo = build_repo("alpha")
 
     class _FailingBorg(FakeBorg):
@@ -210,7 +212,28 @@ async def test_progress_bar_hidden_after_backup_fails(tui_config_with_excludes: 
         await pilot.pause()
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
-        assert progress_bar.display is False
+        assert progress_bar.display is True
+
+
+async def test_clear_log_resets_progress_bar_state(tui_config_with_excludes: Config) -> None:
+    app, _, _ = _build_daily_backup_app(tui_config_with_excludes)
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        progress_bar.update(total=None, progress=42)
+        progress_bar.display = True
+
+        clear_button = screen.query_one("#daily-backup-clear", Button)
+        clear_button.disabled = False
+
+        screen.on_button_pressed(Button.Pressed(clear_button))
+
+        assert progress_bar.total == 100
+        assert progress_bar.progress == 0
+        assert progress_bar.display is True
+        assert clear_button.disabled is True
 
 
 async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_config_with_excludes: Config) -> None:
@@ -244,4 +267,4 @@ async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_co
         assert progress_bar.display is True
 
         await pilot.pause(0.5)
-        assert progress_bar.display is False
+        assert progress_bar.display is True

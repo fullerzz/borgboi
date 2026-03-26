@@ -183,10 +183,14 @@ CollapsibleTitle:hover {
     margin-left: 2;
 }
 
+#daily-backup-progress-wrapper {
+    height: 100%;
+    width: 1fr;
+    align: right middle;
+}
+
 #daily-backup-progress {
-    display: none;
-    height: auto;
-    margin: 0 0 1 0;
+    width: auto;
 }
 
 #daily-backup-progress Bar {

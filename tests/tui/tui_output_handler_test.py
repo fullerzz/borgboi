@@ -261,16 +261,7 @@ def test_handler_without_progress_bar_does_not_fail() -> None:
     handler._update_progress_bar(total=100, progress=50)
 
 
-def _has_setattr_call(
-    cft_calls: list[tuple[Any, ...]],
-    progress_bar: MagicMock,
-    attr: str,
-    value: object,
-) -> bool:
-    return any(c == (setattr, progress_bar, attr, value) for c in cft_calls)
-
-
-def test_render_command_shows_and_hides_progress() -> None:
+def test_render_command_resets_progress_before_streaming() -> None:
     handler, _, progress_bar, cft_calls = _make_handler_with_progress()
     log_lines = [
         '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"working","msgid":"test"}\n',
@@ -278,18 +269,18 @@ def test_render_command_shows_and_hides_progress() -> None:
 
     handler.render_command("Creating", "Create done", log_lines)
 
-    assert _has_setattr_call(cft_calls, progress_bar, "display", True)
-    assert _has_setattr_call(cft_calls, progress_bar, "display", False)
+    assert len(cft_calls) > 0
+    progress_bar.update.assert_any_call(total=None, progress=0)
 
 
-def test_section_shows_and_hides_progress() -> None:
+def test_section_resets_progress_when_entered() -> None:
     handler, _, progress_bar, cft_calls = _make_handler_with_progress()
 
     with handler.section("Pruning", "Prune done"):
         handler.on_log("info", "working...")
 
-    assert _has_setattr_call(cft_calls, progress_bar, "display", True)
-    assert _has_setattr_call(cft_calls, progress_bar, "display", False)
+    assert len(cft_calls) > 0
+    progress_bar.update.assert_any_call(total=None, progress=0)
 
 
 def test_progress_percent_updates_bar() -> None:
@@ -305,35 +296,41 @@ def test_progress_percent_updates_bar() -> None:
     assert any(c == call(total=100, progress=50.0) for c in update_calls)
 
 
-def test_progress_percent_finished_hides_bar() -> None:
-    handler, _, progress_bar, cft_calls = _make_handler_with_progress()
+def test_progress_percent_finished_writes_completion_without_hiding_bar() -> None:
+    handler, written, progress_bar, cft_calls = _make_handler_with_progress()
     log_line = '{"type":"progress_percent","operation":0,"msgid":"archive.prune","finished":true,"current":100,"total":100,"time":"2026-01-01T00:00:00"}'
 
     handler.on_stderr(log_line)
 
-    assert _has_setattr_call(cft_calls, progress_bar, "display", False)
+    assert cft_calls == []
+    progress_bar.update.assert_not_called()
+    assert any("Progress: 100/100 (100.0%)" in (t.plain if isinstance(t, Text) else t) for t in written)
+    assert any("Archive Prune complete" in (t.plain if isinstance(t, Text) else t) for t in written)
 
 
-def test_archive_progress_finished_hides_bar() -> None:
+def test_archive_progress_finished_logs_completion_without_hiding_bar() -> None:
     handler, written, progress_bar, cft_calls = _make_handler_with_progress()
     log_line = '{"type":"archive_progress","finished":true,"time":"2026-01-01T00:00:00"}'
 
     handler.on_stderr(log_line)
 
-    assert _has_setattr_call(cft_calls, progress_bar, "display", False)
+    assert cft_calls == []
+    progress_bar.update.assert_not_called()
     assert any("Archive write complete" in (t.plain if isinstance(t, Text) else t) for t in written)
 
 
-def test_archive_progress_shows_bar_while_active() -> None:
-    handler, _, progress_bar, cft_calls = _make_handler_with_progress()
+def test_archive_progress_logs_details_without_toggling_bar_visibility() -> None:
+    handler, written, progress_bar, cft_calls = _make_handler_with_progress()
     log_line = '{"type":"archive_progress","finished":false,"path":"/some/file.txt","time":"2026-01-01T00:00:00"}'
 
     handler.on_stderr(log_line)
 
-    assert _has_setattr_call(cft_calls, progress_bar, "display", True)
+    assert cft_calls == []
+    progress_bar.update.assert_not_called()
+    assert any("Backing up /some/file.txt" in (t.plain if isinstance(t, Text) else t) for t in written)
 
 
-def test_render_command_defers_archive_progress_hide_until_command_finishes() -> None:
+def test_render_command_only_resets_progress_once_for_archive_updates() -> None:
     handler, _, progress_bar, cft_calls = _make_handler_with_progress()
     log_lines = [
         '{"type":"archive_progress","finished":false,"time":"2026-01-01T00:00:00"}\n',
@@ -342,5 +339,5 @@ def test_render_command_defers_archive_progress_hide_until_command_finishes() ->
 
     handler.render_command("Creating", "Create done", log_lines)
 
-    hide_calls = [call_args for call_args in cft_calls if call_args == (setattr, progress_bar, "display", False)]
-    assert len(hide_calls) == 1
+    assert len(cft_calls) == 1
+    progress_bar.update.assert_called_once_with(total=None, progress=0)

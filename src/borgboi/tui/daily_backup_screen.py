@@ -51,14 +51,10 @@ class TuiOutputHandler:
     # -- ProgressBar helpers (thread-safe) ------------------------------------
 
     def _show_progress(self) -> None:
-        if self._progress_bar is None:
-            return
-        self._app.call_from_thread(setattr, self._progress_bar, "display", True)
+        pass
 
     def _hide_progress(self) -> None:
-        if self._progress_bar is None:
-            return
-        self._app.call_from_thread(setattr, self._progress_bar, "display", False)
+        pass
 
     def _reset_progress(self, *, indeterminate: bool = False) -> None:
         if self._progress_bar is None:
@@ -210,7 +206,6 @@ class TuiOutputHandler:
                 progress = float(event.current or 0)
 
                 def _show_and_update() -> None:
-                    bar.display = True
                     bar.update(total=total, progress=progress)
 
                 self._app.call_from_thread(_show_and_update)
@@ -315,9 +310,10 @@ class DailyBackupScreen(Screen[None]):
                 )
                 yield Label("Sync to S3", id="daily-backup-s3-label")
                 yield Switch(value=not self._is_offline, id="daily-backup-s3-switch", disabled=self._is_offline)
-                yield ProgressBar(total=None, show_eta=False, id="daily-backup-progress")
                 yield Button("Start Backup", id="daily-backup-start", variant="primary", disabled=True)
                 yield Button("Clear Log", id="daily-backup-clear", variant="default", disabled=True)
+                with Vertical(id="daily-backup-progress-wrapper"):
+                    yield ProgressBar(total=100, show_eta=False, id="daily-backup-progress")
             yield RichLog(id="daily-backup-log", markup=True, max_lines=5000)
         yield Footer()
 
@@ -364,8 +360,10 @@ class DailyBackupScreen(Screen[None]):
         if event.button.id == "daily-backup-clear":
             log = self.query_one("#daily-backup-log", RichLog)
             log.clear()
-            self.query_one("#daily-backup-progress", ProgressBar).display = False
+            progress_bar = self.query_one("#daily-backup-progress", ProgressBar)
+            progress_bar.update(total=100, progress=0)
             event.button.disabled = True
+
             return
         if event.button.id != "daily-backup-start":
             return
@@ -413,7 +411,7 @@ class DailyBackupScreen(Screen[None]):
             self.app.call_from_thread(self._on_backup_failed, str(e))
             return
         finally:
-            self.app.call_from_thread(setattr, progress_bar, "display", False)
+            pass
 
         self.app.call_from_thread(self._on_backup_complete)
 
