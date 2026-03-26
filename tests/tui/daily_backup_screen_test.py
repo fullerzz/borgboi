@@ -7,6 +7,7 @@ from typing import Any, cast, override
 
 from textual.widgets import Button, ProgressBar, RichLog, Select, Switch
 
+from borgboi.clients.s3_client import MockS3Client
 from borgboi.config import Config
 from borgboi.models import BorgBoiRepo
 from borgboi.tui.app import BorgBoiApp
@@ -20,6 +21,7 @@ def _build_daily_backup_app(
     repos: list[BorgBoiRepo] | None = None,
     borg: FakeBorg | None = None,
     storage: FakeStorage | None = None,
+    s3: Any = None,
     list_repos: Any = None,
 ) -> tuple[BorgBoiApp, FakeBorg, FakeStorage]:
     """Build a BorgBoiApp wired for daily backup testing."""
@@ -31,7 +33,7 @@ def _build_daily_backup_app(
             config=config,
             borg=borg,
             storage=storage,
-            s3=None,
+            s3=s3,
             list_repos=list_repos or (lambda: repos or [build_repo("alpha")]),
         ),
     )
@@ -268,3 +270,29 @@ async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_co
 
         await pilot.pause(0.5)
         assert progress_bar.display is True
+
+
+async def test_progress_bar_marks_complete_after_s3_sync(monkeypatch: Any, tmp_path: Any) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    config = Config(offline=False)
+    config.borgboi_dir.mkdir(parents=True, exist_ok=True)
+    (config.borgboi_dir / config.excludes_filename).write_text("*.tmp\n")
+
+    repo = build_repo("alpha")
+
+    fake_s3 = MockS3Client()
+    app, _, _ = _build_daily_backup_app(config, [repo], s3=fake_s3)
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        select = screen.query_one("#daily-backup-select", Select)
+        select.value = repo.name
+        await pilot.click("#daily-backup-start")
+        await pilot.pause()
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        assert progress_bar.display is True
+        assert progress_bar.total == 100
+        assert progress_bar.progress == 100
+        assert fake_s3.sync_calls == [(repo.safe_path, repo.name)]

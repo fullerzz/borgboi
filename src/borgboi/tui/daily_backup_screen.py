@@ -76,6 +76,9 @@ class TuiOutputHandler:
 
         self._app.call_from_thread(_do_update)
 
+    def _complete_progress(self) -> None:
+        self._update_progress_bar(total=100, progress=100)
+
     # -- BaseOutputHandler protocol ------------------------------------------
 
     def on_progress(self, current: int, total: int, info: str | None = None) -> None:
@@ -256,6 +259,7 @@ class TuiOutputHandler:
             self._write(Text(f"--- {status} ---", style=f"bold {ruler_color}"))
             for line in log_stream:
                 self.on_stderr(line)
+            self._complete_progress()
             self._write(Text(f"--- {success_msg} ---", style="bold green"))
         finally:
             self._command_progress_active = False
@@ -271,6 +275,7 @@ class TuiOutputHandler:
         try:
             yield
         finally:
+            self._complete_progress()
             self._write(Text(f"--- {success_msg} ---", style="bold green"))
             self._command_progress_active = False
             self._hide_progress()

@@ -269,18 +269,31 @@ def test_render_command_resets_progress_before_streaming() -> None:
 
     handler.render_command("Creating", "Create done", log_lines)
 
-    assert len(cft_calls) > 0
-    progress_bar.update.assert_any_call(total=None, progress=0)
+    assert len(cft_calls) == 2
+    assert progress_bar.update.call_args_list == [call(total=None, progress=0), call(total=100, progress=100)]
 
 
-def test_section_resets_progress_when_entered() -> None:
+def test_section_resets_and_completes_progress() -> None:
     handler, _, progress_bar, cft_calls = _make_handler_with_progress()
 
     with handler.section("Pruning", "Prune done"):
         handler.on_log("info", "working...")
 
-    assert len(cft_calls) > 0
-    progress_bar.update.assert_any_call(total=None, progress=0)
+    assert len(cft_calls) == 2
+    assert progress_bar.update.call_args_list == [call(total=None, progress=0), call(total=100, progress=100)]
+
+
+def test_render_command_marks_progress_complete_for_unstructured_streams() -> None:
+    handler, _, progress_bar, cft_calls = _make_handler_with_progress()
+
+    handler.render_command(
+        "Syncing repo with S3 bucket",
+        "S3 sync completed successfully",
+        ["upload: ./file.txt to s3://test-bucket/repo/file.txt\n"],
+    )
+
+    assert len(cft_calls) == 2
+    assert progress_bar.update.call_args_list == [call(total=None, progress=0), call(total=100, progress=100)]
 
 
 def test_progress_percent_updates_bar() -> None:
@@ -330,7 +343,7 @@ def test_archive_progress_logs_details_without_toggling_bar_visibility() -> None
     assert any("Backing up /some/file.txt" in (t.plain if isinstance(t, Text) else t) for t in written)
 
 
-def test_render_command_only_resets_progress_once_for_archive_updates() -> None:
+def test_render_command_resets_then_completes_progress_for_archive_updates() -> None:
     handler, _, progress_bar, cft_calls = _make_handler_with_progress()
     log_lines = [
         '{"type":"archive_progress","finished":false,"time":"2026-01-01T00:00:00"}\n',
@@ -339,5 +352,5 @@ def test_render_command_only_resets_progress_once_for_archive_updates() -> None:
 
     handler.render_command("Creating", "Create done", log_lines)
 
-    assert len(cft_calls) == 1
-    progress_bar.update.assert_called_once_with(total=None, progress=0)
+    assert len(cft_calls) == 2
+    assert progress_bar.update.call_args_list == [call(total=None, progress=0), call(total=100, progress=100)]
