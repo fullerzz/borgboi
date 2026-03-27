@@ -14,6 +14,7 @@ SQLite stores:
 
 - Repository metadata (`repositories`)
 - Cached S3 statistics (`s3_stats_cache`)
+- Daily backup stage timing history (`backup_stage_timings`)
 - Storage schema version (`schema_version`)
 
 It does **not** store the Borg repository contents themselves. Actual backup archives remain in Borg repositories on disk (and optionally S3).
@@ -70,6 +71,16 @@ erDiagram
         INTEGER object_count
         DATETIME last_modified
         DATETIME cached_at
+    }
+
+    BACKUP_STAGE_TIMINGS {
+        INTEGER id PK
+        STRING repo_name
+        STRING stage_id
+        BOOLEAN sync_enabled
+        BIGINT duration_ms
+        BOOLEAN succeeded
+        DATETIME completed_at
     }
 
     SCHEMA_VERSION {
@@ -143,11 +154,30 @@ Tracks storage schema version.
 
 Current initialization behavior inserts version `1` if no row exists.
 
+### `backup_stage_timings`
+
+Stores observed daily backup stage durations for the TUI so stage progress can be estimated more accurately over time.
+
+This table is used by the daily backup screen to predict duration-weighted progress for the distinct backup stages (`create`, `prune`, `compact`, and optional `sync`). Predictions prefer recent successful samples for the current repository, then recent successful samples across all repositories, then built-in defaults.
+
+See [TUI](tui.md) for the user-facing behavior in the daily backup screen.
+
+| Column | Type | Nullable | Constraints / Behavior |
+| --- | --- | --- | --- |
+| `id` | `INTEGER` | No | Primary key, auto-increment |
+| `repo_name` | `VARCHAR(255)` | No | Indexed; repository name associated with the timing sample |
+| `stage_id` | `VARCHAR(64)` | No | Indexed; stage identifier such as `create`, `prune`, `compact`, or `sync` |
+| `sync_enabled` | `BOOLEAN` | No | Whether the overall daily backup run included S3 sync |
+| `duration_ms` | `BIGINT` | No | Observed stage duration in milliseconds |
+| `succeeded` | `BOOLEAN` | No | Indexed; only successful samples are used for prediction |
+| `completed_at` | `DATETIME` | No | Indexed; completion timestamp used to prefer recent samples |
+
 ## Operational Notes
 
 - SQLite is opened with `PRAGMA journal_mode=WAL` to improve concurrent read behavior.
 - Tables are created through SQLAlchemy metadata (`create_all`) during initialization.
 - Deleting a repository also deletes its `s3_stats_cache` row in application logic.
+- `backup_stage_timings` is append-only timing history; rows are recorded when daily backup stages complete successfully.
 - Exclusions are not stored in SQLite; they are written to text files under `~/.borgboi/data/exclusions/`.
 
 ## Common Introspection Queries
@@ -176,4 +206,11 @@ ORDER BY cached_at DESC;
 SELECT id, version, applied_at
 FROM schema_version
 ORDER BY id DESC;
+```
+
+```sql
+-- Show recent daily backup stage timings
+SELECT repo_name, stage_id, sync_enabled, duration_ms, succeeded, completed_at
+FROM backup_stage_timings
+ORDER BY completed_at DESC;
 ```

@@ -43,6 +43,7 @@ ty:
 
 # run tofu validate
 tofu-validate:
+    cd terraform && tofu init -backend=false
     cd terraform && tofu validate
 
 # run tflint

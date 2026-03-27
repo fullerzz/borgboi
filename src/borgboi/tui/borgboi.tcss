@@ -183,6 +183,25 @@ CollapsibleTitle:hover {
     margin-left: 2;
 }
 
+#daily-backup-progress-wrapper {
+    height: 100%;
+    width: 1fr;
+    align: right middle;
+}
+
+#daily-backup-progress {
+    width: auto;
+}
+
+#daily-backup-progress Bar {
+    color: #cba6f7;
+    background: #313244;
+}
+
+#daily-backup-progress PercentageStatus {
+    color: #cdd6f4;
+}
+
 #daily-backup-log {
     height: 1fr;
     border: round #313244;
