@@ -16,6 +16,7 @@ from sqlalchemy import (
     event,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy.pool import NullPool
 
 
 class Base(DeclarativeBase):
@@ -99,7 +100,7 @@ def _set_sqlite_wal_mode(dbapi_connection: object, _connection_record: object) -
 def get_engine(db_path: Path) -> Engine:
     """Create a SQLAlchemy engine for the given database path."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    engine = create_engine(f"sqlite:///{db_path}", echo=False, poolclass=NullPool)
     event.listen(engine, "connect", _set_sqlite_wal_mode)
     return engine
 

@@ -425,7 +425,13 @@ async def test_progress_bar_marks_complete_after_s3_sync(monkeypatch: Any, tmp_p
         select = screen.query_one("#daily-backup-select", Select)
         select.value = repo.name
         await pilot.click("#daily-backup-start")
-        await pilot.pause()
+
+        # Wait for the backup worker thread to complete and all
+        # call_from_thread callbacks to be processed
+        for _ in range(100):
+            await pilot.pause(0.05)
+            if not screen._backup_running:
+                break
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
         assert progress_bar.display is True
