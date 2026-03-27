@@ -60,6 +60,18 @@ class S3StatsCacheRow(Base):
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
 
+class BackupStageTimingRow(Base):
+    __tablename__ = "backup_stage_timings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    repo_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    stage_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    sync_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    succeeded: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), index=True)
+
+
 class SchemaVersionRow(Base):
     __tablename__ = "schema_version"
 

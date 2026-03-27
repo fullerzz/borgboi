@@ -5,15 +5,30 @@ from collections.abc import Generator
 from types import SimpleNamespace
 from typing import Any, cast, override
 
+import pytest
 from textual.widgets import Button, ProgressBar, RichLog, Select, Switch
 
 from borgboi.clients.s3_client import MockS3Client
 from borgboi.config import Config
 from borgboi.models import BorgBoiRepo
 from borgboi.tui.app import BorgBoiApp
+from borgboi.tui.daily_backup_progress import DEFAULT_STAGE_DURATION_MS, SQLiteDailyBackupProgressHistory
 from borgboi.tui.daily_backup_screen import DailyBackupScreen
 
 from .conftest import FakeBorg, FakeStorage, build_repo
+
+
+class _ProgressBorg(FakeBorg):
+    """FakeBorg that yields a 50% progress event during create, then sleeps."""
+
+    @override
+    def create(self, repo_path: str, backup_target: str, **_kwargs: Any) -> Generator[str]:
+        self.create_calls.append(f"{repo_path}:{backup_target}")
+        yield (
+            '{"type":"progress_percent","operation":0,"msgid":"archive.create",'
+            '"finished":false,"current":50,"total":100,"time":"2026-01-01T00:00:00"}\n'
+        )
+        time.sleep(0.4)
 
 
 def _build_daily_backup_app(
@@ -270,6 +285,117 @@ async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_co
 
         await pilot.pause(0.5)
         assert progress_bar.display is True
+
+
+async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_sync_disabled(
+    monkeypatch: Any,
+    tmp_path: Any,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    config = Config(offline=False)
+    config.borgboi_dir.mkdir(parents=True, exist_ok=True)
+    (config.borgboi_dir / config.excludes_filename).write_text("*.tmp\n")
+
+    repo = build_repo("alpha")
+
+    app, _, _ = _build_daily_backup_app(config, [repo], borg=_ProgressBorg(), s3=MockS3Client())
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        select = screen.query_one("#daily-backup-select", Select)
+        select.value = repo.name
+        screen.query_one("#daily-backup-s3-switch", Switch).value = False
+        await pilot.click("#daily-backup-start")
+        await pilot.pause(0.2)
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        expected_create_span = (
+            DEFAULT_STAGE_DURATION_MS["create"]
+            / (
+                DEFAULT_STAGE_DURATION_MS["create"]
+                + DEFAULT_STAGE_DURATION_MS["prune"]
+                + DEFAULT_STAGE_DURATION_MS["compact"]
+            )
+        ) * 100.0
+        assert progress_bar.progress == pytest.approx(expected_create_span / 2.0)
+
+
+async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_sync_enabled(
+    monkeypatch: Any,
+    tmp_path: Any,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    config = Config(offline=False)
+    config.borgboi_dir.mkdir(parents=True, exist_ok=True)
+    (config.borgboi_dir / config.excludes_filename).write_text("*.tmp\n")
+
+    repo = build_repo("alpha")
+
+    app, _, _ = _build_daily_backup_app(config, [repo], borg=_ProgressBorg(), s3=MockS3Client())
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        select = screen.query_one("#daily-backup-select", Select)
+        select.value = repo.name
+        await pilot.click("#daily-backup-start")
+        await pilot.pause(0.2)
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        expected_create_span = (
+            DEFAULT_STAGE_DURATION_MS["create"]
+            / (
+                DEFAULT_STAGE_DURATION_MS["create"]
+                + DEFAULT_STAGE_DURATION_MS["prune"]
+                + DEFAULT_STAGE_DURATION_MS["compact"]
+                + DEFAULT_STAGE_DURATION_MS["sync"]
+            )
+        ) * 100.0
+        assert progress_bar.progress == pytest.approx(expected_create_span / 2.0)
+
+
+async def test_daily_backup_progress_advances_during_prune_without_percent_output(
+    monkeypatch: Any,
+    tmp_path: Any,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+    config = Config(offline=True)
+    config.borgboi_dir.mkdir(parents=True, exist_ok=True)
+    (config.borgboi_dir / config.excludes_filename).write_text("*.tmp\n")
+
+    history = SQLiteDailyBackupProgressHistory(db_path=config.borgboi_dir / ".database" / "borgboi.db")
+    try:
+        history.record_stage_timing("alpha", "create", 1_000.0, sync_enabled=False, succeeded=True)
+        history.record_stage_timing("alpha", "prune", 200.0, sync_enabled=False, succeeded=True)
+        history.record_stage_timing("alpha", "compact", 1_000.0, sync_enabled=False, succeeded=True)
+    finally:
+        history.close()
+
+    repo = build_repo("alpha")
+
+    class _SlowPruneBorg(FakeBorg):
+        @override
+        def prune(self, repo_path: str, **_kwargs: Any) -> Generator[str]:
+            self.prune_calls.append(repo_path)
+            time.sleep(0.35)
+            if False:
+                yield ""
+
+    app, _, _ = _build_daily_backup_app(config, [repo], borg=_SlowPruneBorg())
+
+    async with app.run_test() as pilot:
+        screen = await _open_daily_backup_screen(app, pilot)
+
+        select = screen.query_one("#daily-backup-select", Select)
+        select.value = repo.name
+        await pilot.click("#daily-backup-start")
+        await pilot.pause(0.25)
+
+        progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
+        create_boundary = (1_000.0 / 2_200.0) * 100.0
+        prune_boundary = ((1_000.0 + 200.0) / 2_200.0) * 100.0
+        assert create_boundary < progress_bar.progress < prune_boundary
 
 
 async def test_progress_bar_marks_complete_after_s3_sync(monkeypatch: Any, tmp_path: Any) -> None:

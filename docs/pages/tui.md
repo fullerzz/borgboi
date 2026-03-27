@@ -8,6 +8,14 @@ bb tui
 
 The TUI uses the same effective configuration as the CLI, so `--offline`, `--debug`, and `BORGBOI_*` overrides all apply here too.
 
+## Daily Backup Progress
+
+The daily backup screen keeps the existing stage boundaries (`create`, `prune`, `compact`, and optional `sync`), but progress within each stage now advances gradually instead of only jumping when a stage finishes.
+
+Progress estimation improves over time because BorgBoi records successful stage durations in the local SQLite database and uses recent timing history to weight each stage more accurately for future runs. If no history is available yet, BorgBoi falls back to built-in default estimates.
+
+See [SQLite Database](sqlite-database.md) for the `backup_stage_timings` table details.
+
 ## Main Screen
 
 When the app starts, BorgBoi loads your managed repositories into a table with these columns:
