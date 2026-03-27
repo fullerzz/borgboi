@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Generator
 from types import SimpleNamespace
@@ -374,11 +375,15 @@ async def test_daily_backup_progress_advances_during_prune_without_percent_outpu
 
     repo = build_repo("alpha")
 
+    prune_entered = threading.Event()
+    prune_continue = threading.Event()
+
     class _SlowPruneBorg(FakeBorg):
         @override
         def prune(self, repo_path: str, **_kwargs: Any) -> Generator[str]:
             self.prune_calls.append(repo_path)
-            time.sleep(0.35)
+            prune_entered.set()
+            prune_continue.wait(timeout=5)
             if False:
                 yield ""
 
@@ -390,12 +395,17 @@ async def test_daily_backup_progress_advances_during_prune_without_percent_outpu
         select = screen.query_one("#daily-backup-select", Select)
         select.value = repo.name
         await pilot.click("#daily-backup-start")
-        await pilot.pause(0.25)
+
+        # Wait until the prune step has actually started in the worker thread
+        prune_entered.wait(timeout=5)
+        await pilot.pause(0.15)
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
         create_boundary = (1_000.0 / 2_200.0) * 100.0
         prune_boundary = ((1_000.0 + 200.0) / 2_200.0) * 100.0
         assert create_boundary < progress_bar.progress < prune_boundary
+
+        prune_continue.set()
 
 
 async def test_progress_bar_marks_complete_after_s3_sync(monkeypatch: Any, tmp_path: Any) -> None:
