@@ -117,9 +117,10 @@ class TuiOutputHandler:
 
     def _update_overall_progress(self, progress: float) -> None:
         clamped_progress = min(max(progress, 0.0), 100.0)
-        if clamped_progress <= self._last_overall_progress:
-            return
-        self._last_overall_progress = clamped_progress
+        with self._step_state_lock:
+            if clamped_progress <= self._last_overall_progress:
+                return
+            self._last_overall_progress = clamped_progress
         self._update_progress_bar(total=100, progress=clamped_progress)
 
     def _resolve_step_duration_predictions(self) -> dict[str, float]:
