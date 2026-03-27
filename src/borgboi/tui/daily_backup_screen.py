@@ -481,9 +481,12 @@ class TuiOutputHandler:
         self._write(Text(f"--- {status} ---", style="bold #74c7ec"))
         try:
             yield
-        finally:
+        except Exception:
+            raise
+        else:
             self._complete_step()
             self._write(Text(f"--- {success_msg} ---", style="bold green"))
+        finally:
             self._command_progress_active = False
 
 
