@@ -1,3 +1,24 @@
+## v1.21.1 (2026-03-27)
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Lock file maintenance (#214) ([c55857c](https://github.com/fullerzz/borgboi/commit/c55857c2fbf8c3937c2d75796b055e46e4d5dd04))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Update tflint plugin terraform-linters/tflint-ruleset-aws to v0.46.0 (#200) ([7a3ca46](https://github.com/fullerzz/borgboi/commit/7a3ca46f56d0632bb34e1cfb7f583b4bb7b10c28))
+
+- **deps**: Update terraform aws to v6.37.0 (#215) ([f413970](https://github.com/fullerzz/borgboi/commit/f413970442c3aaa29530db7c02602b7a46ca2bce))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies (#210) ([87489c9](https://github.com/fullerzz/borgboi/commit/87489c93e8d748013d029a4e20d8bd465803737f))
+
+
 ## v1.21.0 (2026-03-24)
 
 ### 🚀 Features
