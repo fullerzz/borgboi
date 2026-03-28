@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 
-from textual.widgets import DataTable
+from textual.widgets import DataTable, Static
 
 from borgboi.config import Config
 from borgboi.models import BorgBoiRepo
+from borgboi.storage.db import get_db_path
 from borgboi.tui.app import BorgBoiApp
 from borgboi.tui.config_panel import ConfigPanel
 from borgboi.tui.daily_backup_screen import DailyBackupScreen
@@ -102,6 +104,42 @@ async def test_action_refresh_reloads_repos(tui_config: Config) -> None:
         await pilot.press("r")
         await pilot.pause()
         assert call_count > initial_count
+
+
+async def test_app_loads_sparkline_history_from_configured_db(
+    tui_config: Config, monkeypatch: Any, tmp_path_factory: Any
+) -> None:
+    captured_db_paths: list[object] = []
+    alternate_home = tmp_path_factory.mktemp("alt-home")
+
+    class FakeHistory:
+        def __init__(self, db_path: object = None, engine: object = None) -> None:
+            del engine
+            captured_db_paths.append(db_path)
+
+        def __enter__(self) -> FakeHistory:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def get_daily_archive_counts(self, days: int) -> list[float]:
+            return [0.0] * days
+
+    orchestrator = cast(Any, SimpleNamespace(list_repos=lambda: [build_repo("alpha")]))
+    app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
+    monkeypatch.setenv("BORGBOI_HOME", alternate_home.as_posix())
+    monkeypatch.setattr("borgboi.tui.app.SQLiteDailyBackupProgressHistory", FakeHistory)
+
+    today = datetime.now(UTC).date()
+    expected_labels = [(today - timedelta(days=13 - index)).strftime("%m/%d") for index in range(14)]
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        actual_labels = [app.query_one(f"#sparkline-x-label-{index}", Static).content for index in range(14)]
+        assert actual_labels == expected_labels
+
+    assert captured_db_paths == [get_db_path(tui_config.borgboi_dir)]
 
 
 async def test_load_repos_error_shows_notification(tui_config: Config) -> None:

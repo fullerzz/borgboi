@@ -15,7 +15,7 @@ Footer {
 }
 
 #main-content {
-    height: 1fr;
+    height: 2fr;
 }
 
 DataTable {
@@ -78,6 +78,49 @@ CollapsibleTitle {
 
 CollapsibleTitle:hover {
     background: #45475a;
+}
+
+/* Archive sparkline */
+
+#sparkline-section {
+    height: 1fr;
+    padding: 0 2;
+    background: #1e1e2e;
+}
+
+#sparkline-title {
+    color: #cba6f7;
+    text-style: bold;
+    text-align: center;
+    padding: 1 0 0 0;
+    height: auto;
+}
+
+#archive-sparkline {
+    height: 1fr;
+    width: 100%;
+    margin: 1 0;
+}
+
+#archive-sparkline > .sparkline--min-color {
+    color: #313244;
+}
+
+#archive-sparkline > .sparkline--max-color {
+    color: #a6e3a1;
+}
+
+#sparkline-x-labels {
+    width: 100%;
+    height: auto;
+}
+
+.sparkline-x-label {
+    width: 1fr;
+    color: #6c7086;
+    text-align: center;
+    height: auto;
+    padding-bottom: 1;
 }
 
 #default-excludes-screen {

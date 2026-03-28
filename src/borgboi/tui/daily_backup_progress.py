@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 from statistics import median
 from typing import Protocol
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, func
 
 from borgboi.storage.db import BackupStageTimingRow, get_db_path, get_session_factory, init_db
 
@@ -57,6 +57,12 @@ class SQLiteDailyBackupProgressHistory:
         if self._owns_engine:
             self._engine.dispose()
 
+    def __enter__(self) -> SQLiteDailyBackupProgressHistory:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
     def get_stage_durations(self, repo_name: str, stage_ids: Iterable[str]) -> dict[str, float]:
         """Return predicted stage durations for a repository."""
         stage_list = list(stage_ids)
@@ -101,6 +107,32 @@ class SQLiteDailyBackupProgressHistory:
             except Exception:
                 session.rollback()
                 logger.warning("Failed to persist daily backup timing for %s/%s", repo_name, stage_id, exc_info=True)
+
+    def get_daily_archive_counts(self, days: int) -> list[float]:
+        """Return per-day counts of successful archive creations for the last *days* days.
+
+        Returns a list of *days* floats (oldest first) where each value is the
+        number of successful ``create`` stage completions on that calendar day.
+        Days with no backups are represented as ``0.0``.
+        """
+        today = datetime.now(UTC).date()
+        start_date = today - timedelta(days=days - 1)
+
+        with self._session_factory() as session:
+            date_col = func.date(BackupStageTimingRow.completed_at)
+            rows = (
+                session.query(date_col, func.count())
+                .filter(
+                    BackupStageTimingRow.stage_id == "create",
+                    BackupStageTimingRow.succeeded.is_(True),
+                    BackupStageTimingRow.completed_at >= datetime.combine(start_date, time.min, tzinfo=UTC),
+                )
+                .group_by(date_col)
+                .all()
+            )
+
+        counts_by_date: dict[str, int] = {row[0]: row[1] for row in rows}
+        return [float(counts_by_date.get(str(start_date + timedelta(days=i)), 0)) for i in range(days)]
 
     def _predict_stage_duration(self, repo_name: str, stage_id: str) -> float:
         repo_samples = self._load_recent_durations(

@@ -2,18 +2,24 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, ClassVar, override
 
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import Horizontal
-from textual.widgets import DataTable, Footer, Header
+from textual.containers import Horizontal, Vertical
+from textual.widgets import DataTable, Footer, Header, Sparkline, Static
 
 from borgboi.lib.utils import format_last_backup, format_repo_size
+from borgboi.storage.db import get_db_path
 from borgboi.tui.config_panel import ConfigPanel
+from borgboi.tui.daily_backup_progress import SQLiteDailyBackupProgressHistory
 from borgboi.tui.daily_backup_screen import DailyBackupScreen
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from textual.screen import Screen
@@ -21,6 +27,9 @@ if TYPE_CHECKING:
     from borgboi.config import Config
     from borgboi.core.orchestrator import Orchestrator
     from borgboi.models import BorgBoiRepo
+
+SPARKLINE_DAYS = 14
+SPARKLINE_TITLE = "Archive Creations Per Day (Last 2 Weeks)"
 
 
 class BorgBoiApp(App[None]):
@@ -63,6 +72,16 @@ class BorgBoiApp(App[None]):
         with Horizontal(id="main-content"):
             yield DataTable(id="repos-table")
             yield ConfigPanel(config=self._config)
+        with Vertical(id="sparkline-section"):
+            yield Static(SPARKLINE_TITLE, id="sparkline-title")
+            yield Sparkline(
+                [0.0] * SPARKLINE_DAYS,
+                summary_function=max,
+                id="archive-sparkline",
+            )
+            with Horizontal(id="sparkline-x-labels"):
+                for index in range(SPARKLINE_DAYS):
+                    yield Static("", classes="sparkline-x-label", id=f"sparkline-x-label-{index}")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -79,6 +98,7 @@ class BorgBoiApp(App[None]):
         )
         table.loading = True
         self._load_repos()
+        self._load_sparkline_data()
 
     @work(thread=True, exclusive=True)
     def _load_repos(self) -> None:
@@ -112,6 +132,25 @@ class BorgBoiApp(App[None]):
         table.loading = False
         self.notify(str(error), severity="error", title="Failed to load repos")
 
+    @work(thread=True, exclusive=True, group="sparkline")
+    def _load_sparkline_data(self) -> None:
+        try:
+            with SQLiteDailyBackupProgressHistory(
+                db_path=get_db_path(self._config.borgboi_dir if self._config else None)
+            ) as history:
+                data = history.get_daily_archive_counts(SPARKLINE_DAYS)
+            # Build x-labels from the same "today" snapshot used by the query
+            today = datetime.now(UTC).date()
+            labels = [(today - timedelta(days=SPARKLINE_DAYS - 1 - i)).strftime("%m/%d") for i in range(SPARKLINE_DAYS)]
+            self.call_from_thread(self._update_sparkline, data, labels)
+        except Exception:
+            logger.debug("Failed to load sparkline data", exc_info=True)
+
+    def _update_sparkline(self, data: list[float], labels: list[str]) -> None:
+        self.query_one("#archive-sparkline", Sparkline).data = data
+        for index, label in enumerate(labels):
+            self.query_one(f"#sparkline-x-label-{index}", Static).update(label)
+
     def action_toggle_config(self) -> None:
         """Toggle visibility of the config panel sidebar."""
         if self.screen is not self._main_screen:
@@ -120,13 +159,14 @@ class BorgBoiApp(App[None]):
         panel.display = not panel.display
 
     def action_refresh(self) -> None:
-        """Reload the repos table from storage."""
+        """Reload the repos table and sparkline from storage."""
         if self.screen is not self._main_screen:
             return
         if self._repos_table is None:
             return
         self._repos_table.loading = True
         self._load_repos()
+        self._load_sparkline_data()
 
     def action_show_default_excludes(self) -> None:
         """Push the excludes viewer screen."""
