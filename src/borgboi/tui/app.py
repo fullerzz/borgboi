@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, ClassVar, override
 
@@ -12,6 +11,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Sparkline, Static
 
+from borgboi.core.logging import get_logger
 from borgboi.lib.utils import format_last_backup, format_repo_size
 from borgboi.storage.db import get_db_path
 from borgboi.tui.config_screen import ConfigScreen
@@ -19,7 +19,7 @@ from borgboi.tui.daily_backup_progress import SQLiteDailyBackupProgressHistory
 from borgboi.tui.daily_backup_screen import DailyBackupScreen
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 if TYPE_CHECKING:
     from textual.screen import Screen
@@ -83,6 +83,7 @@ class BorgBoiApp(App[None]):
 
     def on_mount(self) -> None:
         """Initialise the repos table columns and trigger the initial data load."""
+        logger.info("TUI app mounted", offline=self._config.offline if self._config else None)
         self._main_screen = self.screen
 
         # Mode indicator in header subtitle
@@ -106,16 +107,20 @@ class BorgBoiApp(App[None]):
 
     @work(thread=True, exclusive=True)
     def _load_repos(self) -> None:
+        logger.debug("Loading repositories for TUI dashboard")
         try:
             repos = self.orchestrator.list_repos()
+            logger.info("Repositories loaded", count=len(repos))
             self.call_from_thread(self._populate_table, repos)
         except Exception as e:
+            logger.exception("Failed to load repositories", error=str(e))
             self.call_from_thread(self._on_load_error, e)
 
     def _populate_table(self, repos: list[BorgBoiRepo]) -> None:
         self._repos = repos
         table = self._repos_table
         if table is None:
+            logger.warning("Repos table not available for population")
             return
         table.clear()
         for repo in repos:
@@ -126,6 +131,7 @@ class BorgBoiApp(App[None]):
                 format_repo_size(repo.metadata),
             )
         table.loading = False
+        logger.debug("Repository table populated", row_count=len(repos))
 
     def _on_load_error(self, error: Exception) -> None:
         table = self._repos_table
@@ -133,9 +139,11 @@ class BorgBoiApp(App[None]):
             return
         table.loading = False
         self.notify(str(error), severity="error", title="Failed to load repos")
+        logger.error("Repository loading error notification shown", error=str(error))
 
     @work(thread=True, exclusive=True, group="sparkline")
     def _load_sparkline_data(self) -> None:
+        logger.debug("Loading sparkline data")
         try:
             with SQLiteDailyBackupProgressHistory(
                 db_path=get_db_path(self._config.borgboi_dir if self._config else None)
@@ -144,6 +152,7 @@ class BorgBoiApp(App[None]):
             # Build x-labels from the same "today" snapshot used by the query
             today = datetime.now(UTC).date()
             labels = [(today - timedelta(days=SPARKLINE_DAYS - 1 - i)).strftime("%m/%d") for i in range(SPARKLINE_DAYS)]
+            logger.debug("Sparkline data loaded", data_points=len(data))
             self.call_from_thread(self._update_sparkline, data, labels)
         except Exception:
             logger.debug("Failed to load sparkline data", exc_info=True)
@@ -157,12 +166,14 @@ class BorgBoiApp(App[None]):
         """Push the configuration viewer screen."""
         if self.screen is not self._main_screen:
             return
+        logger.debug("Opening config screen")
         _ = self.push_screen(ConfigScreen(config=self._config))
 
     def action_refresh(self) -> None:
         """Reload the repos table and sparkline from storage."""
         if self.screen is not self._main_screen:
             return
+        logger.info("Refreshing dashboard")
         self._refresh_dashboard()
 
     def _refresh_dashboard(self) -> None:
@@ -177,12 +188,14 @@ class BorgBoiApp(App[None]):
         """Push the excludes viewer screen."""
         if self.screen is not self._main_screen:
             return
+        logger.debug("Opening excludes screen", repo_count=len(self._repos))
         _ = self.push_screen(DefaultExcludesScreen(config=self._config, repos=self._repos))
 
     def action_daily_backup(self) -> None:
         """Push the daily backup screen."""
         if self.screen is not self._main_screen:
             return
+        logger.info("Opening daily backup screen")
         _ = self.push_screen(
             DailyBackupScreen(
                 orchestrator=self.orchestrator,

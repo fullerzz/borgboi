@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Iterable
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
@@ -11,9 +10,10 @@ from typing import Protocol
 
 from sqlalchemy import Engine, func
 
+from borgboi.core.logging import get_logger
 from borgboi.storage.db import BackupStageTimingRow, get_db_path, get_session_factory, init_db
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_STAGE_DURATION_MS: dict[str, float] = {
     "create": 360_000.0,
@@ -51,10 +51,14 @@ class SQLiteDailyBackupProgressHistory:
         self._owns_engine = engine is None
         self._engine = engine or init_db(db_path or get_db_path())
         self._session_factory = get_session_factory(self._engine)
+        logger.debug(
+            "SQLiteDailyBackupProgressHistory initialized", db_path=str(db_path), owns_engine=self._owns_engine
+        )
 
     def close(self) -> None:
         """Dispose the owned engine when the history store is no longer needed."""
         if self._owns_engine:
+            logger.debug("Disposing SQLiteDailyBackupProgressHistory engine")
             self._engine.dispose()
 
     def __enter__(self) -> SQLiteDailyBackupProgressHistory:
@@ -72,6 +76,7 @@ class SQLiteDailyBackupProgressHistory:
         predictions: dict[str, float] = {}
         for stage_id in stage_list:
             predictions[stage_id] = self._predict_stage_duration(repo_name, stage_id)
+        logger.debug("Stage duration predictions", repo=repo_name, predictions=predictions)
         return predictions
 
     def record_stage_timing(
@@ -132,20 +137,39 @@ class SQLiteDailyBackupProgressHistory:
             )
 
         counts_by_date: dict[str, int] = {row[0]: row[1] for row in rows}
-        return [float(counts_by_date.get(str(start_date + timedelta(days=i)), 0)) for i in range(days)]
+        result = [float(counts_by_date.get(str(start_date + timedelta(days=i)), 0)) for i in range(days)]
+        logger.debug("Daily archive counts retrieved", days=days, total_archives=sum(result))
+        return result
 
     def _predict_stage_duration(self, repo_name: str, stage_id: str) -> float:
         repo_samples = self._load_recent_durations(
             stage_id=stage_id, repo_name=repo_name, limit=REPO_STAGE_SAMPLE_LIMIT
         )
         if repo_samples:
-            return float(median(repo_samples))
+            duration = float(median(repo_samples))
+            logger.debug(
+                "Using repo-specific stage duration prediction",
+                repo=repo_name,
+                stage=stage_id,
+                duration_ms=duration,
+                samples=len(repo_samples),
+            )
+            return duration
 
         global_samples = self._load_recent_durations(stage_id=stage_id, repo_name=None, limit=GLOBAL_STAGE_SAMPLE_LIMIT)
         if global_samples:
-            return float(median(global_samples))
+            duration = float(median(global_samples))
+            logger.debug(
+                "Using global stage duration prediction",
+                stage=stage_id,
+                duration_ms=duration,
+                samples=len(global_samples),
+            )
+            return duration
 
-        return DEFAULT_STAGE_DURATION_MS.get(stage_id, DEFAULT_UNKNOWN_STAGE_DURATION_MS)
+        default_duration = DEFAULT_STAGE_DURATION_MS.get(stage_id, DEFAULT_UNKNOWN_STAGE_DURATION_MS)
+        logger.debug("Using default stage duration", stage=stage_id, duration_ms=default_duration)
+        return default_duration
 
     def _load_recent_durations(self, *, stage_id: str, repo_name: str | None, limit: int) -> list[int]:
         with self._session_factory() as session:
