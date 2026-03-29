@@ -1,3 +1,16 @@
+## v1.22.1 (2026-03-29)
+
+### 🐛 Bug Fixes
+
+- **tui**: Refresh Dashboard after Successful Backup (#222) ([f3e96fa](https://github.com/fullerzz/borgboi/commit/f3e96faa944973d18c987ccc297b114cfa8b7b58))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies (major) (#217) ([60b21cd](https://github.com/fullerzz/borgboi/commit/60b21cdd42d04d6eee1b5955ef74764b5ad01c4f))
+
+
 ## v1.22.0 (2026-03-29)
 
 ### 🚀 Features
