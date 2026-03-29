@@ -211,21 +211,19 @@ class RepoInfoScreen(Screen[None]):
                     yield Rule(classes="repo-info-pane-divider")
                     yield Label("Loading live Borg metadata...", id="repo-info-command-output", markup=True)
 
-                with TabPane("Protection", id="repo-info-protection-tab"), Vertical(classes="repo-info-tab-body"):
-                    with (
-                        Collapsible(title="Excludes in use", classes="repo-info-collapsible"),
-                        Vertical(classes="repo-info-protection-block"),
-                    ):
-                        yield Label("", id="repo-info-excludes-status", markup=True)
-                        yield Label("", id="repo-info-excludes-path", markup=True)
-                        yield excludes_viewer
+                with TabPane("Archives", id="repo-info-archives-tab"), Vertical(classes="repo-info-tab-body"):
+                    yield Label("", id="repo-info-archives-status")
+                    yield DataTable(id="repo-info-archives-table")
 
-                    with (
-                        Collapsible(title="Archives", classes="repo-info-collapsible"),
-                        Vertical(classes="repo-info-protection-block"),
-                    ):
-                        yield Label("", id="repo-info-archives-status")
-                        yield DataTable(id="repo-info-archives-table")
+                with (
+                    TabPane("Protection", id="repo-info-protection-tab"),
+                    Vertical(classes="repo-info-tab-body"),
+                    Collapsible(title="Excludes in use", classes="repo-info-collapsible"),
+                    Vertical(classes="repo-info-protection-block"),
+                ):
+                    yield Label("", id="repo-info-excludes-status", markup=True)
+                    yield Label("", id="repo-info-excludes-path", markup=True)
+                    yield excludes_viewer
         yield Footer()
 
     def on_mount(self) -> None:
