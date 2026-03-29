@@ -250,6 +250,53 @@ class BorgClient:
         )
         return repo_info
 
+    def set_storage_quota(self, repo_path: str, storage_quota: str, passphrase: str | None = None) -> None:
+        """Update the storage quota for an existing repository.
+
+        Args:
+            repo_path: Path to the repository
+            storage_quota: New storage quota for the repository (e.g., "200G", "1.5T")
+            passphrase: Passphrase for encrypted repos
+
+        Raises:
+            BorgError: If the command fails
+        """
+        logger.info(
+            "Updating Borg repository storage quota via client",
+            repo_path=repo_path,
+            storage_quota=storage_quota,
+        )
+        cmd = [
+            self.executable_path,
+            "config",
+            "--log-json",
+            "--progress",
+            repo_path,
+            "storage_quota",
+            storage_quota,
+        ]
+        self._run_command(cmd, passphrase=passphrase)
+        self.output.on_log("info", f"Updated storage quota for repository at {repo_path}")
+
+    def get_additional_free_space(self, repo_path: str, passphrase: str | None = None) -> str | None:
+        """Read the configured reserved free space for a repository.
+
+        Args:
+            repo_path: Path to the repository
+            passphrase: Optional passphrase for encrypted repos
+
+        Returns:
+            Configured reserved free space, or None when the config value is empty
+
+        Raises:
+            BorgError: If the command fails
+        """
+        logger.debug("Reading Borg repository additional free space", repo_path=repo_path)
+        cmd = [self.executable_path, "config", repo_path, "additional_free_space"]
+        result = self._run_command(cmd, passphrase=passphrase)
+        configured_free_space = result.stdout.strip()
+        return configured_free_space or None
+
     def archive_info(
         self,
         repo_path: str,

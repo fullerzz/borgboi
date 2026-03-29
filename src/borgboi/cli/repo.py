@@ -204,3 +204,39 @@ def repo_delete(
             delete_from_s3=delete_from_s3,
         )
         print_error_and_exit(str(error), error=error)
+
+
+@repo.command(name="set-quota")
+def repo_set_quota(
+    *,
+    quota: Annotated[str, Parameter(name=["--quota", "-q"], help="New repository storage quota")],
+    path: Annotated[str | None, Parameter(name=["--path", "-p"], help="Repository path")] = None,
+    name: Annotated[str | None, Parameter(name=["--name", "-n"], help="Repository name")] = None,
+    passphrase: Annotated[str | None, Parameter(name="--passphrase", help="Passphrase override")] = None,
+    ctx: ContextArg,
+) -> None:
+    """Update a repository storage quota."""
+    logger.info("Running repository set-quota command", repo_name=name, repo_path=path, quota=quota)
+    try:
+        updated_quota = ctx.orchestrator.update_repo_storage_quota(
+            quota,
+            name=name,
+            path=path,
+            passphrase=passphrase,
+        )
+        logger.info(
+            "Repository set-quota command completed",
+            repo_name=name,
+            repo_path=path,
+            quota=updated_quota,
+        )
+        console.print(f"[bold green]Repository storage quota updated to {updated_quota}[/]")
+    except Exception as error:
+        logger.exception(
+            "Repository set-quota command failed",
+            error=str(error),
+            repo_name=name,
+            repo_path=path,
+            quota=quota,
+        )
+        print_error_and_exit(str(error), error=error)

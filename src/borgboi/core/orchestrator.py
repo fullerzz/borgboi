@@ -7,8 +7,11 @@ backup operations using dependency injection for testability.
 import shutil
 import socket
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from platform import system
+
+from pydantic import ValidationError as PydanticValidationError
 
 from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.clients.borg_client import BorgClient, create_borg_client
@@ -16,7 +19,7 @@ from borgboi.clients.s3_client import S3ClientInterface
 from borgboi.config import Config, get_config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
 from borgboi.core.logging import get_logger
-from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
+from borgboi.core.models import BackupOptions, RepoStorageQuotaUpdateRequest, RestoreOptions, RetentionPolicy
 from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, render_command_with_fallback
 from borgboi.core.validator import Validator
 from borgboi.lib.passphrase import (
@@ -188,9 +191,8 @@ class Orchestrator:
 
         # Determine if additional free space config should be applied
         # (skip for tmp/private directories)
-        config_free_space = True
-        if "/private/var/" in str(repo_path) or "tmp" in repo_path.parts:
-            config_free_space = False
+        config_free_space = not self._should_skip_additional_free_space(repo_path)
+        if not config_free_space:
             logger.debug("Skipping additional_free_space config for tmp/private directory", repo_path=str(repo_path))
 
         # Initialize Borg repository
@@ -452,6 +454,77 @@ class Orchestrator:
             List of all repositories
         """
         return self.storage.list_all()
+
+    def update_repo_storage_quota(
+        self,
+        quota: str,
+        *,
+        name: str | None = None,
+        path: str | None = None,
+        passphrase: str | None = None,
+    ) -> str:
+        """Update the configured storage quota for a repository.
+
+        Args:
+            quota: New storage quota (e.g., "200G", "1.5T")
+            name: Repository name
+            path: Repository path
+            passphrase: Optional passphrase override
+
+        Returns:
+            Normalized quota string (e.g., "200G")
+
+        Raises:
+            ValidationError: If the repository is remote, disk capacity cannot be inspected,
+                or the quota is invalid (wrong format, too small, or exceeds available capacity)
+        """
+        repo = self.get_repo(name=name, path=path)
+        logger.info(
+            "Updating repository storage quota",
+            repo_name=repo.name,
+            repo_path=repo.path,
+            requested_quota=quota,
+        )
+
+        if not self._is_local(repo):
+            logger.error("Cannot update quota for remote repository", repo_name=repo.name, hostname=repo.hostname)
+            raise ValidationError("Repository must be local to update storage quota", field="repository")
+
+        repo_path_obj = Path(repo.path)
+        try:
+            disk_usage = shutil.disk_usage(repo_path_obj)
+        except OSError as error:
+            raise ValidationError(
+                f"Unable to inspect disk capacity for repository at {repo.path}",
+                field="path",
+                value=repo.path,
+            ) from error
+
+        repo_size_bytes = self._get_directory_size_bytes(repo_path_obj)
+        reserved_free_space = self.borg.get_additional_free_space(repo.path)
+
+        try:
+            quota_request = RepoStorageQuotaUpdateRequest(
+                quota=quota,
+                repo_path=repo_path_obj,
+                repo_size_bytes=repo_size_bytes,
+                disk_free_bytes=disk_usage.free,
+                reserved_free_space=reserved_free_space,
+            )
+        except PydanticValidationError as error:
+            message = error.errors()[0]["msg"].removeprefix("Value error, ")
+            raise ValidationError(message, field="quota", value=quota) from error
+
+        resolved_passphrase = self.resolve_passphrase(repo, passphrase)
+        self.borg.set_storage_quota(repo.path, quota_request.quota, passphrase=resolved_passphrase)
+        logger.info(
+            "Repository storage quota updated",
+            repo_name=repo.name,
+            repo_path=repo.path,
+            storage_quota=quota_request.quota,
+        )
+        self.output.on_log("info", f"Updated storage quota for repo '{repo.name}' to {quota_request.quota}")
+        return quota_request.quota
 
     # Backup Workflows
 
@@ -1050,6 +1123,32 @@ class Orchestrator:
             raise ValidationError(
                 f"Unable to resolve {label.lower()}: {normalized_path}", field=field, value=normalized_path
             ) from error
+
+    def _should_skip_additional_free_space(self, repo_path: Path) -> bool:
+        """Return whether additional free space should be skipped for this repository path."""
+        return "/private/var/" in str(repo_path) or "tmp" in repo_path.parts
+
+    def _get_directory_size_bytes(self, directory: Path) -> int:
+        """Return the total size in bytes for all files under a directory."""
+        try:
+            return sum(file_path.stat().st_size for file_path in self._iter_directory_files(directory))
+        except OSError as error:
+            raise ValidationError(
+                f"Unable to inspect repository size at {directory}",
+                field="path",
+                value=directory.as_posix(),
+            ) from error
+
+    def _iter_directory_files(self, directory: Path) -> Iterator[Path]:
+        """Yield each file under a directory recursively."""
+        for child in directory.iterdir():
+            if child.is_symlink():
+                continue
+            if child.is_dir():
+                yield from self._iter_directory_files(child)
+                continue
+            if child.is_file():
+                yield child
 
     def _ensure_repo_name_available(self, name: str) -> None:
         """Ensure a repository name is not already registered."""

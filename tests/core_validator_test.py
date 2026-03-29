@@ -183,3 +183,13 @@ def test_validate_config_skips_aws_warnings_in_offline_mode(monkeypatch: pytest.
 
     assert not any("AWS S3 bucket not configured" in warning for warning in warnings)
     assert not any("AWS DynamoDB table not configured" in warning for warning in warnings)
+
+
+def test_validate_config_accepts_decimal_storage_quota(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("borgboi.core.validator.which", lambda _: "/usr/bin/borg")
+    config = Config(offline=True)
+    config.borg.storage_quota = "1.5T"
+
+    warnings = Validator.validate_config(config)
+
+    assert not any("Storage quota '1.5T'" in warning for warning in warnings)

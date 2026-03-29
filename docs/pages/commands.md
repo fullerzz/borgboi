@@ -96,6 +96,20 @@ Delete a Borg repository.
 - Optional: `--dry-run`, `--passphrase`, `--delete-from-s3`
 - Prompts for confirmation unless `--dry-run` is used
 
+### `repo set-quota`
+
+Update the configured storage quota for an existing Borg repository.
+
+- Target the repository with `--name/-n` or `--path/-p`
+- Required: `--quota/-q`
+- Optional: `--passphrase`
+
+```sh
+bb repo set-quota --name my-docs-backup --quota 200G
+```
+
+The new quota must fit within the repository disk's remaining headroom after Borg's reserved free space plus the repo's current on-disk size, and it cannot be smaller than the current repo size. Borg-style decimal quotas like `1.5T` are supported.
+
 ---
 
 ## Backup Commands (`backup`)
