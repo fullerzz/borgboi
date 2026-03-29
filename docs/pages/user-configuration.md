@@ -51,6 +51,12 @@ ui:
   color_output: true
   table_style: rounded
 
+logging:
+  enabled: false
+  level: info
+  max_bytes: 10485760
+  backup_count: 5
+
 offline: false
 debug: false
 ```
@@ -109,6 +115,18 @@ sequenceDiagram
 | --- | --- | --- | --- | --- |
 | `offline` | boolean | `false` | `true` or `false` | When `true`, skips AWS usage and uses local metadata storage. |
 | `debug` | boolean | `false` | `true` or `false` | Enables debug mode in CLI context. |
+
+### `logging` Section
+
+| Key | Type | Default | Allowed Values | Notes |
+| --- | --- | --- | --- | --- |
+| `logging.enabled` | boolean | `false` | `true` or `false` | When `true`, writes local JSON logs to `~/.borgboi/logs/borgboi.log`. |
+| `logging.level` | string | `info` | `debug`, `info`, `warning`, `error`, `critical` | Minimum file log level when top-level `debug` is `false`; values are case-insensitive. |
+| `logging.max_bytes` | integer | `10485760` | Integer `>= 0` | Maximum size in bytes of `borgboi.log` before rollover; `0` disables size-based rotation. |
+| `logging.backup_count` | integer | `5` | Integer `>= 0` | Number of rotated log files to retain. |
+
+!!! note "Debug mode and logging"
+    If top-level `debug` is enabled, BorgBoi promotes file logging to `DEBUG` regardless of `logging.level`.
 
 ### `aws` Section
 
@@ -170,6 +188,10 @@ Use `BORGBOI_` variables to override config file values at runtime.
 | --- | --- |
 | `BORGBOI_OFFLINE` | `offline` |
 | `BORGBOI_DEBUG` | `debug` |
+| `BORGBOI_LOGGING__ENABLED` | `logging.enabled` |
+| `BORGBOI_LOGGING__LEVEL` | `logging.level` |
+| `BORGBOI_LOGGING__MAX_BYTES` | `logging.max_bytes` |
+| `BORGBOI_LOGGING__BACKUP_COUNT` | `logging.backup_count` |
 | `BORGBOI_AWS__DYNAMODB_REPOS_TABLE` | `aws.dynamodb_repos_table` |
 | `BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE` | `aws.dynamodb_archives_table` |
 | `BORGBOI_AWS__S3_BUCKET` | `aws.s3_bucket` |

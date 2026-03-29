@@ -10,6 +10,7 @@ from borgboi.config import (
     AWSConfig,
     BorgConfig,
     Config,
+    LoggingConfig,
     RetentionConfig,
     UIConfig,
     get_env_overrides,
@@ -127,12 +128,28 @@ def test_ui_config_custom_values() -> None:
     assert ui.table_style == "simple"
 
 
+def test_logging_config_defaults() -> None:
+    """Test that LoggingConfig has correct defaults."""
+    logging_config = LoggingConfig()
+    assert logging_config.enabled is False
+    assert logging_config.level == "info"
+    assert logging_config.max_bytes == 10 * 1024 * 1024
+    assert logging_config.backup_count == 5
+
+
+def test_logging_config_normalizes_level_case() -> None:
+    """Test that LoggingConfig accepts case-insensitive log levels."""
+    logging_config = LoggingConfig.model_validate({"level": "WARNING"})
+    assert logging_config.level == "warning"
+
+
 def test_config_defaults() -> None:
     """Test that Config has correct defaults."""
     cfg = Config()
     assert cfg.aws.dynamodb_repos_table == "bb-repos"
     assert cfg.borg.compression == "zstd,6"
     assert cfg.ui.theme == "catppuccin"
+    assert cfg.logging.enabled is False
     assert cfg.offline is False
     assert cfg.debug is False
 
@@ -143,12 +160,17 @@ def test_config_custom_values() -> None:
         aws=AWSConfig(s3_bucket="custom-bucket"),
         borg=BorgConfig(compression="lz4"),
         ui=UIConfig(theme="monokai"),
+        logging=LoggingConfig(enabled=True, level="error", max_bytes=1024, backup_count=3),
         offline=True,
         debug=True,
     )
     assert cfg.aws.s3_bucket == "custom-bucket"
     assert cfg.borg.compression == "lz4"
     assert cfg.ui.theme == "monokai"
+    assert cfg.logging.enabled is True
+    assert cfg.logging.level == "error"
+    assert cfg.logging.max_bytes == 1024
+    assert cfg.logging.backup_count == 3
     assert cfg.offline is True
     assert cfg.debug is True
 
@@ -166,6 +188,14 @@ def test_config_excludes_filename_property() -> None:
     """Test that excludes_filename property returns correct value."""
     cfg = Config()
     assert cfg.excludes_filename == "excludes.txt"
+
+
+def test_config_logs_dir_property() -> None:
+    """Test that logs_dir property returns correct path."""
+    import borgboi.config
+
+    cfg = Config()
+    assert cfg.logs_dir == borgboi.config.resolve_home_dir() / ".borgboi" / "logs"
 
 
 def test_resolve_home_dir_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -270,6 +300,10 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that environment variables override defaults."""
     monkeypatch.setenv("BORGBOI_OFFLINE", "true")
     monkeypatch.setenv("BORGBOI_DEBUG", "true")
+    monkeypatch.setenv("BORGBOI_LOGGING__ENABLED", "true")
+    monkeypatch.setenv("BORGBOI_LOGGING__LEVEL", "warning")
+    monkeypatch.setenv("BORGBOI_LOGGING__MAX_BYTES", "4096")
+    monkeypatch.setenv("BORGBOI_LOGGING__BACKUP_COUNT", "2")
     monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "env-bucket")
     monkeypatch.setenv("BORGBOI_AWS__REGION", "us-east-1")
     monkeypatch.setenv("BORGBOI_BORG__COMPRESSION", "lz4")
@@ -280,6 +314,10 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert cfg.offline is True
     assert cfg.debug is True
+    assert cfg.logging.enabled is True
+    assert cfg.logging.level == "warning"
+    assert cfg.logging.max_bytes == 4096
+    assert cfg.logging.backup_count == 2
     assert cfg.aws.s3_bucket == "env-bucket"
     assert cfg.aws.region == "us-east-1"
     assert cfg.borg.compression == "lz4"
@@ -291,6 +329,10 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     [
         ("BORGBOI_OFFLINE", "offline", True),
         ("BORGBOI_DEBUG", "debug", True),
+        ("BORGBOI_LOGGING__ENABLED", "logging.enabled", True),
+        ("BORGBOI_LOGGING__LEVEL", "logging.level", "error"),
+        ("BORGBOI_LOGGING__MAX_BYTES", "logging.max_bytes", 2048),
+        ("BORGBOI_LOGGING__BACKUP_COUNT", "logging.backup_count", 7),
         ("BORGBOI_AWS__DYNAMODB_REPOS_TABLE", "aws.dynamodb_repos_table", "custom-table"),
         ("BORGBOI_AWS__S3_BUCKET", "aws.s3_bucket", "custom-bucket"),
         ("BORGBOI_AWS__REGION", "aws.region", "eu-west-1"),
@@ -370,6 +412,10 @@ def test_config_env_var_map_completeness() -> None:
     expected_paths = [
         "offline",
         "debug",
+        "logging.enabled",
+        "logging.level",
+        "logging.max_bytes",
+        "logging.backup_count",
         "aws.s3_bucket",
         "aws.region",
         "aws.profile",

@@ -79,6 +79,12 @@ borg:
     keep_monthly: 6
     keep_yearly: 0
 
+logging:
+  enabled: false
+  level: info
+  max_bytes: 10485760
+  backup_count: 5
+
 offline: false
 ```
 
@@ -90,6 +96,10 @@ Configuration can be overridden using environment variables with the `BORGBOI_` 
 | -------------------- | ----------- | ----------- |
 | `BORGBOI_OFFLINE` | `offline` | Enable offline mode |
 | `BORGBOI_DEBUG` | `debug` | Enable debug output |
+| `BORGBOI_LOGGING__ENABLED` | `logging.enabled` | Enable local application logging to `~/.borgboi/logs/borgboi.log` |
+| `BORGBOI_LOGGING__LEVEL` | `logging.level` | Set the minimum log level for file logging |
+| `BORGBOI_LOGGING__MAX_BYTES` | `logging.max_bytes` | Set the file size threshold before rotating `borgboi.log` |
+| `BORGBOI_LOGGING__BACKUP_COUNT` | `logging.backup_count` | Set how many rotated log files to retain |
 | `BORGBOI_AWS__S3_BUCKET` | `aws.s3_bucket` | S3 bucket for backup storage |
 | `BORGBOI_AWS__DYNAMODB_REPOS_TABLE` | `aws.dynamodb_repos_table` | DynamoDB table for repo metadata |
 | `BORGBOI_AWS__REGION` | `aws.region` | AWS region |
