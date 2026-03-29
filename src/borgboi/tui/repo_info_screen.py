@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ from textual.screen import Screen
 from textual.widgets import (
     Collapsible,
     DataTable,
+    DirectoryTree,
     Footer,
     Header,
     Label,
@@ -47,6 +49,16 @@ class RepoExcludesState:
     status: str
     path: Path | None
     body: str
+
+
+@dataclass(frozen=True, slots=True)
+class RepoWorkspaceState:
+    """Workspace browsing state for a repository."""
+
+    path: Path
+    status: str
+    detail: str
+    can_browse: bool
 
 
 def _render_value(value: object) -> str:
@@ -151,6 +163,46 @@ def load_repo_excludes_state(config: Config | None, repo_name: str) -> RepoExclu
     )
 
 
+def load_repo_workspace_state(repo: BorgBoiRepo) -> RepoWorkspaceState:
+    """Resolve whether the selected repository workspace can be browsed locally."""
+    repo_path = Path(repo.path)
+    current_hostname = socket.gethostname()
+
+    if repo.hostname != current_hostname:
+        return RepoWorkspaceState(
+            path=repo_path,
+            status="Workspace tree unavailable.",
+            detail=(
+                "Workspace tree is only available for repositories on this machine. "
+                f"Selected host: {repo.hostname}. Current host: {current_hostname}."
+            ),
+            can_browse=False,
+        )
+
+    if not repo_path.exists():
+        return RepoWorkspaceState(
+            path=repo_path,
+            status="Workspace tree unavailable.",
+            detail="Repository path is not available on this machine.",
+            can_browse=False,
+        )
+
+    if not repo_path.is_dir():
+        return RepoWorkspaceState(
+            path=repo_path,
+            status="Workspace tree unavailable.",
+            detail="Repository path exists on this machine but is not a directory.",
+            can_browse=False,
+        )
+
+    return RepoWorkspaceState(
+        path=repo_path,
+        status="Browsing local repository workspace.",
+        detail="Browsing local repository workspace.",
+        can_browse=True,
+    )
+
+
 class RepoInfoScreen(Screen[None]):
     """Screen for viewing repository-specific details."""
 
@@ -170,6 +222,7 @@ class RepoInfoScreen(Screen[None]):
         self._repo = repo
         self._orchestrator = orchestrator
         self._config = config or orchestrator.config
+        self._workspace_state = load_repo_workspace_state(repo)
 
     @override
     def compose(self) -> ComposeResult:
@@ -224,6 +277,14 @@ class RepoInfoScreen(Screen[None]):
                     yield Label("", id="repo-info-excludes-status", markup=True)
                     yield Label("", id="repo-info-excludes-path", markup=True)
                     yield excludes_viewer
+
+                with TabPane("Workspace", id="repo-info-workspace-tab"), Vertical(classes="repo-info-tab-body"):
+                    yield Label("", id="repo-info-workspace-status", markup=True)
+                    yield Label("", id="repo-info-workspace-path", markup=True)
+                    if self._workspace_state.can_browse:
+                        yield DirectoryTree(self._workspace_state.path, id="repo-info-workspace-tree")
+                    else:
+                        yield Static("", id="repo-info-workspace-unavailable", markup=True)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -252,6 +313,16 @@ class RepoInfoScreen(Screen[None]):
         self._render_overview_cards()
         self.query_one("#repo-info-summary", Static).update(self._render_repo_summary())
         self.query_one("#repo-info-config", Static).update(self._render_quota_and_retention())
+        self.query_one("#repo-info-workspace-status", Static).update(
+            _render_fields([("Status", self._workspace_state.status)])
+        )
+        self.query_one("#repo-info-workspace-path", Static).update(
+            _render_fields([("Path", self._workspace_state.path.as_posix())])
+        )
+        if not self._workspace_state.can_browse:
+            self.query_one("#repo-info-workspace-unavailable", Static).update(
+                f"[#f9e2af]{escape(self._workspace_state.detail)}[/]"
+            )
 
         excludes = load_repo_excludes_state(self._config, self._repo.name)
         self.query_one("#repo-info-excludes-status", Static).update(

@@ -332,6 +332,9 @@ CollapsibleTitle:hover {
 #repo-info-config,
 #repo-info-excludes-status,
 #repo-info-excludes-path,
+#repo-info-workspace-status,
+#repo-info-workspace-path,
+#repo-info-workspace-unavailable,
 #repo-info-live-summary,
 #repo-info-command-output,
 #repo-info-archives-status {
@@ -342,6 +345,9 @@ CollapsibleTitle:hover {
 #repo-info-command-output,
 #repo-info-excludes-status,
 #repo-info-excludes-path,
+#repo-info-workspace-status,
+#repo-info-workspace-path,
+#repo-info-workspace-unavailable,
 #repo-info-archives-status {
     margin-bottom: 1;
 }
@@ -357,6 +363,13 @@ CollapsibleTitle:hover {
 
 #repo-info-excludes-viewer {
     height: 10;
+    border: round #45475a;
+    background: #181825;
+    color: #cdd6f4;
+}
+
+#repo-info-workspace-tree {
+    height: 1fr;
     border: round #45475a;
     background: #181825;
     color: #cdd6f4;

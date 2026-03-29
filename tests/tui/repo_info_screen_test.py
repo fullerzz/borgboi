@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from textual.widgets import DataTable, Static, TabbedContent, TextArea
+from textual.widgets import DataTable, DirectoryTree, Static, TabbedContent, TextArea
 
 from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.config import Config
@@ -160,3 +160,74 @@ async def test_repo_info_screen_handles_live_load_errors(repo_info_error_app: Bo
         assert "borg unavailable" in str(cast(Any, command_output).content)
         assert str(cast(Any, archives_status).content) == "Archive list unavailable."
         assert archives_table.row_count == 0
+
+
+async def test_repo_info_screen_shows_workspace_tree_for_local_repo(
+    monkeypatch: pytest.MonkeyPatch,
+    repo_detail_repo: Repository,
+    repo_info_app: BorgBoiApp,
+    tmp_path: Any,
+) -> None:
+    (tmp_path / "nested").mkdir()
+    (tmp_path / "README.md").write_text("hello\n", encoding="utf-8")
+    repo_detail_repo.path = tmp_path.as_posix()
+    monkeypatch.setattr("borgboi.tui.repo_info_screen.socket.gethostname", lambda: repo_detail_repo.hostname)
+
+    async with repo_info_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        assert isinstance(repo_info_app.screen, RepoInfoScreen)
+
+        workspace_status = repo_info_app.screen.query_one("#repo-info-workspace-status", Static)
+        workspace_path = repo_info_app.screen.query_one("#repo-info-workspace-path", Static)
+        workspace_tree = repo_info_app.screen.query_one("#repo-info-workspace-tree", DirectoryTree)
+
+        assert "Browsing local repository workspace" in str(cast(Any, workspace_status).content)
+        assert tmp_path.as_posix() in str(cast(Any, workspace_path).content)
+        assert workspace_tree.path == tmp_path
+        assert len(repo_info_app.screen.query("#repo-info-workspace-unavailable")) == 0
+
+
+async def test_repo_info_screen_hides_workspace_tree_for_remote_repo(
+    monkeypatch: pytest.MonkeyPatch,
+    repo_info_app: BorgBoiApp,
+) -> None:
+    monkeypatch.setattr("borgboi.tui.repo_info_screen.socket.gethostname", lambda: "other-host")
+
+    async with repo_info_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        assert isinstance(repo_info_app.screen, RepoInfoScreen)
+
+        workspace_status = repo_info_app.screen.query_one("#repo-info-workspace-status", Static)
+        workspace_unavailable = repo_info_app.screen.query_one("#repo-info-workspace-unavailable", Static)
+
+        assert "Workspace tree unavailable" in str(cast(Any, workspace_status).content)
+        assert "only available for repositories on this machine" in str(cast(Any, workspace_unavailable).content)
+        assert len(repo_info_app.screen.query("#repo-info-workspace-tree")) == 0
+
+
+async def test_repo_info_screen_reports_missing_local_workspace_path(
+    monkeypatch: pytest.MonkeyPatch,
+    repo_detail_repo: Repository,
+    repo_info_app: BorgBoiApp,
+    tmp_path: Any,
+) -> None:
+    repo_detail_repo.path = (tmp_path / "missing-repo").as_posix()
+    monkeypatch.setattr("borgboi.tui.repo_info_screen.socket.gethostname", lambda: repo_detail_repo.hostname)
+
+    async with repo_info_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        assert isinstance(repo_info_app.screen, RepoInfoScreen)
+
+        workspace_unavailable = repo_info_app.screen.query_one("#repo-info-workspace-unavailable", Static)
+
+        assert "Repository path is not available on this machine" in str(cast(Any, workspace_unavailable).content)
+        assert len(repo_info_app.screen.query("#repo-info-workspace-tree")) == 0
