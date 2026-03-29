@@ -500,11 +500,14 @@ class DailyBackupScreen(Screen[None]):
     def __init__(
         self,
         orchestrator: Orchestrator,
+        on_back_after_success: Callable[[], None] | None = None,
     ) -> None:
         super().__init__()
         self._orchestrator = orchestrator
+        self._on_back_after_success = on_back_after_success
         self._repos: list[BorgBoiRepo] = []
         self._backup_running = False
+        self._backup_completed = False
 
     @property
     def _is_offline(self) -> bool:
@@ -658,6 +661,7 @@ class DailyBackupScreen(Screen[None]):
         self.app.call_from_thread(self._on_backup_complete)
 
     def _on_backup_complete(self) -> None:
+        self._backup_completed = True
         self._backup_running = False
         self._set_controls_enabled(True)
         self.query_one("#daily-backup-clear", Button).disabled = False
@@ -677,3 +681,5 @@ class DailyBackupScreen(Screen[None]):
     def action_back(self) -> None:
         """Pop this screen and return to the previous screen."""
         _ = self.app.pop_screen()
+        if self._backup_completed and self._on_back_after_success is not None:
+            self._on_back_after_success()
