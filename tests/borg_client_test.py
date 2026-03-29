@@ -1,5 +1,6 @@
 import sys
 from collections.abc import Generator
+from types import SimpleNamespace
 
 import pytest
 
@@ -104,3 +105,25 @@ def test_set_storage_quota_uses_borg_config(monkeypatch: pytest.MonkeyPatch) -> 
         "200G",
     ]
     assert captured["passphrase"] == test_passphrase
+
+
+def test_get_additional_free_space_reads_borg_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    captured: dict[str, object] = {}
+
+    def fake_run_command(
+        cmd: list[str],
+        passphrase: str | None = None,
+        capture_output: bool = True,
+    ) -> SimpleNamespace:
+        captured["cmd"] = cmd
+        captured["passphrase"] = passphrase
+        captured["capture_output"] = capture_output
+        return SimpleNamespace(stdout="2G\n")
+
+    monkeypatch.setattr(client, "_run_command", fake_run_command)
+
+    assert client.get_additional_free_space("/repo") == "2G"
+    assert captured["cmd"] == ["borg", "config", "/repo", "additional_free_space"]
+    assert captured["passphrase"] is None
+    assert captured["capture_output"] is True

@@ -501,9 +501,7 @@ class Orchestrator:
             ) from error
 
         repo_size_bytes = self._get_directory_size_bytes(repo_path_obj)
-        reserved_free_space = None
-        if not self._should_skip_additional_free_space(repo_path_obj):
-            reserved_free_space = self.config.borg.additional_free_space or None
+        reserved_free_space = self.borg.get_additional_free_space(repo.path)
 
         try:
             quota_request = RepoStorageQuotaUpdateRequest(

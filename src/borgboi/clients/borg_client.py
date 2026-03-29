@@ -278,6 +278,25 @@ class BorgClient:
         self._run_command(cmd, passphrase=passphrase)
         self.output.on_log("info", f"Updated storage quota for repository at {repo_path}")
 
+    def get_additional_free_space(self, repo_path: str, passphrase: str | None = None) -> str | None:
+        """Read the configured reserved free space for a repository.
+
+        Args:
+            repo_path: Path to the repository
+            passphrase: Optional passphrase for encrypted repos
+
+        Returns:
+            Configured reserved free space, or None when the config value is empty
+
+        Raises:
+            BorgError: If the command fails
+        """
+        logger.debug("Reading Borg repository additional free space", repo_path=repo_path)
+        cmd = [self.executable_path, "config", repo_path, "additional_free_space"]
+        result = self._run_command(cmd, passphrase=passphrase)
+        configured_free_space = result.stdout.strip()
+        return configured_free_space or None
+
     def archive_info(
         self,
         repo_path: str,

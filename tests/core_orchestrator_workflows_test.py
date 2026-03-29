@@ -556,6 +556,7 @@ def test_update_repo_storage_quota_updates_borg_config(
     storage = Mock()
     storage.get_by_name_or_path.return_value = repo
     borg_client = Mock()
+    borg_client.get_additional_free_space.return_value = "0"
     resolved_passphrase = "resolved-passphrase"  # noqa: S105
 
     monkeypatch.setattr(
@@ -574,6 +575,7 @@ def test_update_repo_storage_quota_updates_borg_config(
     updated_quota = orchestrator.update_repo_storage_quota("2g", name=repo.name)
 
     assert updated_quota == "2G"
+    borg_client.get_additional_free_space.assert_called_once_with(repo.path)
     borg_client.set_storage_quota.assert_called_once_with(
         repo.path,
         "2G",
@@ -593,6 +595,7 @@ def test_update_repo_storage_quota_accepts_decimal_sizes(
     storage = Mock()
     storage.get_by_name_or_path.return_value = repo
     borg_client = Mock()
+    borg_client.get_additional_free_space.return_value = "0"
     resolved_passphrase = "resolved-passphrase"  # noqa: S105
 
     monkeypatch.setattr(
@@ -611,6 +614,7 @@ def test_update_repo_storage_quota_accepts_decimal_sizes(
     updated_quota = orchestrator.update_repo_storage_quota("1.5t", name=repo.name)
 
     assert updated_quota == "1.5T"
+    borg_client.get_additional_free_space.assert_called_once_with(repo.path)
     borg_client.set_storage_quota.assert_called_once_with(
         repo.path,
         "1.5T",
@@ -629,6 +633,8 @@ def test_update_repo_storage_quota_rejects_value_larger_than_disk(
     repo.path = repo_path.as_posix()
     storage = Mock()
     storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    borg_client.get_additional_free_space.return_value = "0"
     (repo_path / "segment.1").write_bytes(b"a" * 1024)
 
     monkeypatch.setattr(
@@ -638,7 +644,7 @@ def test_update_repo_storage_quota_rejects_value_larger_than_disk(
 
     orchestrator = Orchestrator(
         config=Config(offline=True),
-        borg_client=cast(Any, Mock()),
+        borg_client=cast(Any, borg_client),
         storage=cast(Any, storage),
         output_handler=output_handler,
     )
@@ -659,8 +665,8 @@ def test_update_repo_storage_quota_accounts_for_reserved_free_space(
     storage = Mock()
     storage.get_by_name_or_path.return_value = repo
     borg_client = Mock()
+    borg_client.get_additional_free_space.return_value = "2G"
     config = Config(offline=True)
-    config.borg.additional_free_space = "2G"
 
     monkeypatch.setattr(
         "borgboi.core.orchestrator.shutil.disk_usage",
@@ -674,7 +680,6 @@ def test_update_repo_storage_quota_accounts_for_reserved_free_space(
         storage=cast(Any, storage),
         output_handler=output_handler,
     )
-    monkeypatch.setattr(orchestrator, "_should_skip_additional_free_space", lambda path: False)
 
     with pytest.raises(ValidationError, match="cannot exceed the available disk headroom after reserved free space"):
         orchestrator.update_repo_storage_quota("9G", name=repo.name)
@@ -692,6 +697,8 @@ def test_update_repo_storage_quota_rejects_value_smaller_than_repo_size(
     repo.path = repo_path.as_posix()
     storage = Mock()
     storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    borg_client.get_additional_free_space.return_value = "0"
 
     monkeypatch.setattr(
         "borgboi.core.orchestrator.shutil.disk_usage",
@@ -700,7 +707,7 @@ def test_update_repo_storage_quota_rejects_value_smaller_than_repo_size(
 
     orchestrator = Orchestrator(
         config=Config(offline=True),
-        borg_client=cast(Any, Mock()),
+        borg_client=cast(Any, borg_client),
         storage=cast(Any, storage),
         output_handler=output_handler,
     )
