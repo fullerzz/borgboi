@@ -5,7 +5,15 @@ from typing import Annotated
 from cyclopts import App, Parameter
 
 from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
+from borgboi.core.logging import get_logger
 from borgboi.rich_utils import console
+
+logger = get_logger(__name__)
+
+
+def _log_command_failure(event: str, error: Exception, **context: object) -> None:
+    logger.exception(event, error=str(error), **context)
+
 
 repo = App(
     name="repo",
@@ -26,6 +34,7 @@ def repo_create(
     ctx: ContextArg,
 ) -> None:
     """Create a new Borg repository."""
+    logger.info("Running repository create command", repo_name=name, repo_path=path, backup_target=backup_target)
     try:
         repo_info = ctx.orchestrator.create_repo(
             path=path,
@@ -33,8 +42,16 @@ def repo_create(
             name=name,
             passphrase=passphrase,
         )
+        logger.info("Repository create command completed", repo_name=repo_info.name, repo_path=repo_info.path)
         console.print(f"Created new Borg repo at [bold cyan]{repo_info.path}[/]")
     except Exception as error:
+        _log_command_failure(
+            "Repository create command failed",
+            error,
+            repo_name=name,
+            repo_path=path,
+            backup_target=backup_target,
+        )
         print_error_and_exit(str(error), error=error)
 
 
@@ -51,6 +68,7 @@ def repo_import(
     ctx: ContextArg,
 ) -> None:
     """Import an existing Borg repository into BorgBoi."""
+    logger.info("Running repository import command", repo_name=name, repo_path=path, backup_target=backup_target)
     try:
         repo_info = ctx.orchestrator.import_repo(
             path=path,
@@ -58,8 +76,16 @@ def repo_import(
             name=name,
             passphrase=passphrase,
         )
+        logger.info("Repository import command completed", repo_name=repo_info.name, repo_path=repo_info.path)
         console.print(f"Imported existing Borg repo at [bold cyan]{repo_info.path}[/]")
     except Exception as error:
+        _log_command_failure(
+            "Repository import command failed",
+            error,
+            repo_name=name,
+            repo_path=path,
+            backup_target=backup_target,
+        )
         print_error_and_exit(str(error), error=error)
 
 
@@ -68,10 +94,13 @@ def repo_list(*, ctx: ContextArg) -> None:
     """List all BorgBoi repositories."""
     from borgboi import rich_utils
 
+    logger.info("Running repository list command")
     try:
         repos = ctx.orchestrator.list_repos()
+        logger.info("Repository list command completed", repo_count=len(repos))
         rich_utils.output_repos_table(repos)
     except Exception as error:
+        _log_command_failure("Repository list command failed", error)
         print_error_and_exit(str(error), error=error)
 
 
@@ -89,15 +118,18 @@ def repo_info(
     """Show repository information."""
     from borgboi import rich_utils
 
+    logger.info("Running repository info command", repo_name=name, repo_path=path, raw=raw)
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
         repo_data = ctx.orchestrator.get_repo_info(repo_info, passphrase=passphrase)
 
         if raw:
+            logger.debug("Printing raw repository info", repo_name=repo_info.name, repo_path=repo_info.path)
             console.print(repo_data)
             return
 
         if repo_info.metadata:
+            logger.debug("Rendering formatted repository metadata", repo_name=repo_info.name, repo_path=repo_info.path)
             rich_utils.output_repo_info(
                 name=repo_info.name,
                 total_size_gb=repo_info.metadata.cache.total_size_gb,
@@ -110,9 +142,13 @@ def repo_info(
             )
             return
 
+        logger.debug(
+            "Printing basic repository information without metadata", repo_name=repo_info.name, repo_path=repo_info.path
+        )
         console.print(f"Repository: [bold cyan]{repo_info.name}[/]")
         console.print(f"Path: {repo_info.path}")
     except Exception as error:
+        _log_command_failure("Repository info command failed", error, repo_name=name, repo_path=path, raw=raw)
         print_error_and_exit(str(error), error=error)
 
 
@@ -132,7 +168,15 @@ def repo_delete(
     ctx: ContextArg,
 ) -> None:
     """Delete a Borg repository."""
+    logger.info(
+        "Running repository delete command",
+        repo_name=name,
+        repo_path=path,
+        dry_run=dry_run,
+        delete_from_s3=delete_from_s3,
+    )
     if not dry_run and not confirm_action("Are you sure you want to delete this repository?"):
+        logger.warning("Repository delete command aborted by user", repo_name=name, repo_path=path)
         console.print("Aborted.")
         return
 
@@ -144,9 +188,24 @@ def repo_delete(
             delete_from_s3=delete_from_s3,
             passphrase=passphrase,
         )
+        logger.info(
+            "Repository delete command completed",
+            repo_name=name,
+            repo_path=path,
+            dry_run=dry_run,
+            delete_from_s3=delete_from_s3,
+        )
         if dry_run:
             console.print("[bold yellow]Dry run completed - no changes made[/]")
         else:
             console.print("[bold green]Repository deleted successfully[/]")
     except Exception as error:
+        _log_command_failure(
+            "Repository delete command failed",
+            error,
+            repo_name=name,
+            repo_path=path,
+            dry_run=dry_run,
+            delete_from_s3=delete_from_s3,
+        )
         print_error_and_exit(str(error), error=error)

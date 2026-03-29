@@ -14,6 +14,9 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from borgboi.config import Config, get_config
 from borgboi.core.errors import StorageError
+from borgboi.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 _CLOUDWATCH_PERIOD_SECONDS = 86400
 _INTELLIGENT_TIERING_TRANSITION_DAYS = 30
@@ -580,6 +583,7 @@ def get_bucket_stats(cfg: Config | None = None) -> S3BucketStats:
     """Get bucket-wide storage composition and object counts from CloudWatch."""
     config = cfg or get_config()
     bucket_name = config.aws.s3_bucket
+    logger.debug("Getting S3 bucket stats", bucket_name=bucket_name)
 
     try:
         cloudwatch_client = _create_cloudwatch_client(config)
@@ -632,6 +636,12 @@ def get_bucket_stats(cfg: Config | None = None) -> S3BucketStats:
                 window_end=now + timedelta(days=_INTELLIGENT_TIERING_FORECAST_WINDOW_DAYS),
             )
 
+        logger.debug(
+            "Retrieved S3 bucket stats",
+            bucket_name=bucket_name,
+            total_size_bytes=total_size_bytes,
+            total_object_count=total_object_count,
+        )
         return S3BucketStats(
             bucket_name=bucket_name,
             total_size_bytes=total_size_bytes,
@@ -641,12 +651,14 @@ def get_bucket_stats(cfg: Config | None = None) -> S3BucketStats:
             intelligent_tiering_forecast=intelligent_tiering_forecast,
         )
     except (ClientError, BotoCoreError) as exc:
+        logger.error("Failed to retrieve S3 bucket stats", bucket_name=bucket_name, error=str(exc))
         raise StorageError(
             f"Failed to retrieve S3 bucket stats for bucket '{bucket_name}': {exc}",
             operation="s3_stats",
             cause=exc,
         ) from exc
     except Exception as exc:
+        logger.error("Failed to retrieve S3 bucket stats", bucket_name=bucket_name, error=str(exc))
         raise StorageError(
             f"Failed to retrieve S3 bucket stats for bucket '{bucket_name}': {exc}",
             operation="s3_stats",
@@ -672,6 +684,7 @@ def sync_with_s3(repo_path: str, repo_name: str, cfg: Config | None = None) -> G
     sync_source = repo_path
     cfg = cfg or get_config()
     s3_destination_uri = f"s3://{cfg.aws.s3_bucket}/{repo_name}"
+    logger.info("Syncing repository to S3", repo_path=repo_path, repo_name=repo_name, destination=s3_destination_uri)
     cmd = [
         "aws",
         "s3",
@@ -701,7 +714,9 @@ def sync_with_s3(repo_path: str, repo_name: str, cfg: Config | None = None) -> G
     # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0:
+        logger.error("S3 sync failed", repo_path=repo_path, repo_name=repo_name, returncode=returncode)
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+    logger.info("S3 sync completed", repo_path=repo_path, repo_name=repo_name)
 
 
 def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool, cfg: Config | None = None) -> Generator[str]:
@@ -723,6 +738,9 @@ def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool, cfg: Config |
     cfg = cfg or get_config()
     sync_source = f"s3://{cfg.aws.s3_bucket}/{repo_name}"
     s3_destination_uri = repo_path
+    logger.info(
+        "Restoring repository from S3", repo_path=repo_path, repo_name=repo_name, source=sync_source, dry_run=dry_run
+    )
     if dry_run:
         cmd = [
             "aws",
@@ -760,4 +778,8 @@ def restore_from_s3(repo_path: str, repo_name: str, dry_run: bool, cfg: Config |
     # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0:
+        logger.error(
+            "S3 restore failed", repo_path=repo_path, repo_name=repo_name, returncode=returncode, dry_run=dry_run
+        )
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+    logger.info("S3 restore completed", repo_path=repo_path, repo_name=repo_name, dry_run=dry_run)

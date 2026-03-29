@@ -8,9 +8,12 @@ from typing import Any
 from pydantic import BaseModel, Field, computed_field
 
 from borgboi.config import config
+from borgboi.core.logging import get_logger
 from borgboi.lib.utils import create_archive_name
 
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
+
+logger = get_logger(__name__)
 
 
 def _build_env_with_passphrase(passphrase: str | None = None) -> dict[str, str] | None:
@@ -43,6 +46,7 @@ def init_repository(
 
     https://borgbackup.readthedocs.io/en/stable/usage/init.html
     """
+    logger.info("Initializing Borg repository", repo_path=repo_path, storage_quota=config.borg.storage_quota)
     cmd = [
         "borg",
         "init",
@@ -57,9 +61,13 @@ def init_repository(
     env = _build_env_with_passphrase(passphrase)
     result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
+        logger.error("Borg repository initialization failed", repo_path=repo_path, returncode=result.returncode)
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd)
 
     if config_additional_free_space:
+        logger.debug(
+            "Configuring additional free space", repo_path=repo_path, free_space=config.borg.additional_free_space
+        )
         config_cmd = [
             "borg",
             "config",
@@ -71,7 +79,9 @@ def init_repository(
         ]
         result = sp.run(config_cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
         if result.returncode != 0 and result.returncode != 1:
+            logger.error("Failed to set additional free space", repo_path=repo_path, returncode=result.returncode)
             raise sp.CalledProcessError(returncode=result.returncode, cmd=config_cmd)
+    logger.info("Borg repository initialized successfully", repo_path=repo_path)
 
 
 def _create_archive_title() -> str:
@@ -94,6 +104,16 @@ def create_archive(
     """
     if not archive_name:
         archive_name = _create_archive_title()
+    logger.info(
+        "Creating Borg archive",
+        repo_path=repo_path,
+        repo_name=repo_name,
+        archive_name=archive_name,
+        backup_target=backup_target_path,
+        compression=config.borg.compression,
+    )
+    excludes_file = (config.borgboi_dir / f"{repo_name}_{config.excludes_filename}").as_posix()
+    logger.debug("Using exclusions file", excludes_file=excludes_file)
     cmd = [
         "borg",
         "create",
@@ -108,7 +128,7 @@ def create_archive(
         "--exclude-caches",
         "--exclude-nodump",
         "--exclude-from",
-        f"{(config.borgboi_dir / f'{repo_name}_{config.excludes_filename}').as_posix()}",
+        excludes_file,
         f"{repo_path}::{archive_name}",
         backup_target_path,
     ]
@@ -135,7 +155,11 @@ def create_archive(
     # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0 and returncode != 1:
+        logger.error(
+            "Borg archive creation failed", repo_path=repo_path, archive_name=archive_name, returncode=returncode
+        )
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+    logger.info("Borg archive created successfully", repo_path=repo_path, archive_name=archive_name)
 
 
 class Stats(BaseModel):
@@ -210,12 +234,21 @@ class ArchiveInfo(BaseModel):
 
 def info(repo_path: str, passphrase: str | None = None) -> RepoInfo:
     """List a local Borg repository's info."""
+    logger.debug("Getting Borg repository info", repo_path=repo_path)
     cmd = ["borg", "info", "--json", repo_path]
     env = _build_env_with_passphrase(passphrase)
     result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
+        logger.error("Failed to get repository info", repo_path=repo_path, returncode=result.returncode)
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
-    return RepoInfo.model_validate_json(result.stdout)
+    repo_info = RepoInfo.model_validate_json(result.stdout)
+    logger.debug(
+        "Retrieved repository info",
+        repo_path=repo_path,
+        encryption_mode=repo_info.encryption.mode,
+        archive_count=len(repo_info.archives),
+    )
+    return repo_info
 
 
 def archive_info(repo_path: str, archive_name: str, passphrase: str | None = None) -> ArchiveInfo:
@@ -232,12 +265,18 @@ def archive_info(repo_path: str, archive_name: str, passphrase: str | None = Non
     Returns:
         ArchiveInfo object containing archive details, cache stats, encryption, and repository info
     """
+    logger.debug("Getting archive info", repo_path=repo_path, archive_name=archive_name)
     cmd = ["borg", "info", "--json", f"{repo_path}::{archive_name}"]
     env = _build_env_with_passphrase(passphrase)
     result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
+        logger.error(
+            "Failed to get archive info", repo_path=repo_path, archive_name=archive_name, returncode=result.returncode
+        )
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
-    return ArchiveInfo.model_validate_json(result.stdout)
+    archive_info_result = ArchiveInfo.model_validate_json(result.stdout)
+    logger.debug("Retrieved archive info", repo_path=repo_path, archive_name=archive_name)
+    return archive_info_result
 
 
 def prune(
@@ -265,6 +304,14 @@ def prune(
     keep_weekly = keep_weekly if keep_weekly is not None else config.borg.retention.keep_weekly
     keep_monthly = keep_monthly if keep_monthly is not None else config.borg.retention.keep_monthly
     keep_yearly = keep_yearly if keep_yearly is not None else config.borg.retention.keep_yearly
+    logger.info(
+        "Pruning Borg repository",
+        repo_path=repo_path,
+        keep_daily=keep_daily,
+        keep_weekly=keep_weekly,
+        keep_monthly=keep_monthly,
+        keep_yearly=keep_yearly,
+    )
 
     cmd = [
         "borg",
@@ -302,7 +349,9 @@ def prune(
     # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0 and returncode != 1:
+        logger.error("Borg prune failed", repo_path=repo_path, returncode=returncode)
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+    logger.info("Borg prune completed successfully", repo_path=repo_path)
 
 
 def compact(repo_path: str, log_json: bool = True, passphrase: str | None = None) -> Generator[str]:
@@ -311,6 +360,7 @@ def compact(repo_path: str, log_json: bool = True, passphrase: str | None = None
 
     https://borgbackup.readthedocs.io/en/stable/usage/compact.html
     """
+    logger.info("Compacting Borg repository", repo_path=repo_path)
     cmd = [
         "borg",
         "compact",
@@ -340,7 +390,9 @@ def compact(repo_path: str, log_json: bool = True, passphrase: str | None = None
     # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0 and returncode != 1:
+        logger.error("Borg compact failed", repo_path=repo_path, returncode=returncode)
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+    logger.info("Borg compact completed successfully", repo_path=repo_path)
 
 
 def export_repo_key(repo_path: str, repo_name: str, passphrase: str | None = None) -> Path:
@@ -400,6 +452,7 @@ def delete(
 
     https://borgbackup.readthedocs.io/en/stable/usage/delete.html
     """
+    logger.info("Deleting Borg repository", repo_path=repo_path, repo_name=repo_name, dry_run=dry_run)
     if dry_run:
         cmd = [
             "borg",
@@ -447,7 +500,9 @@ def delete(
     # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0 and returncode != 1:
+        logger.error("Borg repository delete failed", repo_path=repo_path, returncode=returncode, dry_run=dry_run)
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+    logger.info("Borg repository deleted", repo_path=repo_path, dry_run=dry_run)
 
 
 def delete_archive(
@@ -463,6 +518,9 @@ def delete_archive(
 
     https://borgbackup.readthedocs.io/en/stable/usage/delete.html
     """
+    logger.info(
+        "Deleting Borg archive", repo_path=repo_path, repo_name=repo_name, archive_name=archive_name, dry_run=dry_run
+    )
     if dry_run:
         cmd = [
             "borg",
@@ -510,7 +568,15 @@ def delete_archive(
     # stdout no longer readable so wait for return code
     returncode = proc.wait()
     if returncode != 0 and returncode != 1:
+        logger.error(
+            "Borg archive delete failed",
+            repo_path=repo_path,
+            archive_name=archive_name,
+            returncode=returncode,
+            dry_run=dry_run,
+        )
         raise sp.CalledProcessError(returncode=proc.returncode, cmd=cmd)
+    logger.info("Borg archive deleted", repo_path=repo_path, archive_name=archive_name, dry_run=dry_run)
 
 
 class RepoArchive(BaseModel):
@@ -527,12 +593,15 @@ class ListArchivesOutput(BaseModel):
 
 def list_archives(repo_path: str, passphrase: str | None = None) -> list[RepoArchive]:
     """List the archives in a Borg repository."""
+    logger.debug("Listing Borg archives", repo_path=repo_path)
     cmd = ["borg", "list", "--json", repo_path]
     env = _build_env_with_passphrase(passphrase)
     result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
+        logger.error("Failed to list archives", repo_path=repo_path, returncode=result.returncode)
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
     list_archives_output = ListArchivesOutput.model_validate_json(result.stdout)
+    logger.debug("Listed Borg archives", repo_path=repo_path, archive_count=len(list_archives_output.archives))
     return list_archives_output.archives
 
 
@@ -554,11 +623,20 @@ def list_archive_contents(
     repo_path: str, archive_name: str, json_log: bool = True, passphrase: str | None = None
 ) -> list[ArchivedFile]:
     """List the contents of a Borg archive."""
+    logger.debug("Listing archive contents", repo_path=repo_path, archive_name=archive_name)
     cmd = ["borg", "list", f"{repo_path}::{archive_name}", "--json-lines"]
     if json_log is False:
         cmd.remove("--json-lines")
     env = _build_env_with_passphrase(passphrase)
     result = sp.run(cmd, capture_output=True, text=True, env=env)  # noqa: PLW1510, S603
     if result.returncode != 0 and result.returncode != 1:
+        logger.error(
+            "Failed to list archive contents",
+            repo_path=repo_path,
+            archive_name=archive_name,
+            returncode=result.returncode,
+        )
         raise sp.CalledProcessError(returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr)
-    return [ArchivedFile.model_validate_json(item) for item in result.stdout.splitlines() if item]
+    contents = [ArchivedFile.model_validate_json(item) for item in result.stdout.splitlines() if item]
+    logger.debug("Listed archive contents", repo_path=repo_path, archive_name=archive_name, file_count=len(contents))
+    return contents

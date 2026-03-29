@@ -18,12 +18,15 @@ from borgboi.clients.utils.borg_logs import (
     ProgressPercent,
     parse_borg_log_line,
 )
+from borgboi.core.logging import get_logger
 from borgboi.lib.utils import format_size_bytes
 
 _PROGRESS_MSGID_LABELS: dict[str, str] = {
     "cache.begin_transaction": "Cache initialization",
     "cache.commit": "Cache commit",
 }
+
+logger = get_logger(__name__)
 
 
 def _humanize_msgid(msgid: str | None) -> str:
@@ -160,6 +163,13 @@ def render_command_with_fallback(
     """
     render_command = getattr(output, "render_command", None)
     if callable(render_command):
+        logger.debug(
+            "Rendering command with output handler render_command",
+            output_handler=type(output).__name__,
+            status=status,
+            success_msg=success_msg,
+            spinner=spinner,
+        )
         render_command(
             status,
             success_msg,
@@ -170,6 +180,13 @@ def render_command_with_fallback(
         return
 
     section = getattr(output, "section", None)
+    logger.debug(
+        "Rendering command with legacy output fallback",
+        output_handler=type(output).__name__,
+        status=status,
+        success_msg=success_msg,
+        supports_section=callable(section),
+    )
     section_context = section(status, success_msg) if callable(section) else nullcontext()
     with section_context:  # pyright: ignore[reportGeneralTypeIssues]
         for line in log_stream:
@@ -343,12 +360,20 @@ class DefaultOutputHandler:
         from borgboi.lib.colors import COLOR_HEX
         from borgboi.rich_utils import TEXT_COLOR
 
+        logger.debug(
+            "Rendering streaming command in default output handler",
+            status=status,
+            success_msg=success_msg,
+            spinner=spinner,
+            ruler_color=ruler_color,
+        )
         self._console.rule(f"[bold {TEXT_COLOR}]{status}[/]", style=ruler_color)
         with self._console.status(status=f"[bold {COLOR_HEX.blue}]{status}[/]", spinner=spinner):
             for line in log_stream:
                 self.on_stderr(line)
         self._console.rule(f":heavy_check_mark: [bold {TEXT_COLOR}]{success_msg}[/]", style=ruler_color)
         self._console.print("")
+        logger.debug("Completed streaming command in default output handler", status=status, success_msg=success_msg)
 
     @contextmanager
     def section(self, status: str, success_msg: str) -> Generator[None]:

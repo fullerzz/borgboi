@@ -10,12 +10,25 @@ from shutil import which
 
 from borgboi.config import Config
 from borgboi.core.errors import ValidationError
+from borgboi.core.logging import get_logger
 from borgboi.core.models import RetentionPolicy
 
 # Validation constants
 MAX_REPO_NAME_LENGTH = 64
 VALID_REPO_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 VALID_COMPRESSIONS = {"none", "lz4", "zstd", "zstd,1", "zstd,3", "zstd,6", "zlib", "zlib,6", "lzma", "lzma,6"}
+
+logger = get_logger(__name__)
+
+
+def _validation_error(message: str, *, field: str, value: str | None = None) -> ValidationError:
+    logger.warning("Validation failed", field=field, value=value, reason=message)
+    return ValidationError(message, field=field, value=value)
+
+
+def _append_config_warning(warnings: list[str], message: str, *, category: str) -> None:
+    logger.warning("Configuration validation warning", category=category, warning=message)
+    warnings.append(message)
 
 
 class Validator:
@@ -40,15 +53,15 @@ class Validator:
             ValidationError: If the name is invalid
         """
         if not name:
-            raise ValidationError("Repository name cannot be empty", field="name")
+            raise _validation_error("Repository name cannot be empty", field="name")
 
         if len(name) > MAX_REPO_NAME_LENGTH:
-            raise ValidationError(
+            raise _validation_error(
                 f"Repository name too long (max {MAX_REPO_NAME_LENGTH} characters)", field="name", value=name
             )
 
         if not VALID_REPO_NAME_PATTERN.match(name):
-            raise ValidationError(
+            raise _validation_error(
                 "Repository name must start with alphanumeric and contain only alphanumeric, underscore, or hyphen",
                 field="name",
                 value=name,
@@ -67,18 +80,19 @@ class Validator:
             ValidationError: If the path is invalid
         """
         if not path:
-            raise ValidationError("Path cannot be empty", field="path")
+            raise _validation_error("Path cannot be empty", field="path")
 
         try:
             path_obj = Path(path)
         except Exception as e:
+            logger.exception("Invalid path format", field="path", value=path, error=str(e))
             raise ValidationError(f"Invalid path format: {e}", field="path", value=path) from e
 
         if must_exist and not path_obj.exists():
-            raise ValidationError(f"Path does not exist: {path}", field="path", value=path)
+            raise _validation_error(f"Path does not exist: {path}", field="path", value=path)
 
         if must_be_directory and path_obj.exists() and not path_obj.is_dir():
-            raise ValidationError(f"Path is not a directory: {path}", field="path", value=path)
+            raise _validation_error(f"Path is not a directory: {path}", field="path", value=path)
 
     @staticmethod
     def validate_compression(compression: str) -> None:
@@ -98,12 +112,12 @@ class Validator:
             ValidationError: If the compression is invalid
         """
         if not compression:
-            raise ValidationError("Compression cannot be empty", field="compression")
+            raise _validation_error("Compression cannot be empty", field="compression")
 
         # Allow base algorithm names with any level
         base_algorithm = compression.split(",", maxsplit=1)[0]
         if base_algorithm not in {"none", "lz4", "zstd", "zlib", "lzma"}:
-            raise ValidationError(
+            raise _validation_error(
                 f"Invalid compression algorithm: {base_algorithm}. Valid options: none, lz4, zstd, zlib, lzma",
                 field="compression",
                 value=compression,
@@ -114,10 +128,11 @@ class Validator:
             try:
                 level = int(compression.split(",")[1])
                 if level < 0 or level > 22:  # Zstd supports up to 22
-                    raise ValidationError(
+                    raise _validation_error(
                         f"Compression level must be 0-22, got {level}", field="compression", value=compression
                     )
             except ValueError as e:
+                logger.exception("Invalid compression level format", compression=compression, error=str(e))
                 raise ValidationError(
                     f"Invalid compression level format: {compression}", field="compression", value=compression
                 ) from e
@@ -135,7 +150,7 @@ class Validator:
             ValidationError: If the policy is invalid
         """
         if policy.keep_daily <= 0 and policy.keep_weekly <= 0 and policy.keep_monthly <= 0 and policy.keep_yearly <= 0:
-            raise ValidationError("At least one retention period must be greater than 0", field="retention_policy")
+            raise _validation_error("At least one retention period must be greater than 0", field="retention_policy")
 
     @staticmethod
     def validate_exclusion_pattern(pattern: str) -> None:
@@ -148,12 +163,12 @@ class Validator:
             ValidationError: If the pattern is invalid
         """
         if not pattern:
-            raise ValidationError("Exclusion pattern cannot be empty", field="pattern")
+            raise _validation_error("Exclusion pattern cannot be empty", field="pattern")
 
         # Check for obviously dangerous patterns
         dangerous_patterns = {"/", "/*", "/**", "*", "**"}
         if pattern.strip() in dangerous_patterns:
-            raise ValidationError(
+            raise _validation_error(
                 f"Dangerous exclusion pattern that would exclude everything: {pattern}",
                 field="pattern",
                 value=pattern,
@@ -173,13 +188,13 @@ class Validator:
             ValidationError: If the archive name is invalid
         """
         if not name:
-            raise ValidationError("Archive name cannot be empty", field="archive_name")
+            raise _validation_error("Archive name cannot be empty", field="archive_name")
 
         # Check for problematic characters
         forbidden_chars = {":", "/", "\\", "\x00"}
         for char in forbidden_chars:
             if char in name:
-                raise ValidationError(
+                raise _validation_error(
                     f"Archive name contains forbidden character: {char!r}",
                     field="archive_name",
                     value=name,
@@ -199,39 +214,68 @@ class Validator:
         Returns:
             List of warning messages (empty if no warnings)
         """
-        warnings = []
+        warnings: list[str] = []
+        logger.debug(
+            "Validating configuration",
+            offline=config.offline,
+            borg_executable=config.borg.executable_path,
+            compression=config.borg.compression,
+        )
 
         # Check if borg executable exists
         borg_path = config.borg.executable_path
         if not which(borg_path):
-            warnings.append(f"Borg executable not found at '{borg_path}'. Make sure Borg is installed.")
+            _append_config_warning(
+                warnings,
+                f"Borg executable not found at '{borg_path}'. Make sure Borg is installed.",
+                category="borg_executable",
+            )
 
         # Validate compression
         try:
             Validator.validate_compression(config.borg.compression)
         except ValidationError as e:
-            warnings.append(f"Invalid compression setting: {e.message}")
+            _append_config_warning(
+                warnings,
+                f"Invalid compression setting: {e.message}",
+                category="compression",
+            )
 
         # Check AWS config if not offline
         if not config.offline:
             if not config.aws.s3_bucket:
-                warnings.append("AWS S3 bucket not configured. Set 'aws.s3_bucket' in config.")
+                _append_config_warning(
+                    warnings,
+                    "AWS S3 bucket not configured. Set 'aws.s3_bucket' in config.",
+                    category="aws_s3_bucket",
+                )
             if not config.aws.dynamodb_repos_table:
-                warnings.append("AWS DynamoDB table not configured. Set 'aws.dynamodb_repos_table' in config.")
+                _append_config_warning(
+                    warnings,
+                    "AWS DynamoDB table not configured. Set 'aws.dynamodb_repos_table' in config.",
+                    category="aws_dynamodb_table",
+                )
 
         # Validate retention policy
         retention = config.borg.retention
         if retention.keep_daily <= 0 and retention.keep_weekly <= 0 and retention.keep_monthly <= 0:
-            warnings.append(
+            _append_config_warning(
+                warnings,
                 "Retention policy has all values at 0. No backups will be retained. "
-                "Consider setting at least keep_daily > 0."
+                "Consider setting at least keep_daily > 0.",
+                category="retention_policy",
             )
 
         # Check storage quota format
         quota = config.borg.storage_quota
         if not re.match(r"^\d+[KMGT]?$", quota, re.IGNORECASE):
-            warnings.append(f"Storage quota '{quota}' may be in an invalid format. Expected format: 100G, 500M, etc.")
+            _append_config_warning(
+                warnings,
+                f"Storage quota '{quota}' may be in an invalid format. Expected format: 100G, 500M, etc.",
+                category="storage_quota",
+            )
 
+        logger.info("Configuration validation completed", offline=config.offline, warning_count=len(warnings))
         return warnings
 
     @staticmethod
@@ -246,9 +290,10 @@ class Validator:
             ValidationError: If the passphrase is too weak
         """
         if not passphrase:
-            raise ValidationError("Passphrase cannot be empty", field="passphrase")
+            raise _validation_error("Passphrase cannot be empty", field="passphrase")
 
         if len(passphrase) < min_length:
+            logger.warning("Validation failed", field="passphrase", reason="Passphrase must meet minimum length")
             raise ValidationError(f"Passphrase must be at least {min_length} characters", field="passphrase")
 
     @staticmethod
@@ -262,18 +307,18 @@ class Validator:
             ValidationError: If the hostname is invalid
         """
         if not hostname:
-            raise ValidationError("Hostname cannot be empty", field="hostname")
+            raise _validation_error("Hostname cannot be empty", field="hostname")
 
         # Basic hostname validation (RFC 1123)
         if len(hostname) > 253:
-            raise ValidationError("Hostname too long (max 253 characters)", field="hostname", value=hostname)
+            raise _validation_error("Hostname too long (max 253 characters)", field="hostname", value=hostname)
 
         # Check each label
         labels = hostname.split(".")
         for label in labels:
             if not label:
-                raise ValidationError("Hostname contains empty label", field="hostname", value=hostname)
+                raise _validation_error("Hostname contains empty label", field="hostname", value=hostname)
             if len(label) > 63:
-                raise ValidationError("Hostname label too long (max 63 characters)", field="hostname", value=hostname)
+                raise _validation_error("Hostname label too long (max 63 characters)", field="hostname", value=hostname)
             if not re.match(r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$", label):
-                raise ValidationError("Hostname contains invalid characters", field="hostname", value=hostname)
+                raise _validation_error("Hostname contains invalid characters", field="hostname", value=hostname)

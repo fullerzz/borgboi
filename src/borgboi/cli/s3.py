@@ -5,7 +5,15 @@ from typing import Annotated
 from cyclopts import App, Parameter
 
 from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
+from borgboi.core.logging import get_logger
 from borgboi.rich_utils import console
+
+logger = get_logger(__name__)
+
+
+def _log_command_failure(event: str, error: Exception, **context: object) -> None:
+    logger.exception(event, error=str(error), **context)
+
 
 s3 = App(
     name="s3",
@@ -21,14 +29,18 @@ def s3_sync(
     ctx: ContextArg,
 ) -> None:
     """Sync a repository to S3."""
+    logger.info("Running S3 sync command", repo_name=name, repo_path=path, offline=ctx.offline)
     if ctx.offline:
+        logger.warning("Skipping S3 sync command in offline mode", repo_name=name, repo_path=path)
         console.print("[bold yellow]S3 sync is not available in offline mode[/]")
         return
 
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
         ctx.orchestrator.sync_to_s3(repo_info)
+        logger.info("S3 sync command completed", repo_name=repo_info.name, repo_path=repo_info.path)
     except Exception as error:
+        _log_command_failure("S3 sync command failed", error, repo_name=name, repo_path=path)
         print_error_and_exit(str(error), error=error)
 
 
@@ -48,7 +60,11 @@ def s3_restore(
     ctx: ContextArg,
 ) -> None:
     """Restore a repository from S3."""
+    logger.info(
+        "Running S3 restore command", repo_name=name, repo_path=path, dry_run=dry_run, force=force, offline=ctx.offline
+    )
     if ctx.offline:
+        logger.warning("Skipping S3 restore command in offline mode", repo_name=name, repo_path=path)
         console.print("[bold yellow]S3 restore is not available in offline mode[/]")
         return
 
@@ -63,7 +79,22 @@ def s3_restore(
             console.print(f"Repository found: [bold cyan]{repo_info.path}[/]")
 
         ctx.orchestrator.restore_from_s3(repo_info, dry_run=dry_run, force=force)
+        logger.info(
+            "S3 restore command completed",
+            repo_name=repo_info.name,
+            repo_path=repo_info.path,
+            dry_run=dry_run,
+            force=force,
+        )
     except Exception as error:
+        _log_command_failure(
+            "S3 restore command failed",
+            error,
+            repo_name=name,
+            repo_path=path,
+            dry_run=dry_run,
+            force=force,
+        )
         print_error_and_exit(str(error), error=error)
 
 
@@ -77,28 +108,35 @@ def s3_delete(
     ctx: ContextArg,
 ) -> None:
     """Delete a repository from S3."""
+    logger.info("Running S3 delete command", repo_name=name, dry_run=dry_run, offline=ctx.offline)
     if ctx.offline:
+        logger.warning("Skipping S3 delete command in offline mode", repo_name=name)
         console.print("[bold yellow]S3 delete is not available in offline mode[/]")
         return
 
     if not confirm_action("Are you sure you want to delete this repository from S3?"):
+        logger.warning("S3 delete command aborted by user", repo_name=name)
         console.print("Aborted.")
         return
 
     try:
         ctx.orchestrator.delete_from_s3(name, dry_run=dry_run)
+        logger.info("S3 delete command completed", repo_name=name, dry_run=dry_run)
         if dry_run:
             console.print("[bold yellow]Dry run completed - no changes made[/]")
         else:
             console.print("[bold green]Repository deleted from S3 successfully[/]")
     except Exception as error:
+        _log_command_failure("S3 delete command failed", error, repo_name=name, dry_run=dry_run)
         print_error_and_exit(str(error), error=error)
 
 
 @s3.command(name="stats")
 def s3_stats(*, ctx: ContextArg) -> None:
     """Show S3 bucket storage metrics and class composition."""
+    logger.info("Running S3 stats command", offline=ctx.offline)
     if ctx.offline:
+        logger.warning("Skipping S3 stats command in offline mode")
         console.print("[bold yellow]S3 stats are not available in offline mode[/]")
         return
 
@@ -107,6 +145,13 @@ def s3_stats(*, ctx: ContextArg) -> None:
         from borgboi.clients import s3 as s3_client
 
         stats = s3_client.get_bucket_stats(cfg=ctx.config)
+        logger.info(
+            "S3 stats command completed",
+            bucket_name=stats.bucket_name,
+            total_size_bytes=stats.total_size_bytes,
+            total_object_count=stats.total_object_count,
+        )
         rich_utils.output_s3_bucket_stats(stats)
     except Exception as error:
+        _log_command_failure("S3 stats command failed", error)
         print_error_and_exit(str(error), error=error)

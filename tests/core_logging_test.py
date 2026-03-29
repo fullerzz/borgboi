@@ -3,12 +3,23 @@ import logging
 import re
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any, cast
+from unittest.mock import Mock
 
 import pytest
 
 import borgboi.config as config_module
+from borgboi.clients.borg_client import BorgClient
 from borgboi.config import Config, LoggingConfig
+from borgboi.core.errors import RepositoryNotFoundError, ValidationError
 from borgboi.core.logging import configure_logging, get_logger
+from borgboi.core.models import BackupOptions
+from borgboi.core.orchestrator import Orchestrator
+from borgboi.core.output import CollectingOutputHandler, render_command_with_fallback
+from borgboi.core.validator import Validator
+from borgboi.models import BorgBoiRepo
+from borgboi.storage.db import init_db
+from borgboi.storage.sqlite import SQLiteStorage
 
 
 @pytest.fixture(autouse=True)
@@ -143,3 +154,247 @@ def test_configure_logging_replaces_existing_managed_handler() -> None:
 
     entries = _read_log_entries(log_file)
     assert sum(1 for entry in entries if entry["event"] == "one event") == 1
+
+
+def test_orchestrator_logs_structured_events_for_create_repo(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True, offline=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    repo_path = tmp_path / "repo"
+    passphrase_file = tmp_path / "repo-one.key"
+    generated_passphrase = "generated-passphrase"  # noqa: S105
+    storage = Mock()
+    borg_client = Mock()
+    borg_client.info.return_value = None
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: None)
+    monkeypatch.setattr("borgboi.core.orchestrator.generate_secure_passphrase", lambda: generated_passphrase)
+    monkeypatch.setattr("borgboi.core.orchestrator.save_passphrase_to_file", lambda name, passphrase: passphrase_file)
+
+    orchestrator = Orchestrator(
+        config=cfg,
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=CollectingOutputHandler(),
+    )
+
+    orchestrator.create_repo(repo_path.as_posix(), "/backup/source", "repo-one")
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Creating new Borg repository"
+        and entry["logger"] == "borgboi.core.orchestrator"
+        and entry["repo_name"] == "repo-one"
+        and entry["backup_target"] == "/backup/source"
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Repository created successfully"
+        and entry["logger"] == "borgboi.core.orchestrator"
+        and entry["repo_name"] == "repo-one"
+        and entry["repo_path"] == repo_path.as_posix()
+        for entry in entries
+    )
+    assert all(entry.get("passphrase") != generated_passphrase for entry in entries)
+    assert all(generated_passphrase not in json.dumps(entry) for entry in entries)
+
+
+def test_orchestrator_logs_import_repo_failure_context(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True, offline=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    backup_target = tmp_path / "backup-source"
+    backup_target.mkdir()
+    storage = Mock()
+    storage.exists.return_value = False
+    storage.get_by_path.side_effect = RepositoryNotFoundError("missing", path=repo_path.as_posix())
+    borg_client = Mock()
+    borg_client.info.side_effect = RuntimeError("wrong passphrase")
+
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: "provided-passphrase")
+
+    orchestrator = Orchestrator(
+        config=cfg,
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=CollectingOutputHandler(),
+    )
+
+    with pytest.raises(ValidationError, match="Unable to access Borg repository"):
+        orchestrator.import_repo(repo_path.as_posix(), backup_target.as_posix(), "repo-one")
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Failed to access Borg repository"
+        and entry["logger"] == "borgboi.core.orchestrator"
+        and entry["level"] == "error"
+        and entry["repo_path"] == repo_path.resolve().as_posix()
+        and "wrong passphrase" in str(entry.get("error", ""))
+        for entry in entries
+    )
+
+
+def test_validator_logs_validation_failures_and_config_warnings(monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    monkeypatch.setattr("borgboi.core.validator.which", lambda _: None)
+
+    with pytest.raises(ValidationError, match="Repository name cannot be empty"):
+        Validator.validate_repo_name("")
+
+    config = Config(offline=False)
+    config.borg.executable_path = "missing-borg"
+    config.borg.compression = "brotli"
+    config.borg.retention.keep_daily = 0
+    config.borg.retention.keep_weekly = 0
+    config.borg.retention.keep_monthly = 0
+    config.aws.s3_bucket = ""
+    config.aws.dynamodb_repos_table = ""
+    config.borg.storage_quota = "fifty"
+
+    warnings = Validator.validate_config(config)
+    assert warnings
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Validation failed"
+        and entry["logger"] == "borgboi.core.validator"
+        and entry["field"] == "name"
+        and entry["reason"] == "Repository name cannot be empty"
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Configuration validation warning"
+        and entry["logger"] == "borgboi.core.validator"
+        and entry["category"] == "compression"
+        and "Invalid compression setting" in str(entry["warning"])
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Configuration validation completed"
+        and entry["logger"] == "borgboi.core.validator"
+        and entry["warning_count"] == len(warnings)
+        for entry in entries
+    )
+
+
+def test_output_module_logs_render_command_fallback_path() -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    output_handler = CollectingOutputHandler()
+    render_command_with_fallback(output_handler, "Streaming status", "Streaming done", ["line one\n"])
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Rendering command with output handler render_command"
+        and entry["logger"] == "borgboi.core.output"
+        and entry["output_handler"] == "CollectingOutputHandler"
+        and entry["status"] == "Streaming status"
+        for entry in entries
+    )
+
+
+def test_borg_client_logs_structured_create_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    client = BorgClient(config=cfg.borg)
+    captured: list[tuple[list[str], str | None]] = []
+
+    def fake_run_streaming_command(cmd: list[str], passphrase: str | None = None) -> Generator[str]:
+        captured.append((cmd, passphrase))
+        if False:
+            yield ""
+
+    monkeypatch.setattr(client, "_run_streaming_command", fake_run_streaming_command)
+    excludes_file = tmp_path / "excludes.txt"
+
+    list(
+        client.create(
+            "/repo",
+            "/backup/source",
+            archive_name="archive-1",
+            options=BackupOptions(compression="lz4"),
+            exclude_file=excludes_file.as_posix(),
+            passphrase="super-secret",  # noqa: S106
+        )
+    )
+
+    assert captured
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Creating archive via client"
+        and entry["logger"] == "borgboi.clients.borg_client"
+        and entry["repo_path"] == "/repo"
+        and entry["archive_name"] == "archive-1"
+        and entry["backup_target"] == "/backup/source"
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Archive creation completed via client"
+        and entry["logger"] == "borgboi.clients.borg_client"
+        and entry["archive_name"] == "archive-1"
+        for entry in entries
+    )
+    assert all(entry.get("passphrase") != "super-secret" for entry in entries)
+    assert all("super-secret" not in json.dumps(entry) for entry in entries)
+
+
+def test_sqlite_storage_logs_structured_save_events(tmp_path: Path) -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    engine = init_db(tmp_path / "storage.db")
+    storage = SQLiteStorage(engine=engine)
+    repo = BorgBoiRepo(
+        path="/repos/test",
+        backup_target="/backup/source",
+        name="repo-one",
+        hostname="host-one",
+        os_platform="Darwin",
+        metadata=None,
+    )
+
+    try:
+        storage.save(repo)
+    finally:
+        storage.close()
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Saving repository to SQLite"
+        and entry["logger"] == "borgboi.storage.sqlite"
+        and entry["repo_name"] == "repo-one"
+        and entry["repo_path"] == "/repos/test"
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Repository saved to SQLite"
+        and entry["logger"] == "borgboi.storage.sqlite"
+        and entry["repo_name"] == "repo-one"
+        for entry in entries
+    )
