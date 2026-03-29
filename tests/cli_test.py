@@ -219,6 +219,6 @@ def test_s3_stats_logs_offline_skip_warning(monkeypatch: pytest.MonkeyPatch, tmp
     assert any(
         entry["event"] == "Skipping S3 stats command in offline mode"
         and entry["logger"] == "borgboi.cli.s3"
-        and entry["level"] == "warning"
+        and entry["level"] == "info"
         for entry in log_entries
     )

@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 
 
 def _validation_error(message: str, *, field: str, value: str | None = None) -> ValidationError:
-    logger.warning("Validation failed", field=field, value=value, reason=message)
+    logger.debug("Validation failed", field=field, value=value, reason=message)
     return ValidationError(message, field=field, value=value)
 
 
@@ -293,8 +293,7 @@ class Validator:
             raise _validation_error("Passphrase cannot be empty", field="passphrase")
 
         if len(passphrase) < min_length:
-            logger.warning("Validation failed", field="passphrase", reason="Passphrase must meet minimum length")
-            raise ValidationError(f"Passphrase must be at least {min_length} characters", field="passphrase")
+            raise _validation_error(f"Passphrase must be at least {min_length} characters", field="passphrase")
 
     @staticmethod
     def validate_hostname(hostname: str) -> None:

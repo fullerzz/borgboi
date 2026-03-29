@@ -129,7 +129,6 @@ def configure_logging(config: Config) -> Path | None:
     """Configure file-backed application logging when enabled in config."""
     namespace_logger = stdlib_logging.getLogger(_LOGGER_NAMESPACE)
     _remove_managed_handlers(namespace_logger)
-    _configure_structlog()
 
     if not config.logging.enabled:
         _LoggingState.active_log_file = None
@@ -137,6 +136,7 @@ def configure_logging(config: Config) -> Path | None:
         namespace_logger.propagate = True
         return None
 
+    _configure_structlog()
     level = _get_log_level(config)
     log_file = _get_log_file(config)
     log_file.parent.mkdir(parents=True, exist_ok=True)

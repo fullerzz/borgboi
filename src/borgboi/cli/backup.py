@@ -19,10 +19,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-def _log_command_failure(event: str, error: Exception, **context: object) -> None:
-    logger.exception(event, error=str(error), **context)
-
-
 def _repo_name(repo: object, fallback: str | None = None) -> str | None:
     return getattr(repo, "name", fallback)
 
@@ -156,7 +152,7 @@ def backup_run(
 
         console.print("[bold green]Backup completed successfully[/]")
     except Exception as error:
-        _log_command_failure("Backup command failed", error, repo_name=name, repo_path=path, no_json=no_json)
+        logger.exception("Backup command failed", error=str(error), repo_name=name, repo_path=path, no_json=no_json)
         print_error_and_exit(str(error), error=error)
 
 
@@ -172,10 +168,10 @@ def backup_daily(
     """Perform daily backup with prune and compact."""
     logger.info("Running daily backup command", repo_name=name, repo_path=path, no_s3_sync=no_s3_sync)
     if not name and not path:
-        logger.warning("Daily backup command missing repository selector")
+        logger.info("Daily backup command missing repository selector")
         print_error_and_exit("Provide either --name or --path to select a repository.")
     if name and path:
-        logger.warning("Daily backup command received conflicting repository selectors", repo_name=name, repo_path=path)
+        logger.info("Daily backup command received conflicting repository selectors", repo_name=name, repo_path=path)
         print_error_and_exit("--name and --path are mutually exclusive; provide only one.")
 
     try:
@@ -189,8 +185,8 @@ def backup_daily(
         )
         console.print("[bold green]Daily backup completed successfully[/]")
     except Exception as error:
-        _log_command_failure(
-            "Daily backup command failed", error, repo_name=name, repo_path=path, no_s3_sync=no_s3_sync
+        logger.exception(
+            "Daily backup command failed", error=str(error), repo_name=name, repo_path=path, no_s3_sync=no_s3_sync
         )
         print_error_and_exit(str(error), error=error)
 
@@ -228,7 +224,7 @@ def backup_list(
             )
         console.rule()
     except Exception as error:
-        _log_command_failure("Archive list command failed", error, repo_name=name, repo_path=path)
+        logger.exception("Archive list command failed", error=str(error), repo_name=name, repo_path=path)
         print_error_and_exit(str(error), error=error)
 
 
@@ -243,7 +239,7 @@ def backup_restore(
     """Restore an archive to the current directory."""
     logger.info("Running archive restore command", repo_path=path, archive_name=archive)
     if not confirm_action("Extract archive contents to current directory?"):
-        logger.warning("Archive restore command aborted by user", repo_path=path, archive_name=archive)
+        logger.info("Archive restore command aborted by user", repo_path=path, archive_name=archive)
         console.print("Aborted.")
         return
 
@@ -258,7 +254,7 @@ def backup_restore(
         )
         console.print("[bold green]Archive restored successfully[/]")
     except Exception as error:
-        _log_command_failure("Archive restore command failed", error, repo_path=path, archive_name=archive)
+        logger.exception("Archive restore command failed", error=str(error), repo_path=path, archive_name=archive)
         print_error_and_exit(str(error), error=error)
 
 
@@ -276,7 +272,7 @@ def backup_delete(
     """Delete an archive from a repository."""
     logger.info("Running archive delete command", repo_path=path, archive_name=archive, dry_run=dry_run)
     if not dry_run and not confirm_action(f"Are you sure you want to delete archive '{archive}'?"):
-        logger.warning("Archive delete command aborted by user", repo_path=path, archive_name=archive)
+        logger.info("Archive delete command aborted by user", repo_path=path, archive_name=archive)
         console.print("Aborted.")
         return
 
@@ -295,9 +291,9 @@ def backup_delete(
         else:
             console.print("[bold green]Archive deleted successfully[/]")
     except Exception as error:
-        _log_command_failure(
+        logger.exception(
             "Archive delete command failed",
-            error,
+            error=str(error),
             repo_path=path,
             archive_name=archive,
             dry_run=dry_run,
@@ -366,9 +362,9 @@ def backup_contents(
         )
         console.print(f"Archive contents written to [bold cyan]{output_path}[/]")
     except Exception as error:
-        _log_command_failure(
+        logger.exception(
             "Archive contents command failed",
-            error,
+            error=str(error),
             repo_name=name,
             repo_path=path,
             archive_name=archive,

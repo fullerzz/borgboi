@@ -10,11 +10,6 @@ from borgboi.rich_utils import console
 
 logger = get_logger(__name__)
 
-
-def _log_command_failure(event: str, error: Exception, **context: object) -> None:
-    logger.exception(event, error=str(error), **context)
-
-
 s3 = App(
     name="s3",
     help="S3 synchronization commands.\n\nSync repositories to AWS S3 and inspect bucket stats.",
@@ -31,7 +26,7 @@ def s3_sync(
     """Sync a repository to S3."""
     logger.info("Running S3 sync command", repo_name=name, repo_path=path, offline=ctx.offline)
     if ctx.offline:
-        logger.warning("Skipping S3 sync command in offline mode", repo_name=name, repo_path=path)
+        logger.info("Skipping S3 sync command in offline mode", repo_name=name, repo_path=path)
         console.print("[bold yellow]S3 sync is not available in offline mode[/]")
         return
 
@@ -40,7 +35,7 @@ def s3_sync(
         ctx.orchestrator.sync_to_s3(repo_info)
         logger.info("S3 sync command completed", repo_name=repo_info.name, repo_path=repo_info.path)
     except Exception as error:
-        _log_command_failure("S3 sync command failed", error, repo_name=name, repo_path=path)
+        logger.exception("S3 sync command failed", error=str(error), repo_name=name, repo_path=path)
         print_error_and_exit(str(error), error=error)
 
 
@@ -64,7 +59,7 @@ def s3_restore(
         "Running S3 restore command", repo_name=name, repo_path=path, dry_run=dry_run, force=force, offline=ctx.offline
     )
     if ctx.offline:
-        logger.warning("Skipping S3 restore command in offline mode", repo_name=name, repo_path=path)
+        logger.info("Skipping S3 restore command in offline mode", repo_name=name, repo_path=path)
         console.print("[bold yellow]S3 restore is not available in offline mode[/]")
         return
 
@@ -87,9 +82,9 @@ def s3_restore(
             force=force,
         )
     except Exception as error:
-        _log_command_failure(
+        logger.exception(
             "S3 restore command failed",
-            error,
+            error=str(error),
             repo_name=name,
             repo_path=path,
             dry_run=dry_run,
@@ -110,12 +105,12 @@ def s3_delete(
     """Delete a repository from S3."""
     logger.info("Running S3 delete command", repo_name=name, dry_run=dry_run, offline=ctx.offline)
     if ctx.offline:
-        logger.warning("Skipping S3 delete command in offline mode", repo_name=name)
+        logger.info("Skipping S3 delete command in offline mode", repo_name=name)
         console.print("[bold yellow]S3 delete is not available in offline mode[/]")
         return
 
     if not confirm_action("Are you sure you want to delete this repository from S3?"):
-        logger.warning("S3 delete command aborted by user", repo_name=name)
+        logger.info("S3 delete command aborted by user", repo_name=name)
         console.print("Aborted.")
         return
 
@@ -127,7 +122,7 @@ def s3_delete(
         else:
             console.print("[bold green]Repository deleted from S3 successfully[/]")
     except Exception as error:
-        _log_command_failure("S3 delete command failed", error, repo_name=name, dry_run=dry_run)
+        logger.exception("S3 delete command failed", error=str(error), repo_name=name, dry_run=dry_run)
         print_error_and_exit(str(error), error=error)
 
 
@@ -136,7 +131,7 @@ def s3_stats(*, ctx: ContextArg) -> None:
     """Show S3 bucket storage metrics and class composition."""
     logger.info("Running S3 stats command", offline=ctx.offline)
     if ctx.offline:
-        logger.warning("Skipping S3 stats command in offline mode")
+        logger.info("Skipping S3 stats command in offline mode")
         console.print("[bold yellow]S3 stats are not available in offline mode[/]")
         return
 
@@ -153,5 +148,5 @@ def s3_stats(*, ctx: ContextArg) -> None:
         )
         rich_utils.output_s3_bucket_stats(stats)
     except Exception as error:
-        _log_command_failure("S3 stats command failed", error)
+        logger.exception("S3 stats command failed", error=str(error))
         print_error_and_exit(str(error), error=error)

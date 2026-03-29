@@ -1,6 +1,5 @@
 """SQLite storage implementation for BorgBoi using SQLAlchemy."""
 
-import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import override
@@ -15,9 +14,7 @@ from borgboi.storage.base import RepositoryStorage
 from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_db_path, get_session_factory
 from borgboi.storage.models import S3RepoStats
 
-# Keep stdlib logger for SQLAlchemy compatibility
-logger = logging.getLogger(__name__)
-structlog_logger = get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class SQLiteStorage(RepositoryStorage):
@@ -48,7 +45,7 @@ class SQLiteStorage(RepositoryStorage):
             try:
                 metadata = RepoInfo.model_validate_json(row.metadata_json)
             except Exception:
-                logger.warning("Failed to parse metadata JSON for repo %s", row.name)
+                logger.warning("Failed to parse metadata JSON", repo_name=row.name)
 
         return BorgBoiRepo(
             path=row.path,
@@ -85,7 +82,7 @@ class SQLiteStorage(RepositoryStorage):
 
     @override
     def get(self, name: str) -> BorgBoiRepo:
-        structlog_logger.debug("Getting repository from SQLite", repo_name=name)
+        logger.debug("Getting repository from SQLite", repo_name=name)
         with self._session_factory() as session:
             row = session.query(RepositoryRow).filter_by(name=name).first()
             if row is None:
@@ -94,7 +91,7 @@ class SQLiteStorage(RepositoryStorage):
 
     @override
     def get_by_path(self, path: str, hostname: str | None = None) -> BorgBoiRepo:
-        structlog_logger.debug("Getting repository from SQLite by path", repo_path=path, hostname=hostname)
+        logger.debug("Getting repository from SQLite by path", repo_path=path, hostname=hostname)
         with self._session_factory() as session:
             query = session.query(RepositoryRow).filter_by(path=path)
             if hostname is not None:
@@ -121,7 +118,7 @@ class SQLiteStorage(RepositoryStorage):
 
     @override
     def save(self, repo: BorgBoiRepo) -> None:
-        structlog_logger.debug("Saving repository to SQLite", repo_name=repo.name, repo_path=repo.path)
+        logger.debug("Saving repository to SQLite", repo_name=repo.name, repo_path=repo.path)
         data = self._repo_to_row_dict(repo)
         with self._session_factory() as session:
             try:
@@ -137,11 +134,11 @@ class SQLiteStorage(RepositoryStorage):
             except Exception as e:
                 session.rollback()
                 raise StorageError(f"Failed to save repository {repo.name}: {e}", operation="save", cause=e) from e
-        structlog_logger.debug("Repository saved to SQLite", repo_name=repo.name)
+        logger.debug("Repository saved to SQLite", repo_name=repo.name)
 
     @override
     def delete(self, name: str) -> None:
-        structlog_logger.debug("Deleting repository from SQLite", repo_name=name)
+        logger.debug("Deleting repository from SQLite", repo_name=name)
         with self._session_factory() as session:
             row = session.query(RepositoryRow).filter_by(name=name).first()
             if row is None:
@@ -156,24 +153,24 @@ class SQLiteStorage(RepositoryStorage):
             except Exception as e:
                 session.rollback()
                 raise StorageError(f"Failed to delete repository {name}: {e}", operation="delete", cause=e) from e
-        structlog_logger.debug("Repository deleted from SQLite", repo_name=name)
+        logger.debug("Repository deleted from SQLite", repo_name=name)
 
     @override
     def exists(self, name: str) -> bool:
         with self._session_factory() as session:
             row = session.query(RepositoryRow).filter_by(name=name).first()
             exists_result = row is not None
-            structlog_logger.debug("Checking repository existence in SQLite", repo_name=name, exists=exists_result)
+            logger.debug("Checking repository existence in SQLite", repo_name=name, exists=exists_result)
             return exists_result
 
     # S3 cache methods
 
     def get_s3_stats(self, repo_name: str) -> S3RepoStats | None:
-        structlog_logger.debug("Getting S3 stats from SQLite cache", repo_name=repo_name)
+        logger.debug("Getting S3 stats from SQLite cache", repo_name=repo_name)
         with self._session_factory() as session:
             row = session.query(S3StatsCacheRow).filter_by(repo_name=repo_name).first()
             if row is None:
-                structlog_logger.debug("S3 stats cache miss", repo_name=repo_name)
+                logger.debug("S3 stats cache miss", repo_name=repo_name)
                 return None
             return S3RepoStats(
                 total_size_bytes=row.total_size_bytes,
@@ -183,7 +180,7 @@ class SQLiteStorage(RepositoryStorage):
             )
 
     def update_s3_stats(self, repo_name: str, stats: S3RepoStats) -> None:
-        structlog_logger.debug(
+        logger.debug(
             "Updating S3 stats in SQLite cache",
             repo_name=repo_name,
             total_size_bytes=stats.total_size_bytes,
@@ -208,17 +205,16 @@ class SQLiteStorage(RepositoryStorage):
                 session.commit()
             except Exception as e:
                 session.rollback()
-                logger.warning("Failed to update S3 stats cache for %s: %s", repo_name, e)
-                structlog_logger.warning("Failed to update S3 stats cache", repo_name=repo_name, error=str(e))
+                logger.warning("Failed to update S3 stats cache", repo_name=repo_name, error=str(e))
 
     def invalidate_s3_cache(self, repo_name: str) -> None:
-        structlog_logger.debug("Invalidating S3 cache in SQLite", repo_name=repo_name)
+        logger.debug("Invalidating S3 cache in SQLite", repo_name=repo_name)
         with self._session_factory() as session:
             row = session.query(S3StatsCacheRow).filter_by(repo_name=repo_name).first()
             if row is not None:
                 session.delete(row)
                 session.commit()
-                structlog_logger.debug("S3 cache invalidated", repo_name=repo_name)
+                logger.debug("S3 cache invalidated", repo_name=repo_name)
 
     # Exclusions - delegate to file system (borg needs file paths)
 
@@ -231,12 +227,12 @@ class SQLiteStorage(RepositoryStorage):
     def get_exclusions(self, repo_name: str) -> list[str]:
         path = self.get_exclusions_path(repo_name)
         if not path.exists():
-            structlog_logger.debug("No exclusions file found", repo_name=repo_name, path=str(path))
+            logger.debug("No exclusions file found", repo_name=repo_name, path=str(path))
             return []
         try:
             content = path.read_text()
             patterns = [line.strip() for line in content.splitlines() if line.strip()]
-            structlog_logger.debug(
+            logger.debug(
                 "Loaded exclusions from SQLite", repo_name=repo_name, pattern_count=len(patterns), path=str(path)
             )
             return patterns
@@ -250,9 +246,7 @@ class SQLiteStorage(RepositoryStorage):
         path.parent.mkdir(parents=True, exist_ok=True)
         try:
             path.write_text("\n".join(patterns) + "\n")
-            structlog_logger.debug(
-                "Saved exclusions to SQLite", repo_name=repo_name, pattern_count=len(patterns), path=str(path)
-            )
+            logger.debug("Saved exclusions to SQLite", repo_name=repo_name, pattern_count=len(patterns), path=str(path))
         except OSError as e:
             raise StorageError(
                 f"Failed to save exclusions for {repo_name}: {e}", operation="save_exclusions", cause=e
@@ -269,7 +263,7 @@ class SQLiteStorage(RepositoryStorage):
         if stripped_pattern not in patterns:
             patterns.append(stripped_pattern)
             self.save_exclusions(repo_name, patterns)
-            structlog_logger.debug(
+            logger.debug(
                 "Added exclusion pattern", repo_name=repo_name, pattern=stripped_pattern, line_number=len(patterns)
             )
 
@@ -279,6 +273,4 @@ class SQLiteStorage(RepositoryStorage):
             raise ValueError(f"Invalid line number {line_number}")
         removed_pattern = patterns.pop(line_number - 1)
         self.save_exclusions(repo_name, patterns)
-        structlog_logger.debug(
-            "Removed exclusion pattern", repo_name=repo_name, line_number=line_number, pattern=removed_pattern
-        )
+        logger.debug("Removed exclusion pattern", repo_name=repo_name, line_number=line_number, pattern=removed_pattern)

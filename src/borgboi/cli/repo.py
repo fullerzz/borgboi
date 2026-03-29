@@ -10,11 +10,6 @@ from borgboi.rich_utils import console
 
 logger = get_logger(__name__)
 
-
-def _log_command_failure(event: str, error: Exception, **context: object) -> None:
-    logger.exception(event, error=str(error), **context)
-
-
 repo = App(
     name="repo",
     help="Repository management commands.\n\nCreate, inspect, list, and delete Borg repositories.",
@@ -45,9 +40,9 @@ def repo_create(
         logger.info("Repository create command completed", repo_name=repo_info.name, repo_path=repo_info.path)
         console.print(f"Created new Borg repo at [bold cyan]{repo_info.path}[/]")
     except Exception as error:
-        _log_command_failure(
+        logger.exception(
             "Repository create command failed",
-            error,
+            error=str(error),
             repo_name=name,
             repo_path=path,
             backup_target=backup_target,
@@ -79,9 +74,9 @@ def repo_import(
         logger.info("Repository import command completed", repo_name=repo_info.name, repo_path=repo_info.path)
         console.print(f"Imported existing Borg repo at [bold cyan]{repo_info.path}[/]")
     except Exception as error:
-        _log_command_failure(
+        logger.exception(
             "Repository import command failed",
-            error,
+            error=str(error),
             repo_name=name,
             repo_path=path,
             backup_target=backup_target,
@@ -100,7 +95,7 @@ def repo_list(*, ctx: ContextArg) -> None:
         logger.info("Repository list command completed", repo_count=len(repos))
         rich_utils.output_repos_table(repos)
     except Exception as error:
-        _log_command_failure("Repository list command failed", error)
+        logger.exception("Repository list command failed", error=str(error))
         print_error_and_exit(str(error), error=error)
 
 
@@ -148,7 +143,7 @@ def repo_info(
         console.print(f"Repository: [bold cyan]{repo_info.name}[/]")
         console.print(f"Path: {repo_info.path}")
     except Exception as error:
-        _log_command_failure("Repository info command failed", error, repo_name=name, repo_path=path, raw=raw)
+        logger.exception("Repository info command failed", error=str(error), repo_name=name, repo_path=path, raw=raw)
         print_error_and_exit(str(error), error=error)
 
 
@@ -176,7 +171,7 @@ def repo_delete(
         delete_from_s3=delete_from_s3,
     )
     if not dry_run and not confirm_action("Are you sure you want to delete this repository?"):
-        logger.warning("Repository delete command aborted by user", repo_name=name, repo_path=path)
+        logger.info("Repository delete command aborted by user", repo_name=name, repo_path=path)
         console.print("Aborted.")
         return
 
@@ -200,9 +195,9 @@ def repo_delete(
         else:
             console.print("[bold green]Repository deleted successfully[/]")
     except Exception as error:
-        _log_command_failure(
+        logger.exception(
             "Repository delete command failed",
-            error,
+            error=str(error),
             repo_name=name,
             repo_path=path,
             dry_run=dry_run,

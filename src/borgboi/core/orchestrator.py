@@ -167,7 +167,7 @@ class Orchestrator:
 
         if resolved_passphrase is None:
             resolved_passphrase = generate_secure_passphrase()
-            logger.warning("Generated passphrase for repo", repo_name=name)
+            logger.info("Generated passphrase for repo", repo_name=name)
             self.output.on_log("warning", f"Generated passphrase for repo '{name}'")
             self.output.on_log("info", f"Passphrase: {resolved_passphrase}")
             self.output.on_log("warning", "SAVE THIS PASSPHRASE SECURELY!")
@@ -409,7 +409,7 @@ class Orchestrator:
             self.storage.delete(repo.name)
             self._delete_excludes_file(repo.name)
         else:
-            logger.warning("Dry run mode: skipping storage deletion", repo_name=repo.name)
+            logger.debug("Dry run mode: skipping storage deletion", repo_name=repo.name)
 
         if delete_from_s3:
             self.delete_from_s3(repo, dry_run=dry_run)
@@ -653,7 +653,7 @@ class Orchestrator:
                 archive_name=archive_name,
             )
         else:
-            logger.warning(
+            logger.debug(
                 "Dry run mode: skipping compact and metadata refresh",
                 repo_name=resolved_repo.name,
                 archive_name=archive_name,
@@ -887,7 +887,7 @@ class Orchestrator:
         excludes_path = self._get_excludes_path(resolved_repo.name)
 
         if excludes_path.exists():
-            logger.warning(
+            logger.info(
                 "Exclusion list already created", repo_name=resolved_repo.name, excludes_path=str(excludes_path)
             )
             raise ValidationError("Exclude list already created", field="excludes")
@@ -944,7 +944,7 @@ class Orchestrator:
         excludes_path = self._get_excludes_path(resolved_repo.name)
 
         if not excludes_path.exists():
-            logger.warning("Cannot add exclusion, list not created", repo_name=resolved_repo.name)
+            logger.info("Cannot add exclusion, list not created", repo_name=resolved_repo.name)
             raise ValidationError("Exclude list not created", field="excludes")
 
         logger.debug("Adding exclusion pattern", repo_name=resolved_repo.name, pattern=pattern)
@@ -965,7 +965,7 @@ class Orchestrator:
         excludes_path = self._get_excludes_path(resolved_repo.name)
 
         if not excludes_path.exists():
-            logger.warning("Cannot remove exclusion, list not created", repo_name=resolved_repo.name)
+            logger.info("Cannot remove exclusion, list not created", repo_name=resolved_repo.name)
             raise ValidationError("Exclude list not created", field="excludes")
 
         with excludes_path.open("r") as f:
@@ -1168,7 +1168,7 @@ class Orchestrator:
         """
         excludes_path = self._resolve_excludes_path_for_read(repo_name)
         if excludes_path is None:
-            logger.warning(
+            logger.info(
                 "Exclude list must be created before performing a backup",
                 repo_name=repo_name,
             )
@@ -1227,7 +1227,7 @@ class Orchestrator:
             )
             return repo
 
-        logger.warning("Auto-migrating passphrase for repo to file storage", repo_name=repo.name)
+        logger.info("Auto-migrating passphrase for repo to file storage", repo_name=repo.name)
         self.output.on_log("warning", f"Auto-migrating passphrase for repo '{repo.name}' to file storage...")
 
         try:

@@ -10,11 +10,6 @@ from borgboi.rich_utils import console
 
 logger = get_logger(__name__)
 
-
-def _log_command_failure(event: str, error: Exception, **context: object) -> None:
-    logger.exception(event, error=str(error), **context)
-
-
 exclusions = App(
     name="exclusions",
     help="Exclusions management commands.\n\nCreate, inspect, add, and remove exclusion patterns.",
@@ -41,7 +36,7 @@ def exclusions_create(
         )
         console.print(f"Exclusions file created at [bold cyan]{excludes_path}[/]")
     except Exception as error:
-        _log_command_failure("Exclusions create command failed", error, repo_path=path, source_file=source)
+        logger.exception("Exclusions create command failed", error=str(error), repo_path=path, source_file=source)
         print_error_and_exit(str(error), error=error)
 
 
@@ -78,7 +73,7 @@ def exclusions_show(
         logger.warning("No exclusions file found for repository", repo_name=repo_info.name)
         console.print(f"[bold yellow]No exclusions file found for repository {name}[/]")
     except Exception as error:
-        _log_command_failure("Exclusions show command failed", error, repo_name=name)
+        logger.exception("Exclusions show command failed", error=str(error), repo_name=name)
         print_error_and_exit(str(error), error=error)
 
 
@@ -108,7 +103,7 @@ def exclusions_add(
         )
         rich_utils.render_excludes_file(excludes_path.as_posix(), lines_to_highlight={line_count})
     except Exception as error:
-        _log_command_failure("Exclusions add command failed", error, repo_name=name, pattern=pattern)
+        logger.exception("Exclusions add command failed", error=str(error), repo_name=name, pattern=pattern)
         print_error_and_exit(str(error), error=error)
 
 
@@ -136,5 +131,5 @@ def exclusions_remove(
         )
         rich_utils.render_excludes_file(excludes_path.as_posix())
     except Exception as error:
-        _log_command_failure("Exclusions remove command failed", error, repo_name=name, line_number=line)
+        logger.exception("Exclusions remove command failed", error=str(error), repo_name=name, line_number=line)
         print_error_and_exit(str(error), error=error)

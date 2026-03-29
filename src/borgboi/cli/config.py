@@ -228,7 +228,7 @@ def config_show(
         output_config_dict = config_dict
 
     if output_format == "tree" or (pretty_print and env_overrides and output_format != "json"):
-        logger.info(
+        logger.debug(
             "Rendering configuration as tree",
             config_path=str(config_path),
             env_override_count=len(env_overrides),
@@ -237,7 +237,7 @@ def config_show(
         return
 
     if pretty_print:
-        logger.info(
+        logger.debug(
             "Rendering configuration with syntax highlighting",
             config_path=str(config_path),
             output_format=output_format,
@@ -245,5 +245,5 @@ def config_show(
         _render_syntax_panel(output_config_dict, output_format)
         return
 
-    logger.info("Rendering configuration as plain text", config_path=str(config_path), output_format=output_format)
+    logger.debug("Rendering configuration as plain text", config_path=str(config_path), output_format=output_format)
     _render_plain_text(output_config_dict, output_format, env_overrides)
