@@ -127,7 +127,8 @@ def test_cli_logging_redacts_passphrase_tokens(monkeypatch: pytest.MonkeyPatch, 
 
     assert exit_code == 0
 
-    log_file = config_module.resolve_home_dir() / ".borgboi" / "logs" / "borgboi.log"
+    logs_dir = config_module.resolve_home_dir() / ".borgboi" / "logs"
+    log_file = next(logs_dir.glob("borgboi_*.log"))
     log_entries = [json.loads(line) for line in log_file.read_text().splitlines() if line.strip()]
     command_entry = next(entry for entry in log_entries if entry["event"] == "Running CLI command")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging as stdlib_logging
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, cast
@@ -11,7 +12,8 @@ import structlog
 
 from borgboi.config import Config
 
-LOG_FILE_NAME = "borgboi.log"
+LOG_FILE_BASENAME = "borgboi"
+_LOG_FILE_GLOB = f"{LOG_FILE_BASENAME}_*.log"
 _HANDLER_NAME = "borgboi-local-file"
 _LOGGER_NAMESPACE = "borgboi"
 _LOG_LEVELS = {
@@ -21,6 +23,10 @@ _LOG_LEVELS = {
     "error": stdlib_logging.ERROR,
     "critical": stdlib_logging.CRITICAL,
 }
+
+
+class _LoggingState:
+    active_log_file: Path | None = None
 
 
 def _build_shared_processors() -> list[Any]:
@@ -45,6 +51,37 @@ def _configure_structlog() -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
+
+
+def _build_log_file_name(timestamp: datetime | None = None) -> str:
+    occurred_at = timestamp or datetime.now().astimezone()
+    formatted_timestamp = occurred_at.strftime("%Y-%m-%dT%H_%M_%S")
+    return f"{LOG_FILE_BASENAME}_{formatted_timestamp}.log"
+
+
+def _get_log_file(config: Config) -> Path:
+    if _LoggingState.active_log_file is not None and _LoggingState.active_log_file.parent == config.logs_dir:
+        return _LoggingState.active_log_file
+
+    _LoggingState.active_log_file = config.logs_dir / _build_log_file_name()
+    return _LoggingState.active_log_file
+
+
+def _prune_session_log_files(logs_dir: Path, active_log_file: Path, backup_count: int) -> None:
+    retained_session_count = backup_count + 1
+    session_log_files = sorted(logs_dir.glob(_LOG_FILE_GLOB))
+
+    if active_log_file not in session_log_files:
+        session_log_files.append(active_log_file)
+        session_log_files.sort()
+
+    if len(session_log_files) <= retained_session_count:
+        return
+
+    for expired_log_file in session_log_files[:-retained_session_count]:
+        expired_log_file.unlink(missing_ok=True)
+        for rotated_file in logs_dir.glob(f"{expired_log_file.name}.*"):
+            rotated_file.unlink(missing_ok=True)
 
 
 def _build_file_handler(log_file: Path, level: int, max_bytes: int, backup_count: int) -> stdlib_logging.Handler:
@@ -94,13 +131,15 @@ def configure_logging(config: Config) -> Path | None:
     _configure_structlog()
 
     if not config.logging.enabled:
+        _LoggingState.active_log_file = None
         namespace_logger.setLevel(stdlib_logging.NOTSET)
         namespace_logger.propagate = True
         return None
 
     level = _get_log_level(config)
-    log_file = config.logs_dir / LOG_FILE_NAME
+    log_file = _get_log_file(config)
     log_file.parent.mkdir(parents=True, exist_ok=True)
+    _prune_session_log_files(config.logs_dir, log_file, config.logging.backup_count)
 
     namespace_logger.setLevel(level)
     namespace_logger.addHandler(

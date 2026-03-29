@@ -120,10 +120,10 @@ sequenceDiagram
 
 | Key | Type | Default | Allowed Values | Notes |
 | --- | --- | --- | --- | --- |
-| `logging.enabled` | boolean | `false` | `true` or `false` | When `true`, writes local JSON logs to `~/.borgboi/logs/borgboi.log`. |
+| `logging.enabled` | boolean | `false` | `true` or `false` | When `true`, writes local JSON logs to timestamped files like `~/.borgboi/logs/borgboi_2026-03-28T19_13_27.log`. |
 | `logging.level` | string | `info` | `debug`, `info`, `warning`, `error`, `critical` | Minimum file log level when top-level `debug` is `false`; values are case-insensitive. |
-| `logging.max_bytes` | integer | `10485760` | Integer `>= 0` | Maximum size in bytes of `borgboi.log` before rollover; `0` disables size-based rotation. |
-| `logging.backup_count` | integer | `5` | Integer `>= 0` | Number of rotated log files to retain. |
+| `logging.max_bytes` | integer | `10485760` | Integer `>= 0` | Maximum size in bytes of the active timestamped log file before rollover; `0` disables size-based rotation. |
+| `logging.backup_count` | integer | `5` | Integer `>= 0` | Number of historical timestamped log sessions to retain alongside the active file; size-based rollovers for pruned sessions are removed with them. |
 
 !!! note "Debug mode and logging"
     If top-level `debug` is enabled, BorgBoi promotes file logging to `DEBUG` regardless of `logging.level`.
