@@ -204,3 +204,35 @@ def test_repo_delete_routes_errors_to_print_error_and_exit(monkeypatch: pytest.M
 
     with pytest.raises(AssertionError, match="cannot delete"):
         repo_module.repo_delete(name="repo-one", ctx=cast(Any, ctx))
+
+
+def test_repo_set_quota_calls_orchestrator_and_prints_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    orchestrator = SimpleNamespace(update_repo_storage_quota=Mock(return_value="200G"))
+    ctx = SimpleNamespace(orchestrator=orchestrator)
+    console_print = Mock()
+
+    monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
+
+    repo_module.repo_set_quota(name="repo-one", quota="200G", ctx=cast(Any, ctx))
+
+    orchestrator.update_repo_storage_quota.assert_called_once_with(
+        "200G",
+        name="repo-one",
+        path=None,
+        passphrase=None,
+    )
+    console_print.assert_called_once_with("[bold green]Repository storage quota updated to 200G[/]")
+
+
+def test_repo_set_quota_routes_errors_to_print_error_and_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    ctx = SimpleNamespace(
+        orchestrator=SimpleNamespace(update_repo_storage_quota=Mock(side_effect=RuntimeError("bad quota")))
+    )
+
+    def fail(message: str, *, error: Exception | None = None) -> None:
+        raise AssertionError((message, error))
+
+    monkeypatch.setattr(repo_module, "print_error_and_exit", fail)
+
+    with pytest.raises(AssertionError, match="bad quota"):
+        repo_module.repo_set_quota(name="repo-one", quota="200G", ctx=cast(Any, ctx))

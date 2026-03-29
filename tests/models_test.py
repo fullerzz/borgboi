@@ -1,8 +1,10 @@
+from pathlib import Path
 from platform import system
 
 import pytest
+from pydantic import ValidationError
 
-from borgboi.core.models import Repository
+from borgboi.core.models import Repository, RepoStorageQuotaUpdateRequest
 from borgboi.models import BorgBoiRepo
 
 
@@ -157,4 +159,41 @@ def test_repository_os_platform_rejects_invalid(invalid_platform: str) -> None:
             name="test-repo",
             hostname="test-host",
             os_platform=invalid_platform,
+        )
+
+
+def test_repo_storage_quota_update_request_normalizes_quota() -> None:
+    request = RepoStorageQuotaUpdateRequest(
+        quota=" 1.5t ",
+        repo_path=Path("/repo"),
+        repo_size_bytes=1024,
+        disk_free_bytes=5 * 1024**4,
+        reserved_free_space="2g",
+    )
+
+    assert request.quota == "1.5T"
+    assert request.reserved_free_space == "2G"
+
+
+def test_repo_storage_quota_update_request_rejects_quota_smaller_than_repo_size() -> None:
+    with pytest.raises(ValidationError, match="Storage quota cannot be smaller than the current repository size"):
+        RepoStorageQuotaUpdateRequest(
+            quota="1K",
+            repo_path=Path("/repo"),
+            repo_size_bytes=2048,
+            disk_free_bytes=10 * 1024**3,
+        )
+
+
+def test_repo_storage_quota_update_request_rejects_quota_larger_than_available_capacity() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="Storage quota cannot exceed the available disk headroom after reserved free space plus the current repository size",
+    ):
+        RepoStorageQuotaUpdateRequest(
+            quota="9G",
+            repo_path=Path("/repo"),
+            repo_size_bytes=1024,
+            disk_free_bytes=10 * 1024**3,
+            reserved_free_space="2G",
         )

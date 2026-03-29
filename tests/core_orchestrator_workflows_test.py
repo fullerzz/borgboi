@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import socket
 from pathlib import Path
 from typing import Any, cast, override
@@ -540,6 +541,187 @@ def test_delete_repo_rejects_remote_repository(output_handler: CollectingOutputH
 
     with pytest.raises(ValidationError, match="must be local"):
         orchestrator.delete_repo(name=remote_repo.name)
+
+
+def test_update_repo_storage_quota_updates_borg_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "segment.1").write_bytes(b"a" * 1024)
+    repo = _build_repo()
+    repo.path = repo_path.as_posix()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    resolved_passphrase = "resolved-passphrase"  # noqa: S105
+
+    monkeypatch.setattr(
+        "borgboi.core.orchestrator.shutil.disk_usage",
+        lambda path: shutil._ntuple_diskusage(10 * 1024**3, 5 * 1024**3, 5 * 1024**3),
+    )
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: resolved_passphrase)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    updated_quota = orchestrator.update_repo_storage_quota("2g", name=repo.name)
+
+    assert updated_quota == "2G"
+    borg_client.set_storage_quota.assert_called_once_with(
+        repo.path,
+        "2G",
+        passphrase=resolved_passphrase,
+    )
+
+
+def test_update_repo_storage_quota_accepts_decimal_sizes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    repo = _build_repo()
+    repo.path = repo_path.as_posix()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    resolved_passphrase = "resolved-passphrase"  # noqa: S105
+
+    monkeypatch.setattr(
+        "borgboi.core.orchestrator.shutil.disk_usage",
+        lambda path: shutil._ntuple_diskusage(4 * 1024**4, 1024**4, 3 * 1024**4),
+    )
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: resolved_passphrase)
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    updated_quota = orchestrator.update_repo_storage_quota("1.5t", name=repo.name)
+
+    assert updated_quota == "1.5T"
+    borg_client.set_storage_quota.assert_called_once_with(
+        repo.path,
+        "1.5T",
+        passphrase=resolved_passphrase,
+    )
+
+
+def test_update_repo_storage_quota_rejects_value_larger_than_disk(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    repo = _build_repo()
+    repo.path = repo_path.as_posix()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+    (repo_path / "segment.1").write_bytes(b"a" * 1024)
+
+    monkeypatch.setattr(
+        "borgboi.core.orchestrator.shutil.disk_usage",
+        lambda path: shutil._ntuple_diskusage(10 * 1024**3, 1024**3, 1024**3),
+    )
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(ValidationError, match="cannot exceed the available disk headroom after reserved free space"):
+        orchestrator.update_repo_storage_quota("2G", name=repo.name)
+
+
+def test_update_repo_storage_quota_accounts_for_reserved_free_space(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    repo = _build_repo()
+    repo.path = repo_path.as_posix()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    config = Config(offline=True)
+    config.borg.additional_free_space = "2G"
+
+    monkeypatch.setattr(
+        "borgboi.core.orchestrator.shutil.disk_usage",
+        lambda path: shutil._ntuple_diskusage(10 * 1024**3, 0, 10 * 1024**3),
+    )
+    monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: None)
+
+    orchestrator = Orchestrator(
+        config=config,
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+    monkeypatch.setattr(orchestrator, "_should_skip_additional_free_space", lambda path: False)
+
+    with pytest.raises(ValidationError, match="cannot exceed the available disk headroom after reserved free space"):
+        orchestrator.update_repo_storage_quota("9G", name=repo.name)
+
+
+def test_update_repo_storage_quota_rejects_value_smaller_than_repo_size(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "segment.1").write_bytes(b"a" * 2048)
+    repo = _build_repo()
+    repo.path = repo_path.as_posix()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+
+    monkeypatch.setattr(
+        "borgboi.core.orchestrator.shutil.disk_usage", lambda path: shutil._ntuple_diskusage(10 * 1024**3, 0, 0)
+    )
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(ValidationError, match="cannot be smaller than the current repository size"):
+        orchestrator.update_repo_storage_quota("1K", name=repo.name)
+
+
+def test_update_repo_storage_quota_rejects_remote_repository(output_handler: CollectingOutputHandler) -> None:
+    remote_repo = _build_repo(hostname="remote-host")
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = remote_repo
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    with pytest.raises(ValidationError, match="must be local"):
+        orchestrator.update_repo_storage_quota("2G", name=remote_repo.name)
 
 
 def test_delete_repo_removes_storage_and_excludes_file(

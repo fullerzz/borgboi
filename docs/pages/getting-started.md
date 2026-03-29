@@ -232,6 +232,16 @@ Get detailed information about a repository:
 bb repo info --name my-docs-backup
 ```
 
+## Update Repository Quota
+
+Adjust the repository's configured storage cap when you need to raise or lower it:
+
+```sh
+bb repo set-quota --name my-docs-backup --quota 200G
+```
+
+The new quota must be at least as large as the repo's current on-disk size and no larger than the remaining disk headroom after Borg's reserved free space plus the repo's current size. Borg-style decimal quotas like `1.5T` are supported.
+
 ## List Archives
 
 View all archives in a repository:

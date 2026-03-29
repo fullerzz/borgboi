@@ -73,3 +73,34 @@ def test_streaming_command_splits_on_all_line_endings(
     cmd = [sys.executable, "-c", script]
     lines = list(client._run_streaming_command(cmd))
     assert lines == expected
+
+
+def test_set_storage_quota_uses_borg_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    captured: dict[str, object] = {}
+    test_passphrase = "secret"  # noqa: S105
+
+    def fake_run_command(
+        cmd: list[str],
+        passphrase: str | None = None,
+        capture_output: bool = True,
+    ) -> object:
+        captured["cmd"] = cmd
+        captured["passphrase"] = passphrase
+        captured["capture_output"] = capture_output
+        return object()
+
+    monkeypatch.setattr(client, "_run_command", fake_run_command)
+
+    client.set_storage_quota("/repo", "200G", passphrase=test_passphrase)
+
+    assert captured["cmd"] == [
+        "borg",
+        "config",
+        "--log-json",
+        "--progress",
+        "/repo",
+        "storage_quota",
+        "200G",
+    ]
+    assert captured["passphrase"] == test_passphrase

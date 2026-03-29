@@ -268,10 +268,10 @@ class Validator:
 
         # Check storage quota format
         quota = config.borg.storage_quota
-        if not re.match(r"^\d+[KMGT]?$", quota, re.IGNORECASE):
+        if not re.match(r"^\d+(?:\.\d+)?[KMGT]?$", quota, re.IGNORECASE):
             _append_config_warning(
                 warnings,
-                f"Storage quota '{quota}' may be in an invalid format. Expected format: 100G, 500M, etc.",
+                f"Storage quota '{quota}' may be in an invalid format. Expected format: 100G, 500M, 1.5T, etc.",
                 category="storage_quota",
             )
 

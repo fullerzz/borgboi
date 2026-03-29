@@ -4,16 +4,26 @@ This module contains the primary data models used throughout BorgBoi,
 including Repository, RetentionPolicy, and operation options.
 """
 
+import re
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from functools import cached_property
 from pathlib import Path
 from platform import system
 from typing import Any
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 # Conversion factor for bytes to gigabytes (accounting for GiB vs GB)
 GIBIBYTES_IN_GIGABYTE = 0.93132257461548
+STORAGE_QUOTA_PATTERN = re.compile(r"^\d+(?:\.\d+)?[KMGT]?$")
+STORAGE_QUOTA_MULTIPLIERS = {
+    "": 1,
+    "K": 1024,
+    "M": 1024**2,
+    "G": 1024**3,
+    "T": 1024**4,
+}
 
 
 class RetentionPolicy(BaseModel):
@@ -290,6 +300,81 @@ class Repository(BaseModel):
     def has_passphrase_file(self) -> bool:
         """Check if the repository has a passphrase file configured."""
         return self.passphrase_file_path is not None and Path(self.passphrase_file_path).exists()
+
+
+class RepoStorageQuotaUpdateRequest(BaseModel):
+    """Validated inputs for updating a repository's storage quota."""
+
+    quota: str
+    repo_path: Path
+    repo_size_bytes: int = Field(ge=0)
+    disk_free_bytes: int = Field(ge=0)
+    reserved_free_space: str | None = None
+
+    @field_validator("quota", mode="before")
+    @classmethod
+    def normalize_quota(cls, value: Any) -> str:
+        return cls.normalize_storage_quota(value)
+
+    @field_validator("reserved_free_space", mode="before")
+    @classmethod
+    def normalize_reserved_free_space(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        return cls.normalize_storage_quota(value)
+
+    @classmethod
+    def normalize_storage_quota(cls, value: Any) -> str:
+        """Normalize a Borg size string and validate its format."""
+        if not isinstance(value, str):
+            raise ValueError("Storage quota must use Borg size format like 500M, 100G, or 1.5T")
+
+        normalized_quota = value.strip().upper()
+        if not normalized_quota:
+            raise ValueError("Storage quota cannot be empty")
+        if not STORAGE_QUOTA_PATTERN.fullmatch(normalized_quota):
+            raise ValueError("Storage quota must use Borg size format like 500M, 100G, or 1.5T")
+        return normalized_quota
+
+    @classmethod
+    def parse_storage_quota_bytes(cls, quota: Any) -> int:
+        """Convert a Borg-style storage quota string to bytes."""
+        normalized_quota = cls.normalize_storage_quota(quota)
+        unit = normalized_quota[-1] if normalized_quota[-1].isalpha() else ""
+        numeric_portion = normalized_quota[:-1] if unit else normalized_quota
+
+        try:
+            return int(Decimal(numeric_portion) * STORAGE_QUOTA_MULTIPLIERS[unit])
+        except (InvalidOperation, KeyError) as error:
+            raise ValueError("Storage quota must use Borg size format like 500M, 100G, or 1.5T") from error
+
+    @property
+    def quota_bytes(self) -> int:
+        """Requested quota in bytes."""
+        return self.parse_storage_quota_bytes(self.quota)
+
+    @property
+    def reserved_free_space_bytes(self) -> int:
+        """Reserved free space in bytes."""
+        if self.reserved_free_space is None:
+            return 0
+        return self.parse_storage_quota_bytes(self.reserved_free_space)
+
+    @property
+    def max_supported_quota_bytes(self) -> int:
+        """Largest quota supported by current disk headroom and repo size."""
+        available_growth_bytes = max(self.disk_free_bytes - self.reserved_free_space_bytes, 0)
+        return available_growth_bytes + self.repo_size_bytes
+
+    @model_validator(mode="after")
+    def validate_quota_bounds(self) -> "RepoStorageQuotaUpdateRequest":
+        if self.quota_bytes > self.max_supported_quota_bytes:
+            raise ValueError(
+                "Storage quota cannot exceed the available disk headroom after reserved free space plus the current repository size"
+            )
+        if self.quota_bytes < self.repo_size_bytes:
+            raise ValueError("Storage quota cannot be smaller than the current repository size")
+        return self
 
 
 # Type alias for backward compatibility
