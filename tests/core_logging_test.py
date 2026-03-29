@@ -10,6 +10,7 @@ import pytest
 
 import borgboi.config as config_module
 from borgboi.clients.borg_client import BorgClient
+from borgboi.clients.utils.borg_logs import LogMessage
 from borgboi.config import Config, LoggingConfig
 from borgboi.core.errors import RepositoryNotFoundError, ValidationError
 from borgboi.core.logging import configure_logging, get_logger
@@ -396,5 +397,162 @@ def test_sqlite_storage_logs_structured_save_events(tmp_path: Path) -> None:
         entry["event"] == "Repository saved to SQLite"
         and entry["logger"] == "borgboi.storage.sqlite"
         and entry["repo_name"] == "repo-one"
+        for entry in entries
+    )
+
+
+def test_offline_storage_and_trash_log_structured_events(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    from borgboi.clients import offline_storage
+    from borgboi.clients.utils import trash
+
+    metadata_dir = tmp_path / ".borgboi_metadata"
+    trash_dir = tmp_path / ".Trash"
+    repo = BorgBoiRepo(
+        path="/repos/test",
+        backup_target="/backup/source",
+        name="repo-one",
+        hostname="host-one",
+        os_platform="Darwin",
+        metadata=None,
+    )
+
+    monkeypatch.setattr(offline_storage, "METADATA_DIR", metadata_dir)
+    monkeypatch.setattr(trash, "TRASH_PATH", trash_dir)
+    trash.get_trash.cache_clear()
+
+    try:
+        offline_storage.store_borgboi_repo_metadata(repo)
+        assert offline_storage.get_repo(repo.name).path == repo.path
+        offline_storage.delete_repo_metadata(repo.name)
+    finally:
+        trash.get_trash.cache_clear()
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Storing offline repository metadata"
+        and entry["logger"] == "borgboi.clients.offline_storage"
+        and entry["repo_name"] == "repo-one"
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Retrieved repository from offline storage"
+        and entry["logger"] == "borgboi.clients.offline_storage"
+        and entry["repo_path"] == "/repos/test"
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Moving file to trash"
+        and entry["logger"] == "borgboi.clients.utils.trash"
+        and entry["file_path"] == str(metadata_dir / "repo-one.json")
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Deleted offline repository metadata"
+        and entry["logger"] == "borgboi.clients.offline_storage"
+        and entry["metadata_file"] == str(metadata_dir / "repo-one.json")
+        for entry in entries
+    )
+
+
+@pytest.mark.usefixtures("create_dynamodb_table", "create_dynamodb_archives_table")
+def test_dynamodb_client_logs_structured_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    from borgboi.clients.dynamodb import (
+        BorgBoiArchiveTableItem,
+        add_archive_to_table,
+        add_repo_to_table,
+        get_all_repos,
+        get_archive_by_id,
+    )
+
+    repo = BorgBoiRepo(
+        path="/repos/test",
+        backup_target="/backup/source",
+        name="repo-one",
+        hostname="host-one",
+        os_platform="Darwin",
+        metadata=None,
+    )
+    archive = BorgBoiArchiveTableItem(
+        repo_name="repo-one",
+        iso_timestamp="2025-01-10T12:00:00",
+        archive_id="archive-123",
+        archive_name="2025-01-10_12:00:00",
+        archive_path="/repos/test::2025-01-10_12:00:00",
+        hostname="host-one",
+        original_size=1000,
+        compressed_size=500,
+        deduped_size=250,
+    )
+
+    monkeypatch.setattr("borgboi.clients.dynamodb.borg.info", lambda repo_path, passphrase=None: None)
+
+    add_repo_to_table(repo)
+    add_archive_to_table(archive)
+
+    repos = get_all_repos()
+    archive_result = get_archive_by_id("archive-123")
+
+    assert [saved_repo.name for saved_repo in repos] == ["repo-one"]
+    assert archive_result is not None
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Adding repository to DynamoDB table"
+        and entry["logger"] == "borgboi.clients.dynamodb"
+        and entry["repo_name"] == "repo-one"
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Listed repositories from DynamoDB client"
+        and entry["logger"] == "borgboi.clients.dynamodb"
+        and entry["repo_count"] == 1
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Archive added to DynamoDB table"
+        and entry["logger"] == "borgboi.clients.dynamodb"
+        and entry["archive_name"] == "2025-01-10_12:00:00"
+        for entry in entries
+    )
+    assert any(
+        entry["event"] == "Retrieved archive from DynamoDB client by ID"
+        and entry["logger"] == "borgboi.clients.dynamodb"
+        and entry["archive_id"] == "archive-123"
+        for entry in entries
+    )
+
+
+def test_borg_log_parser_logs_shape_fallback() -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True), debug=True)
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    from borgboi.clients.utils.borg_logs import parse_borg_log_line
+
+    result = parse_borg_log_line(
+        '{"type": "unknown_event", "time": 1234567890.0, "levelname": "INFO", "name": "borg", "message": "Done"}'
+    )
+
+    assert isinstance(result, LogMessage)
+    assert result.message == "Done"
+
+    entries = _read_log_entries(log_file)
+
+    assert any(
+        entry["event"] == "Falling back to Borg log parsing by payload shape"
+        and entry["logger"] == "borgboi.clients.utils.borg_logs"
+        and entry["payload_type"] == "unknown_event"
         for entry in entries
     )
