@@ -1,3 +1,10 @@
+## v1.24.0 (2026-03-29)
+
+### 🚀 Features
+
+- Add per-repo storage quota updates (#227) ([c33b783](https://github.com/fullerzz/borgboi/commit/c33b783fca7ed03f7e9cb657dea7dbc17dc604b3))
+
+
 ## v1.23.0 (2026-03-29)
 
 ### 🚀 Features
