@@ -1144,6 +1144,8 @@ class Orchestrator:
     def _iter_directory_files(self, directory: Path) -> Iterator[Path]:
         """Yield each file under a directory recursively."""
         for child in directory.iterdir():
+            if child.is_symlink():
+                continue
             if child.is_dir():
                 yield from self._iter_directory_files(child)
                 continue

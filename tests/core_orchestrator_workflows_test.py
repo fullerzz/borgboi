@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import shutil
 import socket
+import types
 from pathlib import Path
 from typing import Any, cast, override
 from unittest.mock import Mock
@@ -560,7 +560,7 @@ def test_update_repo_storage_quota_updates_borg_config(
 
     monkeypatch.setattr(
         "borgboi.core.orchestrator.shutil.disk_usage",
-        lambda path: shutil._ntuple_diskusage(10 * 1024**3, 5 * 1024**3, 5 * 1024**3),
+        lambda path: types.SimpleNamespace(total=10 * 1024**3, used=5 * 1024**3, free=5 * 1024**3),
     )
     monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: resolved_passphrase)
 
@@ -597,7 +597,7 @@ def test_update_repo_storage_quota_accepts_decimal_sizes(
 
     monkeypatch.setattr(
         "borgboi.core.orchestrator.shutil.disk_usage",
-        lambda path: shutil._ntuple_diskusage(4 * 1024**4, 1024**4, 3 * 1024**4),
+        lambda path: types.SimpleNamespace(total=4 * 1024**4, used=1024**4, free=3 * 1024**4),
     )
     monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: resolved_passphrase)
 
@@ -633,7 +633,7 @@ def test_update_repo_storage_quota_rejects_value_larger_than_disk(
 
     monkeypatch.setattr(
         "borgboi.core.orchestrator.shutil.disk_usage",
-        lambda path: shutil._ntuple_diskusage(10 * 1024**3, 1024**3, 1024**3),
+        lambda path: types.SimpleNamespace(total=10 * 1024**3, used=1024**3, free=1024**3),
     )
 
     orchestrator = Orchestrator(
@@ -664,7 +664,7 @@ def test_update_repo_storage_quota_accounts_for_reserved_free_space(
 
     monkeypatch.setattr(
         "borgboi.core.orchestrator.shutil.disk_usage",
-        lambda path: shutil._ntuple_diskusage(10 * 1024**3, 0, 10 * 1024**3),
+        lambda path: types.SimpleNamespace(total=10 * 1024**3, used=0, free=10 * 1024**3),
     )
     monkeypatch.setattr("borgboi.core.orchestrator.resolve_passphrase", lambda **_: None)
 
@@ -694,7 +694,8 @@ def test_update_repo_storage_quota_rejects_value_smaller_than_repo_size(
     storage.get_by_name_or_path.return_value = repo
 
     monkeypatch.setattr(
-        "borgboi.core.orchestrator.shutil.disk_usage", lambda path: shutil._ntuple_diskusage(10 * 1024**3, 0, 0)
+        "borgboi.core.orchestrator.shutil.disk_usage",
+        lambda path: types.SimpleNamespace(total=10 * 1024**3, used=0, free=0),
     )
 
     orchestrator = Orchestrator(
@@ -706,6 +707,28 @@ def test_update_repo_storage_quota_rejects_value_smaller_than_repo_size(
 
     with pytest.raises(ValidationError, match="cannot be smaller than the current repository size"):
         orchestrator.update_repo_storage_quota("1K", name=repo.name)
+
+
+def test_get_directory_size_bytes_ignores_symlinked_directories(
+    output_handler: CollectingOutputHandler, tmp_path: Path
+) -> None:
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    (repo_path / "segment.1").write_bytes(b"a" * 2048)
+
+    try:
+        (repo_path / "loop").symlink_to(repo_path, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"symlinks are unavailable: {error}")
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, Mock()),
+        output_handler=output_handler,
+    )
+
+    assert orchestrator._get_directory_size_bytes(repo_path) == 2048
 
 
 def test_update_repo_storage_quota_rejects_remote_repository(output_handler: CollectingOutputHandler) -> None:
