@@ -14,7 +14,7 @@ from textual.widgets import DataTable, Footer, Header, Sparkline, Static
 
 from borgboi.lib.utils import format_last_backup, format_repo_size
 from borgboi.storage.db import get_db_path
-from borgboi.tui.config_panel import ConfigPanel
+from borgboi.tui.config_screen import ConfigScreen
 from borgboi.tui.daily_backup_progress import SQLiteDailyBackupProgressHistory
 from borgboi.tui.daily_backup_screen import DailyBackupScreen
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     from borgboi.models import BorgBoiRepo
 
 SPARKLINE_DAYS = 14
-SPARKLINE_TITLE = "Archive Creations Per Day (Last 2 Weeks)"
 
 
 class BorgBoiApp(App[None]):
@@ -39,7 +38,7 @@ class BorgBoiApp(App[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("q", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
-        Binding("c", "toggle_config", "Config"),
+        Binding("c", "show_config", "Config"),
         Binding("e", "show_default_excludes", "Excludes"),
         Binding("b", "daily_backup", "Backup"),
     ]
@@ -67,13 +66,11 @@ class BorgBoiApp(App[None]):
 
     @override
     def compose(self) -> ComposeResult:
-        """Build the main screen layout with header, repos table, config panel, and footer."""
+        """Build the main screen layout with header, repos table, sparkline, and footer."""
         yield Header()
-        with Horizontal(id="main-content"):
+        with Vertical(id="repos-section"):
             yield DataTable(id="repos-table")
-            yield ConfigPanel(config=self._config)
         with Vertical(id="sparkline-section"):
-            yield Static(SPARKLINE_TITLE, id="sparkline-title")
             yield Sparkline(
                 [0.0] * SPARKLINE_DAYS,
                 summary_function=max,
@@ -87,15 +84,22 @@ class BorgBoiApp(App[None]):
     def on_mount(self) -> None:
         """Initialise the repos table columns and trigger the initial data load."""
         self._main_screen = self.screen
+
+        # Mode indicator in header subtitle
+        if self._config is not None:
+            self.sub_title = "Offline" if self._config.offline else "Online"
+
+        # Titled borders for dashboard sections
+        repos_section = self.query_one("#repos-section", Vertical)
+        repos_section.border_title = "Repositories"
+
+        sparkline_section = self.query_one("#sparkline-section", Vertical)
+        sparkline_section.border_title = "Archive Activity"
+        sparkline_section.border_subtitle = "Last 2 Weeks"
+
+        # Simplified repo table
         self._repos_table = table = self.query_one("#repos-table", DataTable)
-        table.add_columns(
-            "Name",
-            "Local Path",
-            "Hostname",
-            "Last Archive",
-            "Size",
-            "Backup Target",
-        )
+        table.add_columns("Name", "Hostname", "Last Archive", "Size")
         table.loading = True
         self._load_repos()
         self._load_sparkline_data()
@@ -117,11 +121,9 @@ class BorgBoiApp(App[None]):
         for repo in repos:
             table.add_row(
                 repo.name,
-                repo.path,
                 repo.hostname,
                 format_last_backup(repo.last_backup),
                 format_repo_size(repo.metadata),
-                repo.backup_target,
             )
         table.loading = False
 
@@ -151,12 +153,11 @@ class BorgBoiApp(App[None]):
         for index, label in enumerate(labels):
             self.query_one(f"#sparkline-x-label-{index}", Static).update(label)
 
-    def action_toggle_config(self) -> None:
-        """Toggle visibility of the config panel sidebar."""
+    def action_show_config(self) -> None:
+        """Push the configuration viewer screen."""
         if self.screen is not self._main_screen:
             return
-        panel = self.query_one("#config-panel", ConfigPanel)
-        panel.display = not panel.display
+        _ = self.push_screen(ConfigScreen(config=self._config))
 
     def action_refresh(self) -> None:
         """Reload the repos table and sparkline from storage."""
@@ -170,6 +171,8 @@ class BorgBoiApp(App[None]):
 
     def action_show_default_excludes(self) -> None:
         """Push the excludes viewer screen."""
+        if self.screen is not self._main_screen:
+            return
         _ = self.push_screen(DefaultExcludesScreen(config=self._config, repos=self._repos))
 
     def action_daily_backup(self) -> None:

@@ -14,12 +14,16 @@ Footer {
     color: #cdd6f4;
 }
 
-#main-content {
+#repos-section {
     height: 2fr;
+    margin: 1 2 0 2;
+    border: round #313244;
+    border-title-color: #cba6f7;
+    border-title-style: bold;
 }
 
 DataTable {
-    width: 3fr;
+    width: 100%;
     background: #1e1e2e;
 }
 
@@ -84,16 +88,13 @@ CollapsibleTitle:hover {
 
 #sparkline-section {
     height: 1fr;
+    margin: 1 2;
+    border: round #313244;
+    border-title-color: #cba6f7;
+    border-title-style: bold;
+    border-subtitle-color: #6c7086;
     padding: 0 2;
     background: #1e1e2e;
-}
-
-#sparkline-title {
-    color: #cba6f7;
-    text-style: bold;
-    text-align: center;
-    padding: 1 0 0 0;
-    height: auto;
 }
 
 #archive-sparkline {
@@ -178,6 +179,20 @@ CollapsibleTitle:hover {
 
 #default-excludes-viewer.-editing {
     border: round #a6e3a1;
+}
+
+/* Config screen */
+
+#config-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#config-screen #config-panel {
+    width: 100%;
+    max-width: 100%;
+    border-left: none;
 }
 
 /* Daily Backup screen */
