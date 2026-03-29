@@ -141,6 +141,7 @@ select = [
     "PTH",
     "LOG",
     "G",
+    "FA",
 ]
 ignore = ["E501", "S101", "PLC0415"]
 
