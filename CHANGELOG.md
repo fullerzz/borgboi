@@ -1,3 +1,10 @@
+## v1.23.0 (2026-03-29)
+
+### 🚀 Features
+
+- Instrument BorgBoi with App Logging (#224) ([c022f50](https://github.com/fullerzz/borgboi/commit/c022f5021050d7c51baa4d03fd107484a3373ff8))
+
+
 ## v1.22.1 (2026-03-29)
 
 ### 🐛 Bug Fixes
