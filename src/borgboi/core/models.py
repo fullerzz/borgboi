@@ -348,12 +348,14 @@ class RepoStorageQuotaUpdateRequest(BaseModel):
         except (InvalidOperation, KeyError) as error:
             raise ValueError("Storage quota must use Borg size format like 500M, 100G, or 1.5T") from error
 
-    @property
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
     def quota_bytes(self) -> int:
         """Requested quota in bytes."""
         return self.parse_storage_quota_bytes(self.quota)
 
-    @property
+    @computed_field  # type: ignore[prop-decorator]
+    @cached_property
     def reserved_free_space_bytes(self) -> int:
         """Reserved free space in bytes."""
         if self.reserved_free_space is None:
