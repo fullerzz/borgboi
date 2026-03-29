@@ -9,6 +9,10 @@ from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Collapsible, Static
 
+from borgboi.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 if TYPE_CHECKING:
     from borgboi.config import Config
 

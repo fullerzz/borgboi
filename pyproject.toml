@@ -15,7 +15,9 @@ dependencies = [
     "pyyaml>=6.0",
     "rich>=13.9.4",
     "sqlalchemy>=2.0",
+    "structlog>=25.5.0",
     "textual[syntax]>=8.1.1",
+    "uuid-utils>=0.14.1",
 ]
 
 [project.scripts]
@@ -140,6 +142,7 @@ select = [
     "PTH",
     "LOG",
     "G",
+    "FA",
 ]
 ignore = ["E501", "S101", "PLC0415"]
 

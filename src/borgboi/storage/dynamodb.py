@@ -20,11 +20,13 @@ from borgboi.clients.dynamodb import (
 )
 from borgboi.config import Config, get_config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError
+from borgboi.core.logging import get_logger
 from borgboi.models import BorgBoiRepo
 from borgboi.rich_utils import console
 from borgboi.storage.base import RepositoryStorage
 
 boto_config = BotoConfig(retries={"mode": "standard"})
+logger = get_logger(__name__)
 
 
 class DynamoDBStorage(RepositoryStorage):
@@ -58,6 +60,7 @@ class DynamoDBStorage(RepositoryStorage):
     @override
     def get(self, name: str) -> BorgBoiRepo:
         """Retrieve a repository by name."""
+        logger.debug("Getting repository from DynamoDB", repo_name=name)
         try:
             response = self._table.query(
                 IndexName="name_gsi",
@@ -81,6 +84,7 @@ class DynamoDBStorage(RepositoryStorage):
     def get_by_path(self, path: str, hostname: str | None = None) -> BorgBoiRepo:
         """Retrieve a repository by its path."""
         host = hostname or socket.gethostname()
+        logger.debug("Getting repository from DynamoDB by path", repo_path=path, hostname=host)
         try:
             response = self._table.get_item(Key={"repo_path": path, "hostname": host})
             item = response.get("Item")
@@ -99,24 +103,35 @@ class DynamoDBStorage(RepositoryStorage):
     @override
     def list_all(self) -> list[BorgBoiRepo]:
         """List all repositories in storage."""
+        logger.debug("Listing all repositories from DynamoDB", table_name=self.table_name)
         try:
             response = self._table.scan()
             repos = []
+            skipped_count = 0
             for item in response.get("Items", []):
                 try:
                     table_item = BorgBoiRepoTableItem.model_validate(item)
                     repos.append(_convert_table_item_to_repo(table_item))
                 except ValidationError as e:
+                    skipped_count += 1
                     repo_identifier = str(item.get("common_name") or item.get("repo_path") or "unknown")
                     error_count = e.error_count()
                     console.print(
                         f"[dim]Skipping repo '{repo_identifier}': invalid data in DynamoDB ({error_count} validation error(s))[/dim]"
                     )
+                    logger.warning(
+                        "Skipping invalid repository data from DynamoDB",
+                        repo_identifier=repo_identifier,
+                        validation_errors=error_count,
+                    )
                     continue
                 except Exception:
+                    skipped_count += 1
                     repo_identifier = str(item.get("common_name") or item.get("repo_path") or "unknown")
                     console.print(f"[dim]Skipping repo '{repo_identifier}': failed to load from DynamoDB[/dim]")
+                    logger.warning("Failed to load repository from DynamoDB", repo_identifier=repo_identifier)
                     continue
+            logger.debug("Listed repositories from DynamoDB", repo_count=len(repos), skipped_count=skipped_count)
             return repos
         except Exception as e:
             raise StorageError(f"Failed to list repositories: {e}", operation="list_all", cause=e) from e
@@ -124,19 +139,23 @@ class DynamoDBStorage(RepositoryStorage):
     @override
     def save(self, repo: BorgBoiRepo) -> None:
         """Save or update repository metadata."""
+        logger.debug("Saving repository to DynamoDB", repo_name=repo.name, repo_path=repo.path)
         try:
             table_item = _convert_repo_to_table_item(repo)
             self._table.put_item(Item=table_item.model_dump(exclude_none=True))
+            logger.debug("Repository saved to DynamoDB", repo_name=repo.name)
         except Exception as e:
             raise StorageError(f"Failed to save repository {repo.name}: {e}", operation="save", cause=e) from e
 
     @override
     def delete(self, name: str) -> None:
         """Delete a repository by name."""
+        logger.debug("Deleting repository from DynamoDB", repo_name=name)
         try:
             # First get the repo to obtain path and hostname
             repo = self.get(name)
             self._table.delete_item(Key={"repo_path": repo.path, "hostname": repo.hostname})
+            logger.debug("Repository deleted from DynamoDB", repo_name=name)
         except RepositoryNotFoundError:
             raise
         except Exception as e:
@@ -151,7 +170,9 @@ class DynamoDBStorage(RepositoryStorage):
                 KeyConditionExpression=Key("repo_name").eq(name),
                 Limit=1,
             )
-            return len(response.get("Items", [])) > 0
+            exists_result = len(response.get("Items", [])) > 0
+            logger.debug("Checking repository existence in DynamoDB", repo_name=name, exists=exists_result)
+            return exists_result
         except Exception:
             return False
 
@@ -167,6 +188,7 @@ class DynamoDBStorage(RepositoryStorage):
             StorageError: If deletion fails
         """
         host = hostname or socket.gethostname()
+        logger.debug("Deleting repository from DynamoDB by path", repo_path=path, hostname=host)
         try:
             # Verify it exists first
             response = self._table.get_item(Key={"repo_path": path, "hostname": host})
@@ -174,6 +196,7 @@ class DynamoDBStorage(RepositoryStorage):
                 raise RepositoryNotFoundError(f"Repository at path '{path}' not found", path=path)
 
             self._table.delete_item(Key={"repo_path": path, "hostname": host})
+            logger.debug("Repository deleted from DynamoDB by path", repo_path=path, hostname=host)
         except RepositoryNotFoundError:
             raise
         except Exception as e:

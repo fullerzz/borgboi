@@ -15,7 +15,10 @@ from typing import override
 
 from borgboi.config import AWSConfig, get_config
 from borgboi.core.errors import StorageError
+from borgboi.core.logging import get_logger
 from borgboi.storage.models import S3RepoStats
+
+logger = get_logger(__name__)
 
 
 class S3ClientInterface(ABC):
@@ -209,7 +212,15 @@ class S3Client(S3ClientInterface):
             "--storage-class",
             self.storage_class,
         ]
+        logger.info(
+            "S3 sync to bucket",
+            repo_name=repo_name,
+            local_path=str(local_path),
+            bucket=self.bucket,
+            storage_class=self.storage_class,
+        )
         yield from self._run_streaming_command(cmd, f"Failed to sync {repo_name} to S3")
+        logger.info("S3 sync to bucket completed", repo_name=repo_name)
 
     @override
     def sync_from_bucket(self, local_path: str | Path, repo_name: str, dry_run: bool = False) -> Generator[str]:
@@ -227,7 +238,9 @@ class S3Client(S3ClientInterface):
         if dry_run:
             cmd.append("--dryrun")
         cmd.extend(["sync", self._s3_uri(repo_name), str(local_path)])
+        logger.info("S3 sync from bucket", repo_name=repo_name, local_path=str(local_path), dry_run=dry_run)
         yield from self._run_streaming_command(cmd, f"Failed to restore {repo_name} from S3")
+        logger.info("S3 sync from bucket completed", repo_name=repo_name, dry_run=dry_run)
 
     @override
     def delete_from_bucket(self, repo_name: str, dry_run: bool = False) -> Generator[str]:
@@ -243,7 +256,9 @@ class S3Client(S3ClientInterface):
         cmd = [self.aws_cli_path, "s3", "rm", self._s3_uri(repo_name), "--recursive"]
         if dry_run:
             cmd.append("--dryrun")
+        logger.info("S3 delete from bucket", repo_name=repo_name, dry_run=dry_run)
         yield from self._run_streaming_command(cmd, f"Failed to delete {repo_name} from S3")
+        logger.info("S3 delete from bucket completed", repo_name=repo_name, dry_run=dry_run)
 
     @override
     def get_stats(self, repo_name: str) -> S3RepoStats:
@@ -269,6 +284,7 @@ class S3Client(S3ClientInterface):
             "json",
         ]
 
+        logger.debug("Getting S3 stats", repo_name=repo_name, bucket=self.bucket)
         try:
             result = sp.run(cmd, capture_output=True, text=True, check=True)  # noqa: S603
             data = json.loads(result.stdout) if result.stdout.strip() else []
@@ -284,6 +300,9 @@ class S3Client(S3ClientInterface):
                     if last_modified is None or item_time > last_modified:
                         last_modified = item_time
 
+            logger.debug(
+                "Retrieved S3 stats", repo_name=repo_name, total_size_bytes=total_size, object_count=object_count
+            )
             return S3RepoStats(
                 total_size_bytes=total_size,
                 object_count=object_count,
@@ -291,8 +310,10 @@ class S3Client(S3ClientInterface):
                 cached_at=datetime.now(),
             )
         except sp.CalledProcessError as e:
+            logger.error("Failed to get S3 stats", repo_name=repo_name, error=e.stderr)
             raise StorageError(f"Failed to get stats for {repo_name}: {e.stderr}") from e
         except json.JSONDecodeError as e:
+            logger.error("Failed to parse S3 stats response", repo_name=repo_name, error=str(e))
             raise StorageError(f"Failed to parse S3 stats response: {e}") from e
 
     @override
@@ -315,7 +336,9 @@ class S3Client(S3ClientInterface):
 
         try:
             result = sp.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
-            return result.returncode == 0 and "Total Objects" in result.stdout
+            exists_result = result.returncode == 0 and "Total Objects" in result.stdout
+            logger.debug("S3 existence check", repo_name=repo_name, exists=exists_result)
+            return exists_result
         except Exception:
             return False
 
@@ -333,6 +356,7 @@ class S3Client(S3ClientInterface):
             f"s3://{self.bucket}/",
         ]
 
+        logger.debug("Listing S3 repos", bucket=self.bucket)
         try:
             result = sp.run(cmd, capture_output=True, text=True, check=True)  # noqa: S603
             repos = []
@@ -343,8 +367,10 @@ class S3Client(S3ClientInterface):
                     if parts and parts[0] == "PRE":
                         repo_name = parts[1].rstrip("/")
                         repos.append(repo_name)
+            logger.debug("Listed S3 repos", bucket=self.bucket, repo_count=len(repos))
             return repos
-        except sp.CalledProcessError:
+        except sp.CalledProcessError as e:
+            logger.error("Failed to list S3 repos", bucket=self.bucket, error=str(e))
             return []
 
 

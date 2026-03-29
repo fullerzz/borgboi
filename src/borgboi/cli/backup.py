@@ -7,12 +7,24 @@ from typing import TYPE_CHECKING, Annotated
 from cyclopts import App, Parameter
 
 from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
+from borgboi.core.logging import get_logger
 from borgboi.rich_utils import console
 
 if TYPE_CHECKING:
     from rich.table import Table
 
     from borgboi.clients.borg import ArchiveInfo
+
+
+logger = get_logger(__name__)
+
+
+def _repo_name(repo: object, fallback: str | None = None) -> str | None:
+    return getattr(repo, "name", fallback)
+
+
+def _repo_path(repo: object, fallback: str | None = None) -> str | None:
+    return getattr(repo, "path", fallback)
 
 
 def _build_archive_stats_tables(repo_path: str, archive_info: ArchiveInfo) -> tuple[Table, Table]:
@@ -85,31 +97,62 @@ def backup_run(
     """Create a new backup archive."""
     from borgboi.core.models import BackupOptions
 
+    logger.info("Running backup command", repo_name=name, repo_path=path, no_json=no_json)
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
 
         options: BackupOptions | None = None
         if no_json:
+            logger.debug(
+                "Disabling Borg JSON output for backup command",
+                repo_name=_repo_name(repo_info, name),
+                repo_path=_repo_path(repo_info, path),
+            )
             options = BackupOptions(json_output=False, compression=ctx.config.borg.compression)
 
         archive_name = ctx.orchestrator.backup(repo_info, passphrase=passphrase, options=options)
+        logger.info(
+            "Backup command completed",
+            repo_name=_repo_name(repo_info, name),
+            repo_path=_repo_path(repo_info, path),
+            archive_name=archive_name,
+        )
 
         if not no_json:
             try:
+                resolved_repo_path = _repo_path(repo_info, path) or ""
+                logger.debug(
+                    "Rendering archive statistics after backup",
+                    repo_name=_repo_name(repo_info, name),
+                    repo_path=resolved_repo_path,
+                    archive_name=archive_name,
+                )
                 resolved_passphrase = ctx.orchestrator.resolve_passphrase(repo_info, passphrase)
                 archive_info = ctx.orchestrator.borg.archive_info(
-                    repo_info.path,
+                    resolved_repo_path,
                     archive_name,
                     passphrase=resolved_passphrase,
                 )
-                _render_archive_stats_table(repo_info.path, archive_info)
+                _render_archive_stats_table(resolved_repo_path, archive_info)
+                logger.debug(
+                    "Rendered archive statistics after backup",
+                    repo_name=_repo_name(repo_info, name),
+                    archive_name=archive_name,
+                )
             except Exception as stats_error:
+                logger.warning(
+                    "Failed to render archive statistics after backup",
+                    repo_name=_repo_name(repo_info, name),
+                    archive_name=archive_name,
+                    error=str(stats_error),
+                )
                 console.print(
                     f"[bold yellow]Warning:[/] Backup succeeded, but stats could not be rendered: {stats_error}"
                 )
 
         console.print("[bold green]Backup completed successfully[/]")
     except Exception as error:
+        logger.exception("Backup command failed", error=str(error), repo_name=name, repo_path=path, no_json=no_json)
         print_error_and_exit(str(error), error=error)
 
 
@@ -123,16 +166,28 @@ def backup_daily(
     ctx: ContextArg,
 ) -> None:
     """Perform daily backup with prune and compact."""
+    logger.info("Running daily backup command", repo_name=name, repo_path=path, no_s3_sync=no_s3_sync)
     if not name and not path:
+        logger.info("Daily backup command missing repository selector")
         print_error_and_exit("Provide either --name or --path to select a repository.")
     if name and path:
+        logger.info("Daily backup command received conflicting repository selectors", repo_name=name, repo_path=path)
         print_error_and_exit("--name and --path are mutually exclusive; provide only one.")
 
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
         ctx.orchestrator.daily_backup(repo_info, passphrase=passphrase, sync_to_s3=not no_s3_sync)
+        logger.info(
+            "Daily backup command completed",
+            repo_name=_repo_name(repo_info, name),
+            repo_path=_repo_path(repo_info, path),
+            sync_to_s3=not no_s3_sync,
+        )
         console.print("[bold green]Daily backup completed successfully[/]")
     except Exception as error:
+        logger.exception(
+            "Daily backup command failed", error=str(error), repo_name=name, repo_path=path, no_s3_sync=no_s3_sync
+        )
         print_error_and_exit(str(error), error=error)
 
 
@@ -148,12 +203,19 @@ def backup_list(
     from borgboi.lib import utils
     from borgboi.lib.colors import COLOR_HEX
 
+    logger.info("Running archive list command", repo_name=name, repo_path=path)
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
         archives = ctx.orchestrator.list_archives(repo_info, passphrase=passphrase)
         archives.sort(key=lambda archive: archive.name, reverse=True)
+        logger.info(
+            "Archive list command completed",
+            repo_name=_repo_name(repo_info, name),
+            repo_path=_repo_path(repo_info, path),
+            archive_count=len(archives),
+        )
 
-        console.rule(f"[bold]Archives for {repo_info.name}[/]")
+        console.rule(f"[bold]Archives for {_repo_name(repo_info, name)}[/]")
         for archive in archives:
             console.print(
                 f"  [bold {COLOR_HEX.sky}]{archive.name}[/]  "
@@ -162,6 +224,7 @@ def backup_list(
             )
         console.rule()
     except Exception as error:
+        logger.exception("Archive list command failed", error=str(error), repo_name=name, repo_path=path)
         print_error_and_exit(str(error), error=error)
 
 
@@ -174,15 +237,24 @@ def backup_restore(
     ctx: ContextArg,
 ) -> None:
     """Restore an archive to the current directory."""
+    logger.info("Running archive restore command", repo_path=path, archive_name=archive)
     if not confirm_action("Extract archive contents to current directory?"):
+        logger.info("Archive restore command aborted by user", repo_path=path, archive_name=archive)
         console.print("Aborted.")
         return
 
     try:
         repo_info = ctx.orchestrator.get_repo(path=path)
         ctx.orchestrator.restore_archive(repo_info, archive, passphrase=passphrase)
+        logger.info(
+            "Archive restore command completed",
+            repo_name=_repo_name(repo_info),
+            repo_path=_repo_path(repo_info, path),
+            archive_name=archive,
+        )
         console.print("[bold green]Archive restored successfully[/]")
     except Exception as error:
+        logger.exception("Archive restore command failed", error=str(error), repo_path=path, archive_name=archive)
         print_error_and_exit(str(error), error=error)
 
 
@@ -198,18 +270,34 @@ def backup_delete(
     ctx: ContextArg,
 ) -> None:
     """Delete an archive from a repository."""
+    logger.info("Running archive delete command", repo_path=path, archive_name=archive, dry_run=dry_run)
     if not dry_run and not confirm_action(f"Are you sure you want to delete archive '{archive}'?"):
+        logger.info("Archive delete command aborted by user", repo_path=path, archive_name=archive)
         console.print("Aborted.")
         return
 
     try:
         repo_info = ctx.orchestrator.get_repo(path=path)
         ctx.orchestrator.delete_archive(repo_info, archive, dry_run=dry_run, passphrase=passphrase)
+        logger.info(
+            "Archive delete command completed",
+            repo_name=_repo_name(repo_info),
+            repo_path=_repo_path(repo_info, path),
+            archive_name=archive,
+            dry_run=dry_run,
+        )
         if dry_run:
             console.print("[bold yellow]Dry run completed - no changes made[/]")
         else:
             console.print("[bold green]Archive deleted successfully[/]")
     except Exception as error:
+        logger.exception(
+            "Archive delete command failed",
+            error=str(error),
+            repo_path=path,
+            archive_name=archive,
+            dry_run=dry_run,
+        )
         print_error_and_exit(str(error), error=error)
 
 
@@ -230,20 +318,56 @@ def backup_contents(
     from borgboi.lib import utils
     from borgboi.lib.colors import COLOR_HEX
 
+    logger.info(
+        "Running archive contents command",
+        repo_name=name,
+        repo_path=path,
+        archive_name=archive,
+        output=output,
+    )
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
         contents = borg.list_archive_contents(repo_info.path, archive, passphrase=passphrase)
+        logger.debug(
+            "Retrieved archive contents",
+            repo_name=_repo_name(repo_info, name),
+            repo_path=_repo_path(repo_info, path),
+            archive_name=archive,
+            item_count=len(contents),
+        )
 
         if output == "stdout":
             for item in contents:
                 console.print(f"  [{COLOR_HEX.sky}]{utils.shorten_archive_path(item.path)}[/]")
             console.rule()
+            logger.info(
+                "Archive contents command completed",
+                repo_name=_repo_name(repo_info, name),
+                repo_path=_repo_path(repo_info, path),
+                archive_name=archive,
+                output=output,
+            )
             return
 
         output_path = Path(output)
-        with output_path.open("w") as file_obj:
+        with output_path.open("w", encoding="utf-8") as file_obj:
             for item in contents:
                 file_obj.write(item.path + "\n")
+        logger.info(
+            "Archive contents written to file",
+            repo_name=_repo_name(repo_info, name),
+            repo_path=_repo_path(repo_info, path),
+            archive_name=archive,
+            output_path=str(output_path),
+        )
         console.print(f"Archive contents written to [bold cyan]{output_path}[/]")
     except Exception as error:
+        logger.exception(
+            "Archive contents command failed",
+            error=str(error),
+            repo_name=name,
+            repo_path=path,
+            archive_name=archive,
+            output=output,
+        )
         print_error_and_exit(str(error), error=error)

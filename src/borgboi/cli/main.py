@@ -14,7 +14,11 @@ from rich.traceback import install
 if TYPE_CHECKING:
     from borgboi.core.orchestrator import Orchestrator
 
+import uuid_utils as uuid
+from structlog.contextvars import bind_contextvars, clear_contextvars
+
 from borgboi.config import Config, get_config
+from borgboi.core.logging import configure_logging, get_logger
 from borgboi.rich_utils import console
 
 install(suppress=[cyclopts])
@@ -26,6 +30,7 @@ class BorgBoiContext:
     def __init__(self, offline: bool = False, debug: bool = False) -> None:
         self.offline = offline
         self.debug = debug
+        self.trace_id = uuid.uuid7().hex
         self._orchestrator: Orchestrator | None = None
         self._config: Config | None = None
 
@@ -52,6 +57,32 @@ class BorgBoiContext:
 
 ContextArg = Annotated[BorgBoiContext, Parameter(parse=False)]
 MetaTokens = Annotated[str, Parameter(show=False, allow_leading_hyphen=True)]  # pyright: ignore[reportCallIssue]
+_REDACTED = "[REDACTED]"
+_SENSITIVE_FLAGS = {"--passphrase"}
+
+
+def _redact_sensitive_tokens(tokens: Iterable[str]) -> list[str]:
+    redacted_tokens: list[str] = []
+    redact_next = False
+
+    for token in tokens:
+        if redact_next:
+            redacted_tokens.append(_REDACTED)
+            redact_next = False
+            continue
+
+        option, separator, _value = token.partition("=")
+        if option in _SENSITIVE_FLAGS:
+            if separator:
+                redacted_tokens.append(f"{option}={_REDACTED}")
+            else:
+                redacted_tokens.append(token)
+                redact_next = True
+            continue
+
+        redacted_tokens.append(token)
+
+    return redacted_tokens
 
 
 def print_error_and_exit(message: str, *, error: Exception | None = None) -> NoReturn:
@@ -89,14 +120,41 @@ def _launcher(
     ] = False,
 ) -> Any:
     ctx = BorgBoiContext(offline=offline, debug=debug)
-    command, bound, ignored = app.parse_args(tokens)
-    additional_kwargs: dict[str, Any] = {}
+    clear_contextvars()
+    bind_contextvars(trace_id=ctx.trace_id)
+    config = ctx.config
+    logging_enabled = configure_logging(config) is not None
+    logger = get_logger(__name__) if logging_enabled else None
+    safe_tokens = _redact_sensitive_tokens(tokens)
 
-    for parameter_name, annotation in ignored.items():
-        if annotation is BorgBoiContext:
-            additional_kwargs[parameter_name] = ctx
+    try:
+        command, bound, ignored = app.parse_args(tokens)
+        additional_kwargs: dict[str, Any] = {}
 
-    return command(*bound.args, **bound.kwargs, **additional_kwargs)
+        for parameter_name, annotation in ignored.items():
+            if annotation is BorgBoiContext:
+                additional_kwargs[parameter_name] = ctx
+
+        command_name = getattr(command, "__name__", command.__class__.__name__)
+        if logger is not None:
+            logger.info(
+                "Running CLI command",
+                command=command_name,
+                tokens=safe_tokens,
+                offline=config.offline,
+                debug=config.debug,
+            )
+
+        return command(*bound.args, **bound.kwargs, **additional_kwargs)
+    except SystemExit:
+        raise
+    except Exception:
+        if logger is not None:
+            logger.exception("CLI command failed", tokens=safe_tokens)
+        raise
+    finally:
+        if logging_enabled:
+            console.print(f"Logs for this execution have trace_id {ctx.trace_id}")
 
 
 @app.command(name="version")

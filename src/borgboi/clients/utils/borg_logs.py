@@ -4,6 +4,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
+from borgboi.core.logging import get_logger
+
 
 class ArchiveProgress(BaseModel):
     type: Literal["archive_progress"] = "archive_progress"
@@ -61,6 +63,7 @@ _JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, Any])
 _TYPED_EVENT_ADAPTER: TypeAdapter[ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus] = (
     TypeAdapter(BorgLogEvent)
 )
+logger = get_logger(__name__)
 
 
 def _is_unknown_union_tag_error(exc: ValidationError) -> bool:
@@ -93,15 +96,31 @@ def parse_borg_log_line(log_line: str) -> BorgLogEvent:
     """Parse a Borg JSON log line into a strongly typed event model."""
     payload = _JSON_OBJECT_ADAPTER.validate_json(log_line)
     if "type" in payload:
+        payload_type = str(payload.get("type"))
         _normalize_payload_type(payload)
         try:
             return _TYPED_EVENT_ADAPTER.validate_python(payload)
         except ValidationError as exc:
             if _is_unknown_union_tag_error(exc):
                 payload_without_type = {key: value for key, value in payload.items() if key != "type"}
+                logger.debug(
+                    "Falling back to Borg log parsing by payload shape",
+                    payload_type=payload_type,
+                    payload_keys=sorted(payload_without_type),
+                )
                 return _parse_by_shape(payload_without_type)
+            logger.error(
+                "Failed to parse Borg log payload",
+                payload_type=payload_type,
+                payload_keys=sorted(payload),
+                error=str(exc),
+            )
             raise
-    return _parse_by_shape(payload)
+    try:
+        return _parse_by_shape(payload)
+    except ValidationError as exc:
+        logger.error("Failed to parse Borg log payload without type", payload_keys=sorted(payload), error=str(exc))
+        raise
 
 
 def parse_borg_log_stream(log_stream: Iterable[str]) -> Generator[BorgLogEvent]:

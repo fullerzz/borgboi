@@ -5,10 +5,10 @@ import shutil
 from functools import lru_cache
 from pathlib import Path
 from platform import system
-from typing import Any, override
+from typing import Any, Literal, override
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 DEFAULT_DYNAMODB_REPOS_TABLE = "bb-repos"
@@ -61,6 +61,23 @@ class UIConfig(BaseModel):
     table_style: str = "rounded"
 
 
+class LoggingConfig(BaseModel):
+    """Application logging configuration."""
+
+    enabled: bool = False
+    level: Literal["debug", "info", "warning", "error", "critical"] = "info"
+    max_bytes: int = Field(default=10 * 1024 * 1024, ge=0)
+    backup_count: int = Field(default=5, ge=0)
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def normalize_level(cls, value: Any) -> Any:
+        """Accept case-insensitive logging levels from YAML or environment variables."""
+        if isinstance(value, str):
+            return value.lower()
+        return value
+
+
 class Config(BaseSettings):
     """Main configuration container."""
 
@@ -73,6 +90,7 @@ class Config(BaseSettings):
     aws: AWSConfig = Field(default_factory=AWSConfig)
     borg: BorgConfig = Field(default_factory=BorgConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
     offline: bool = False
     debug: bool = False
 
@@ -104,6 +122,11 @@ class Config(BaseSettings):
     def passphrases_dir(self) -> Path:
         """Get the passphrases directory path."""
         return self.borgboi_dir / "passphrases"
+
+    @property
+    def logs_dir(self) -> Path:
+        """Get the local application logs directory path."""
+        return self.borgboi_dir / "logs"
 
     @property
     def excludes_filename(self) -> str:
@@ -325,6 +348,11 @@ CONFIG_ENV_VAR_MAP: dict[str, str] = {
     "ui.show_progress": "BORGBOI_UI__SHOW_PROGRESS",
     "ui.color_output": "BORGBOI_UI__COLOR_OUTPUT",
     "ui.table_style": "BORGBOI_UI__TABLE_STYLE",
+    # Logging
+    "logging.enabled": "BORGBOI_LOGGING__ENABLED",
+    "logging.level": "BORGBOI_LOGGING__LEVEL",
+    "logging.max_bytes": "BORGBOI_LOGGING__MAX_BYTES",
+    "logging.backup_count": "BORGBOI_LOGGING__BACKUP_COUNT",
 }
 
 

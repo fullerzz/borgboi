@@ -13,6 +13,10 @@ from textual.containers import Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, Header, Link, Static, Tab, Tabs, TextArea
 
+from borgboi.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 if TYPE_CHECKING:
     from borgboi.config import Config
     from borgboi.models import BorgBoiRepo
@@ -35,7 +39,13 @@ class ExcludesDocument:
 
 def _read_excludes_body(path: Path) -> str:
     """Read excludes file content for display."""
-    return path.read_text()
+    try:
+        content = path.read_text()
+        logger.debug("Read excludes file", path=str(path), content_length=len(content))
+        return content
+    except Exception as exc:
+        logger.warning("Failed to read excludes file", path=str(path), error=str(exc))
+        raise
 
 
 def load_default_excludes_document(config: Config | None) -> ExcludesDocument:
@@ -167,6 +177,9 @@ class DefaultExcludesScreen(Screen[None]):
         self._documents = load_excludes_documents(config, self._repos)
         self._documents_by_tab_id = {document.tab_id: document for document in self._documents}
         self._editing = False
+        logger.debug(
+            "DefaultExcludesScreen initialized", document_count=len(self._documents), repo_count=len(self._repos)
+        )
 
     @property
     def _active_document(self) -> ExcludesDocument | None:
@@ -203,24 +216,30 @@ class DefaultExcludesScreen(Screen[None]):
 
     def on_mount(self) -> None:
         """Focus the tab bar when the screen is first mounted."""
+        logger.debug("DefaultExcludesScreen mounted")
         self.query_one("#default-excludes-tabs", Tabs).focus()
 
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
         """Update the viewer when a tab becomes active."""
         if event.tab is None or event.tab.id is None:
+            logger.debug("Tab activation event with no tab")
             return
 
         if self._editing:
+            logger.debug("Cancelling edit mode on tab switch")
             self._reset_edit_state()
 
         document = self._documents_by_tab_id[event.tab.id]
+        logger.debug("Tab activated", tab_id=event.tab.id, document_exists=document.exists)
         self._show_document(document)
 
     def action_toggle_edit(self) -> None:
         """Toggle between read-only and edit mode."""
         if self._editing:
+            logger.debug("Exiting edit mode via toggle")
             self._cancel_edit()
         else:
+            logger.debug("Entering edit mode via toggle")
             self._enter_edit_mode()
 
     def action_save(self) -> None:
@@ -231,6 +250,7 @@ class DefaultExcludesScreen(Screen[None]):
         document = self._active_document
         if document is None or document.path is None:
             self.notify("Cannot save: no file path available", severity="error")
+            logger.error("Save attempted with no active document or path")
             return
 
         content = self.query_one("#default-excludes-viewer", TextArea).text
@@ -238,7 +258,9 @@ class DefaultExcludesScreen(Screen[None]):
         try:
             document.path.parent.mkdir(parents=True, exist_ok=True)
             document.path.write_text(content)
+            logger.info("Excludes file saved", path=str(document.path), content_length=len(content))
         except OSError as exc:
+            logger.error("Failed to save excludes file", path=str(document.path), error=str(exc))
             self.notify(f"Save failed: {exc}", severity="error")
             return
 
@@ -253,17 +275,21 @@ class DefaultExcludesScreen(Screen[None]):
 
     def action_back(self) -> None:
         """Go back to the main screen (only available when not editing)."""
+        logger.debug("Closing excludes screen")
         _ = self.app.pop_screen()
 
     def action_cancel_or_back(self) -> None:
         """Cancel editing or go back to the main screen."""
         if self._editing:
+            logger.debug("Cancelling edit and returning to main screen")
             self._cancel_edit()
         else:
+            logger.debug("Closing excludes screen via cancel/back")
             _ = self.app.pop_screen()
 
     def _cancel_edit(self) -> None:
         """Exit edit mode and restore the current document."""
+        logger.debug("Cancelling edit mode")
         self._reset_edit_state()
         document = self._active_document
         if document is not None:
@@ -274,6 +300,7 @@ class DefaultExcludesScreen(Screen[None]):
         document = self._active_document
         if document is None or document.path is None:
             self.notify("Cannot edit: no file path available", severity="error")
+            logger.warning("Edit mode requested but no active document or path available")
             return
 
         viewer = self.query_one("#default-excludes-viewer", TextArea)
@@ -281,6 +308,7 @@ class DefaultExcludesScreen(Screen[None]):
 
         if not document.exists:
             viewer.load_text("")
+            logger.debug("Creating new excludes file in edit mode", path=str(document.path))
 
         viewer.read_only = False
         viewer.add_class("-editing")
@@ -288,6 +316,7 @@ class DefaultExcludesScreen(Screen[None]):
 
         self.query_one("#default-excludes-status", Static).update(f"{document.status} {_EDITING_STATUS}")
         self.refresh_bindings()
+        logger.debug("Entered edit mode", path=str(document.path))
 
     def _reset_edit_state(self) -> None:
         """Reset editing flags and viewer styling without modifying TextArea content."""
@@ -299,17 +328,21 @@ class DefaultExcludesScreen(Screen[None]):
 
         self.query_one("#default-excludes-tabs", Tabs).focus()
         self.refresh_bindings()
+        logger.debug("Edit state reset")
 
     def _show_document(self, document: ExcludesDocument) -> None:
         """Render an excludes document in the viewer area."""
         self.query_one("#default-excludes-status", Static).update(document.status)
         self.query_one("#default-excludes-path", Static).update(self._path_label(document))
         self.query_one("#default-excludes-viewer", TextArea).load_text(document.body)
+        logger.debug("Document shown", tab_id=document.tab_id, exists=document.exists)
 
     def _reload_documents(self) -> None:
         """Reload all documents from disk."""
+        logger.debug("Reloading excludes documents from disk")
         self._documents = load_excludes_documents(self._config, self._repos)
         self._documents_by_tab_id = {document.tab_id: document for document in self._documents}
+        logger.debug("Documents reloaded", count=len(self._documents))
 
     @override
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:

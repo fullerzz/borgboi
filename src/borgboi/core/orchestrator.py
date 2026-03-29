@@ -15,6 +15,7 @@ from borgboi.clients.borg_client import BorgClient, create_borg_client
 from borgboi.clients.s3_client import S3ClientInterface
 from borgboi.config import Config, get_config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
+from borgboi.core.logging import get_logger
 from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
 from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, render_command_with_fallback
 from borgboi.core.validator import Validator
@@ -27,6 +28,8 @@ from borgboi.lib.passphrase import (
 from borgboi.lib.utils import create_archive_name
 from borgboi.models import BorgBoiRepo
 from borgboi.storage.base import RepositoryStorage
+
+logger = get_logger(__name__)
 
 
 class Orchestrator:
@@ -73,10 +76,12 @@ class Orchestrator:
             RepositoryStorage instance (SQLite for offline, DynamoDB for cloud)
         """
         if self.config.offline:
+            logger.debug("Creating SQLite storage for offline mode")
             from borgboi.storage.sqlite import SQLiteStorage
 
             return SQLiteStorage()
         else:
+            logger.debug("Creating DynamoDB storage for cloud mode, initializing local SQLite cache")
             self._ensure_local_sqlite_initialized()
             from borgboi.storage.dynamodb import DynamoDBStorage
 
@@ -85,8 +90,10 @@ class Orchestrator:
     def _create_default_s3_client(self) -> S3ClientInterface | None:
         """Create the default S3 client when cloud features are enabled."""
         if self.config.offline:
+            logger.debug("Skipping S3 client creation in offline mode")
             return None
 
+        logger.debug("Creating S3 client for cloud mode")
         from borgboi.clients.s3_client import S3Client
 
         return S3Client(config=self.config.aws)
@@ -102,10 +109,14 @@ class Orchestrator:
 
         db_path = get_db_path()
         if self._should_log_sqlite_migration(db_path):
+            logger.info("Migrating local metadata database", db_path=str(db_path))
             self.output.on_log("info", f"Migrating local metadata database to {db_path}")
+        else:
+            logger.debug("No SQLite migration needed", db_path=str(db_path))
 
         engine = auto_migrate_if_needed(db_path)
         engine.dispose()
+        logger.debug("Local SQLite database initialized successfully")
 
     def _should_log_sqlite_migration(self, db_path: Path) -> bool:
         """Return True when a legacy storage migration is expected."""
@@ -146,6 +157,7 @@ class Orchestrator:
             StorageError: If saving the repository fails
         """
         # Resolve or generate passphrase
+        logger.info("Creating new Borg repository", repo_name=name, repo_path=path, backup_target=backup_target)
         resolved_passphrase = resolve_passphrase(
             repo_name=name,
             cli_passphrase=passphrase,
@@ -155,28 +167,34 @@ class Orchestrator:
 
         if resolved_passphrase is None:
             resolved_passphrase = generate_secure_passphrase()
+            logger.info("Generated passphrase for repo", repo_name=name)
             self.output.on_log("warning", f"Generated passphrase for repo '{name}'")
             self.output.on_log("info", f"Passphrase: {resolved_passphrase}")
             self.output.on_log("warning", "SAVE THIS PASSPHRASE SECURELY!")
 
         # Save passphrase to file
         passphrase_file_path = save_passphrase_to_file(name, resolved_passphrase)
+        logger.info("Passphrase saved to file", repo_name=name, passphrase_file=str(passphrase_file_path))
         self.output.on_log("info", f"Passphrase saved to: {passphrase_file_path}")
 
         # Create repo directory if needed
         repo_path = Path(path)
         if repo_path.is_file():
+            logger.error("Repository path is a file, not a directory", repo_path=str(repo_path))
             raise ValidationError(f"Path {repo_path} is a file, not a directory", field="path")
         if not repo_path.exists():
             repo_path.mkdir(parents=True)
+            logger.debug("Created repository directory", repo_path=str(repo_path))
 
         # Determine if additional free space config should be applied
         # (skip for tmp/private directories)
         config_free_space = True
         if "/private/var/" in str(repo_path) or "tmp" in repo_path.parts:
             config_free_space = False
+            logger.debug("Skipping additional_free_space config for tmp/private directory", repo_path=str(repo_path))
 
         # Initialize Borg repository
+        logger.debug("Initializing Borg repository", repo_path=str(repo_path), config_free_space=config_free_space)
         self.borg.init(
             repo_path.as_posix(),
             passphrase=resolved_passphrase,
@@ -200,7 +218,9 @@ class Orchestrator:
         )
 
         # Save to storage
+        logger.debug("Saving repository to storage", repo_name=name)
         self.storage.save(repo)
+        logger.info("Repository created successfully", repo_name=name, repo_path=repo.path)
         self.output.on_log("info", f"Created new Borg repo at {repo.path}")
 
         return repo
@@ -228,6 +248,12 @@ class Orchestrator:
             StorageError: If passphrase or repository metadata cannot be saved
         """
         normalized_name = name.strip()
+        logger.info(
+            "Importing existing Borg repository",
+            repo_name=normalized_name,
+            repo_path=path,
+            backup_target=backup_target,
+        )
         Validator.validate_repo_name(normalized_name)
 
         normalized_repo_path = self._normalize_existing_directory_path(path, field="path", label="Repository path")
@@ -236,9 +262,13 @@ class Orchestrator:
             field="backup_target",
             label="Backup target path",
         )
+        logger.debug("Validated paths", repo_path=normalized_repo_path, backup_target=normalized_backup_target)
 
         self._ensure_repo_name_available(normalized_name)
         self._ensure_repo_path_available(normalized_repo_path)
+        logger.debug(
+            "Validated repo name and path are available", repo_name=normalized_name, repo_path=normalized_repo_path
+        )
 
         resolved_passphrase = resolve_passphrase(
             repo_name=normalized_name,
@@ -248,7 +278,13 @@ class Orchestrator:
 
         try:
             repo_info = self.borg.info(normalized_repo_path, passphrase=resolved_passphrase)
+            logger.debug("Retrieved repository info from Borg", repo_path=normalized_repo_path)
         except Exception as error:
+            logger.exception(
+                "Failed to access Borg repository",
+                repo_path=normalized_repo_path,
+                error=str(error),
+            )
             raise ValidationError(
                 f"Unable to access Borg repository at {normalized_repo_path}: {error}",
                 field="path",
@@ -256,7 +292,9 @@ class Orchestrator:
             ) from error
 
         is_encrypted = repo_info is not None and repo_info.encryption.mode != "none"
+        logger.debug("Repository encryption status", repo_path=normalized_repo_path, is_encrypted=is_encrypted)
         if is_encrypted:
+            logger.debug("Verifying repokey accessibility", repo_path=normalized_repo_path)
             self._verify_repokey_accessible(normalized_repo_path, resolved_passphrase)
 
         passphrase_file_path: Path | None = None
@@ -268,8 +306,17 @@ class Orchestrator:
                 existing_path = get_passphrase_file_path(normalized_name)
                 if existing_path.exists():
                     previous_passphrase = existing_path.read_text(encoding="utf-8")
+                    logger.debug("Found existing passphrase file", repo_name=normalized_name, path=str(existing_path))
                 passphrase_file_path = save_passphrase_to_file(normalized_name, resolved_passphrase)
+                logger.info(
+                    "Passphrase saved to file", repo_name=normalized_name, passphrase_file=str(passphrase_file_path)
+                )
             except OSError as error:
+                logger.exception(
+                    "Failed to save passphrase for repository",
+                    repo_name=normalized_name,
+                    error=str(error),
+                )
                 raise StorageError(
                     f"Failed to save passphrase for repository {normalized_name}: {error}",
                     operation="save_passphrase",
@@ -290,8 +337,14 @@ class Orchestrator:
         )
 
         try:
+            logger.debug("Saving imported repository to storage", repo_name=normalized_name)
             self.storage.save(repo)
         except Exception as error:
+            logger.exception(
+                "Failed to save imported repository",
+                repo_name=normalized_name,
+                error=str(error),
+            )
             self._cleanup_import_passphrase_file(passphrase_file_path, normalized_name, previous_passphrase)
             if isinstance(error, StorageError):
                 raise
@@ -301,6 +354,12 @@ class Orchestrator:
                 cause=error,
             ) from error
 
+        logger.info(
+            "Repository imported successfully",
+            repo_name=normalized_name,
+            repo_path=repo.path,
+            is_encrypted=is_encrypted,
+        )
         self.output.on_log("info", f"Imported existing Borg repo at {repo.path}")
         return repo
 
@@ -326,24 +385,37 @@ class Orchestrator:
             ValidationError: If repository is not local
         """
         repo = self.get_repo(name=name, path=path)
+        logger.info(
+            "Deleting repository",
+            repo_name=repo.name,
+            repo_path=repo.path,
+            dry_run=dry_run,
+            delete_from_s3=delete_from_s3,
+        )
 
         if not self._is_local(repo):
+            logger.error("Cannot delete remote repository", repo_name=repo.name, hostname=repo.hostname)
             raise ValidationError("Repository must be local to delete", field="repository")
 
         resolved_passphrase = self.resolve_passphrase(repo, passphrase)
 
         # Delete using Borg client
+        logger.debug("Executing Borg delete", repo_name=repo.name, repo_path=repo.path, dry_run=dry_run)
         for line in self.borg.delete(repo.path, dry_run=dry_run, passphrase=resolved_passphrase):
             self.output.on_stderr(line)
 
         if not dry_run:
+            logger.debug("Deleting repository from storage", repo_name=repo.name)
             self.storage.delete(repo.name)
             self._delete_excludes_file(repo.name)
+        else:
+            logger.debug("Dry run mode: skipping storage deletion", repo_name=repo.name)
 
         if delete_from_s3:
             self.delete_from_s3(repo, dry_run=dry_run)
 
         if not dry_run:
+            logger.info("Repository deleted successfully", repo_name=repo.name, repo_path=repo.path)
             self.output.on_log("info", f"Deleted repository {repo.name}")
 
     def get_repo(
@@ -403,7 +475,18 @@ class Orchestrator:
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
 
         excludes_path = self._resolve_excludes_path_for_backup(resolved_repo.name)
+        logger.debug(
+            "Resolved excludes path for backup",
+            repo_name=resolved_repo.name,
+            excludes_path=str(excludes_path),
+        )
         archive_name = create_archive_name()
+        logger.info(
+            "Creating backup archive",
+            repo_name=resolved_repo.name,
+            archive_name=archive_name,
+            backup_target=resolved_repo.backup_target,
+        )
 
         log_stream = self.borg.create(
             resolved_repo.path,
@@ -415,6 +498,7 @@ class Orchestrator:
         )
         render_command_with_fallback(self.output, "Creating new archive", "Archive created successfully", log_stream)
 
+        logger.info("Backup archive created successfully", repo_name=resolved_repo.name, archive_name=archive_name)
         self.output.on_log("info", "Archive created successfully", archive_name=archive_name, repo=resolved_repo.name)
         return archive_name
 
@@ -433,29 +517,45 @@ class Orchestrator:
         """
         resolved_repo = self._resolve_repo(repo)
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        logger.info(
+            "Starting daily backup workflow",
+            repo_name=resolved_repo.name,
+            repo_path=resolved_repo.path,
+            sync_to_s3=sync_to_s3 and not self.config.offline and self.s3 is not None,
+        )
 
         # Create archive
         self.output.on_log("info", "Creating new archive...")
+        logger.debug("Creating archive for daily backup", repo_name=resolved_repo.name)
         self.backup(resolved_repo, passphrase=resolved_passphrase)
 
         # Prune old archives
         self.output.on_log("info", "Pruning old backups...")
+        logger.debug("Pruning old archives", repo_name=resolved_repo.name)
         self.prune(resolved_repo, passphrase=resolved_passphrase)
 
         # Compact repository
         self.output.on_log("info", "Compacting repository...")
+        logger.debug("Compacting repository", repo_name=resolved_repo.name)
         self.compact(resolved_repo, passphrase=resolved_passphrase)
 
         # Sync to S3 (if not offline and requested)
         if sync_to_s3 and not self.config.offline and self.s3:
             self.output.on_log("info", "Syncing to S3...")
+            logger.debug("Syncing repository to S3", repo_name=resolved_repo.name)
             self.sync_to_s3(resolved_repo)
+        elif sync_to_s3:
+            logger.warning(
+                "S3 sync requested but not available", offline=self.config.offline, s3_configured=self.s3 is not None
+            )
 
         # Refresh metadata
+        logger.debug("Refreshing repository metadata after daily backup", repo_name=resolved_repo.name)
         repo_info = self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
         resolved_repo.metadata = repo_info
         self.storage.save(resolved_repo)
 
+        logger.info("Daily backup completed successfully", repo_name=resolved_repo.name)
         self.output.on_log("info", "Daily backup completed successfully")
 
     def restore_archive(
@@ -475,6 +575,12 @@ class Orchestrator:
         """
         resolved_repo = self._resolve_repo(repo)
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        logger.info(
+            "Restoring archive",
+            repo_name=resolved_repo.name,
+            archive_name=archive_name,
+            repo_path=resolved_repo.path,
+        )
 
         for line in self.borg.extract(
             resolved_repo.path,
@@ -484,6 +590,7 @@ class Orchestrator:
         ):
             self.output.on_stderr(line)
 
+        logger.info("Archive restored successfully", repo_name=resolved_repo.name, archive_name=archive_name)
         self.output.on_log("info", f"Archive {archive_name} restored successfully")
 
     def delete_archive(
@@ -502,13 +609,26 @@ class Orchestrator:
             passphrase: Optional passphrase override
         """
         resolved_repo = self._resolve_repo(repo)
+        logger.info(
+            "Deleting archive",
+            repo_name=resolved_repo.name,
+            archive_name=archive_name,
+            dry_run=dry_run,
+        )
 
         if not self._is_local(resolved_repo):
+            logger.error("Cannot delete archive from remote repository", repo_name=resolved_repo.name)
             raise ValidationError("Repository must be local to delete archives", field="repository")
 
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
 
         # Delete archive
+        logger.debug(
+            "Executing Borg delete for archive",
+            repo_name=resolved_repo.name,
+            archive_name=archive_name,
+            dry_run=dry_run,
+        )
         for line in self.borg.delete(
             resolved_repo.path,
             archive_name=archive_name,
@@ -519,12 +639,25 @@ class Orchestrator:
 
         if not dry_run:
             # Compact after deletion to reclaim space
+            logger.debug("Compacting repository after archive deletion", repo_name=resolved_repo.name)
             self.compact(resolved_repo, passphrase=resolved_passphrase)
 
             # Refresh metadata
+            logger.debug("Refreshing repository metadata after archive deletion", repo_name=resolved_repo.name)
             repo_info = self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
             resolved_repo.metadata = repo_info
             self.storage.save(resolved_repo)
+            logger.info(
+                "Archive deleted and repository metadata refreshed",
+                repo_name=resolved_repo.name,
+                archive_name=archive_name,
+            )
+        else:
+            logger.debug(
+                "Dry run mode: skipping compact and metadata refresh",
+                repo_name=resolved_repo.name,
+                archive_name=archive_name,
+            )
 
         self.output.on_log("info", f"Archive {archive_name} deleted successfully")
 
@@ -545,6 +678,7 @@ class Orchestrator:
         """
         resolved_repo = self._resolve_repo(repo)
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        logger.info("Pruning repository", repo_name=resolved_repo.name, repo_path=resolved_repo.path)
 
         for line in self.borg.prune(
             resolved_repo.path,
@@ -553,6 +687,7 @@ class Orchestrator:
         ):
             self.output.on_stderr(line)
 
+        logger.info("Pruning completed", repo_name=resolved_repo.name)
         self.output.on_log("info", "Pruning completed")
 
     def compact(
@@ -568,6 +703,7 @@ class Orchestrator:
         """
         resolved_repo = self._resolve_repo(repo)
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        logger.info("Compacting repository", repo_name=resolved_repo.name, repo_path=resolved_repo.path)
 
         for line in self.borg.compact(
             resolved_repo.path,
@@ -575,6 +711,7 @@ class Orchestrator:
         ):
             self.output.on_stderr(line)
 
+        logger.info("Compacting completed", repo_name=resolved_repo.name)
         self.output.on_log("info", "Compacting completed")
 
     def sync_to_s3(self, repo: BorgBoiRepo | str) -> None:
@@ -588,9 +725,11 @@ class Orchestrator:
         resolved_repo = self._resolve_repo(repo)
 
         if self.s3 is None:
+            logger.warning("S3 client not configured, cannot sync to S3", repo_name=resolved_repo.name)
             self.output.on_log("warning", "S3 client not configured")
             return
 
+        logger.info("Syncing repository to S3", repo_name=resolved_repo.name, repo_path=resolved_repo.safe_path)
         log_stream = self.s3.sync_to_bucket(resolved_repo.safe_path, resolved_repo.name)
         render_command_with_fallback(
             self.output,
@@ -600,6 +739,7 @@ class Orchestrator:
             spinner="arrow",
             ruler_color=COLOR_HEX.green,
         )
+        logger.info("S3 sync completed successfully", repo_name=resolved_repo.name)
         self.output.on_log("info", "S3 sync completed successfully", repo=resolved_repo.name)
 
     def delete_from_s3(
@@ -618,9 +758,15 @@ class Orchestrator:
         resolved_repo = self._resolve_repo(repo)
 
         if self.s3 is None:
+            logger.warning("S3 client not configured, cannot delete from S3", repo_name=resolved_repo.name)
             self.output.on_log("warning", "S3 client not configured")
             return
 
+        logger.info(
+            "Deleting repository from S3",
+            repo_name=resolved_repo.name,
+            dry_run=dry_run,
+        )
         status = "Performing dry run of S3 delete..." if dry_run else "Deleting repo from S3..."
         success_msg = "S3 delete dry run completed successfully" if dry_run else "S3 delete completed successfully"
         log_stream = self.s3.delete_from_bucket(resolved_repo.name, dry_run=dry_run)
@@ -632,6 +778,7 @@ class Orchestrator:
             spinner="arrow",
             ruler_color=COLOR_HEX.red,
         )
+        logger.info("S3 delete completed", repo_name=resolved_repo.name, dry_run=dry_run)
         self.output.on_log("info", success_msg, repo=resolved_repo.name)
 
     def restore_from_s3(
@@ -652,16 +799,33 @@ class Orchestrator:
         """
         resolved_repo = self._resolve_repo(repo)
 
-        if not force and self._is_local(resolved_repo):
+        is_local = self._is_local(resolved_repo)
+        logger.info(
+            "Restoring repository from S3",
+            repo_name=resolved_repo.name,
+            repo_path=resolved_repo.safe_path,
+            is_local=is_local,
+            dry_run=dry_run,
+            force=force,
+        )
+
+        if not force and is_local:
+            logger.error(
+                "Repository already exists locally, restore aborted",
+                repo_name=resolved_repo.name,
+                repo_path=resolved_repo.path,
+            )
             raise ValidationError("Repository already exists locally", field="repository")
 
         if self.s3 is None:
+            logger.warning("S3 client not configured, cannot restore from S3", repo_name=resolved_repo.name)
             self.output.on_log("warning", "S3 client not configured")
             return
 
         status = "Performing dry run of S3 restore..." if dry_run else "Restoring repo from S3..."
         log_stream = self.s3.sync_from_bucket(resolved_repo.safe_path, resolved_repo.name, dry_run=dry_run)
         render_command_with_fallback(self.output, status, "S3 restore completed successfully", log_stream)
+        logger.info("S3 restore completed successfully", repo_name=resolved_repo.name, dry_run=dry_run)
 
     # Archive Operations
 
@@ -723,6 +887,9 @@ class Orchestrator:
         excludes_path = self._get_excludes_path(resolved_repo.name)
 
         if excludes_path.exists():
+            logger.info(
+                "Exclusion list already created", repo_name=resolved_repo.name, excludes_path=str(excludes_path)
+            )
             raise ValidationError("Exclude list already created", field="excludes")
 
         # Ensure directory exists
@@ -732,8 +899,15 @@ class Orchestrator:
         shutil.copy(source_file, excludes_path.as_posix())
 
         if not excludes_path.exists():
+            logger.error("Failed to create exclusion list", repo_name=resolved_repo.name, source_file=source_file)
             raise StorageError("Excludes list not created", operation="create_exclusions")
 
+        logger.info(
+            "Exclusion list created",
+            repo_name=resolved_repo.name,
+            excludes_path=str(excludes_path),
+            source_file=source_file,
+        )
         self.output.on_log("info", f"Exclude list created at {excludes_path}")
         return excludes_path
 
@@ -750,10 +924,14 @@ class Orchestrator:
         excludes_path = self._resolve_excludes_path_for_read(resolved_repo.name)
 
         if excludes_path is None:
+            logger.debug("No exclusions file found for repository", repo_name=resolved_repo.name)
             return []
 
+        logger.debug("Reading exclusions from file", repo_name=resolved_repo.name, excludes_path=str(excludes_path))
         content = excludes_path.read_text()
-        return [line.strip() for line in content.splitlines() if line.strip()]
+        patterns = [line.strip() for line in content.splitlines() if line.strip()]
+        logger.debug("Retrieved exclusion patterns", repo_name=resolved_repo.name, count=len(patterns))
+        return patterns
 
     def add_exclusion(self, repo: BorgBoiRepo | str, pattern: str) -> None:
         """Add an exclusion pattern.
@@ -766,11 +944,14 @@ class Orchestrator:
         excludes_path = self._get_excludes_path(resolved_repo.name)
 
         if not excludes_path.exists():
+            logger.info("Cannot add exclusion, list not created", repo_name=resolved_repo.name)
             raise ValidationError("Exclude list not created", field="excludes")
 
+        logger.debug("Adding exclusion pattern", repo_name=resolved_repo.name, pattern=pattern)
         with excludes_path.open("a") as f:
             f.write(pattern + "\n")
 
+        logger.info("Added exclusion pattern", repo_name=resolved_repo.name, pattern=pattern)
         self.output.on_log("info", f"Added exclusion pattern: {pattern}")
 
     def remove_exclusion(self, repo: BorgBoiRepo | str, line_number: int) -> None:
@@ -784,19 +965,33 @@ class Orchestrator:
         excludes_path = self._get_excludes_path(resolved_repo.name)
 
         if not excludes_path.exists():
+            logger.info("Cannot remove exclusion, list not created", repo_name=resolved_repo.name)
             raise ValidationError("Exclude list not created", field="excludes")
 
         with excludes_path.open("r") as f:
             lines = f.readlines()
 
         if line_number < 1 or line_number > len(lines):
+            logger.error(
+                "Invalid line number for exclusion removal",
+                repo_name=resolved_repo.name,
+                line_number=line_number,
+                total_lines=len(lines),
+            )
             raise ValidationError(f"Invalid line number: {line_number}", field="line_number")
 
+        removed_pattern = lines[line_number - 1].strip()
         lines.pop(line_number - 1)
 
         with excludes_path.open("w") as f:
             f.writelines(lines)
 
+        logger.info(
+            "Removed exclusion pattern",
+            repo_name=resolved_repo.name,
+            line_number=line_number,
+            pattern=removed_pattern,
+        )
         self.output.on_log("info", f"Removed exclusion at line {line_number}")
 
     # Passphrase Operations
@@ -879,8 +1074,11 @@ class Orchestrator:
         with tempfile.TemporaryDirectory() as tmpdir:
             export_path = Path(tmpdir) / "key-verify.txt"
             try:
+                logger.debug("Verifying repokey accessibility", repo_path=repo_path)
                 self.borg.export_key(repo_path, export_path, paper=True, passphrase=passphrase)
+                logger.debug("Repokey is accessible", repo_path=repo_path)
             except Exception as error:
+                logger.error("Repository encryption key is not accessible", repo_path=repo_path, error=str(error))
                 raise ValidationError(
                     f"Repository encryption key is not accessible at {repo_path}: {error}",
                     field="path",
@@ -903,11 +1101,33 @@ class Orchestrator:
 
         try:
             if previous_passphrase is not None:
+                logger.debug(
+                    "Restoring previous passphrase file", repo_name=repo_name, passphrase_file=str(passphrase_file_path)
+                )
                 passphrase_file_path.write_text(previous_passphrase, encoding="utf-8")
                 passphrase_file_path.chmod(0o600)
+                logger.info(
+                    "Restored previous passphrase file", repo_name=repo_name, passphrase_file=str(passphrase_file_path)
+                )
             else:
+                logger.debug(
+                    "Deleting passphrase file after failed import",
+                    repo_name=repo_name,
+                    passphrase_file=str(passphrase_file_path),
+                )
                 passphrase_file_path.unlink(missing_ok=True)
+                logger.info(
+                    "Deleted passphrase file after failed import",
+                    repo_name=repo_name,
+                    passphrase_file=str(passphrase_file_path),
+                )
         except OSError as error:
+            logger.warning(
+                "Failed to clean up passphrase file",
+                repo_name=repo_name,
+                passphrase_file=str(passphrase_file_path),
+                error=str(error),
+            )
             self.output.on_log(
                 "warning",
                 f"Failed to clean up passphrase file for repo '{repo_name}': {error}",
@@ -948,8 +1168,13 @@ class Orchestrator:
         """
         excludes_path = self._resolve_excludes_path_for_read(repo_name)
         if excludes_path is None:
+            logger.info(
+                "Exclude list must be created before performing a backup",
+                repo_name=repo_name,
+            )
             raise ValidationError("Exclude list must be created before performing a backup", field="excludes")
 
+        logger.debug("Resolved excludes path for backup", repo_name=repo_name, excludes_path=str(excludes_path))
         return excludes_path
 
     def _resolve_excludes_path_for_read(self, repo_name: str) -> Path | None:
@@ -981,6 +1206,7 @@ class Orchestrator:
         excludes_path = self._get_excludes_path(repo_name)
         if excludes_path.exists():
             excludes_path.unlink()
+            logger.info("Deleted excludes file", repo_name=repo_name, excludes_path=str(excludes_path))
             self.output.on_log("info", f"Deleted excludes file for {repo_name}")
 
     def _auto_migrate_passphrase(self, repo: BorgBoiRepo) -> BorgBoiRepo:
@@ -993,8 +1219,15 @@ class Orchestrator:
             Updated repository (may be same if no migration needed)
         """
         if repo.passphrase_migrated or repo.passphrase is None:
+            logger.debug(
+                "Skipping passphrase migration",
+                repo_name=repo.name,
+                passphrase_migrated=repo.passphrase_migrated,
+                has_passphrase=repo.passphrase is not None,
+            )
             return repo
 
+        logger.info("Auto-migrating passphrase for repo to file storage", repo_name=repo.name)
         self.output.on_log("warning", f"Auto-migrating passphrase for repo '{repo.name}' to file storage...")
 
         try:
@@ -1003,8 +1236,12 @@ class Orchestrator:
             repo.passphrase_migrated = True
 
             self.storage.save(repo)
+            logger.info(
+                "Passphrase migrated successfully", repo_name=repo.name, passphrase_file=str(passphrase_file_path)
+            )
             self.output.on_log("info", f"Passphrase migrated to {passphrase_file_path}")
         except Exception as e:
+            logger.exception("Failed to auto-migrate passphrase", repo_name=repo.name, error=str(e))
             self.output.on_log("error", f"Failed to auto-migrate passphrase: {e}")
             self.output.on_log("warning", "Run 'bb migrate-passphrases' to migrate manually")
 

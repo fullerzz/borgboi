@@ -20,9 +20,12 @@ from borgboi.clients.borg import (
 )
 from borgboi.config import BorgConfig, Config, get_config
 from borgboi.core.errors import BorgError, BorgExitCode
+from borgboi.core.logging import get_logger
 from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
 from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, SilentOutputHandler
 from borgboi.lib.utils import create_archive_name
+
+logger = get_logger(__name__)
 
 
 class BorgClient:
@@ -190,6 +193,7 @@ class BorgClient:
         Raises:
             BorgError: If initialization fails
         """
+        logger.info("Initializing Borg repository via client", repo_path=repo_path, encryption=encryption)
         quota = storage_quota or self.config.storage_quota
         cmd = [
             self.executable_path,
@@ -206,6 +210,7 @@ class BorgClient:
         # Set additional_free_space if specified
         free_space = additional_free_space or self.config.additional_free_space
         if free_space:
+            logger.debug("Setting additional free space", repo_path=repo_path, free_space=free_space)
             config_cmd = [
                 self.executable_path,
                 "config",
@@ -217,6 +222,7 @@ class BorgClient:
             ]
             self._run_command(config_cmd, passphrase=passphrase)
 
+        logger.info("Borg repository initialized via client", repo_path=repo_path)
         self.output.on_log("info", f"Initialized repository at {repo_path}")
 
     def info(self, repo_path: str, passphrase: str | None = None) -> RepoInfo:
@@ -232,9 +238,17 @@ class BorgClient:
         Raises:
             BorgError: If the command fails
         """
+        logger.debug("Getting repository info via client", repo_path=repo_path)
         cmd = [self.executable_path, "info", "--json", repo_path]
         result = self._run_command(cmd, passphrase=passphrase)
-        return RepoInfo.model_validate_json(result.stdout)
+        repo_info = RepoInfo.model_validate_json(result.stdout)
+        logger.debug(
+            "Retrieved repository info via client",
+            repo_path=repo_path,
+            encryption_mode=repo_info.encryption.mode,
+            archive_count=len(repo_info.archives),
+        )
+        return repo_info
 
     def archive_info(
         self,
@@ -288,6 +302,9 @@ class BorgClient:
         """
         if archive_name is None:
             archive_name = create_archive_name()
+        logger.info(
+            "Creating archive via client", repo_path=repo_path, archive_name=archive_name, backup_target=backup_target
+        )
 
         opts = options or BackupOptions(compression=self.config.compression)
         cmd = [
@@ -300,11 +317,13 @@ class BorgClient:
         ]
 
         if exclude_file:
+            logger.debug("Using exclusions file", exclude_file=exclude_file)
             cmd.extend(["--exclude-from", exclude_file])
 
         cmd.extend([f"{repo_path}::{archive_name}", backup_target])
 
         yield from self._run_streaming_command(cmd, passphrase=passphrase)
+        logger.info("Archive creation completed via client", repo_path=repo_path, archive_name=archive_name)
 
     def extract(
         self,
@@ -360,6 +379,7 @@ class BorgClient:
             BorgError: If the command fails
         """
         target = f"{repo_path}::{archive_name}" if archive_name else repo_path
+        logger.info("Deleting via client", repo_path=repo_path, archive_name=archive_name, dry_run=dry_run)
 
         cmd = [
             self.executable_path,
@@ -378,6 +398,7 @@ class BorgClient:
         cmd.append(target)
 
         yield from self._run_streaming_command(cmd, passphrase=passphrase)
+        logger.info("Delete completed via client", repo_path=repo_path, archive_name=archive_name, dry_run=dry_run)
 
     def prune(
         self,
@@ -404,6 +425,14 @@ class BorgClient:
             keep_monthly=self.config.retention.keep_monthly,
             keep_yearly=self.config.retention.keep_yearly,
         )
+        logger.info(
+            "Pruning via client",
+            repo_path=repo_path,
+            keep_daily=policy.keep_daily,
+            keep_weekly=policy.keep_weekly,
+            keep_monthly=policy.keep_monthly,
+            keep_yearly=policy.keep_yearly,
+        )
 
         cmd = [
             self.executable_path,
@@ -416,6 +445,7 @@ class BorgClient:
         ]
 
         yield from self._run_streaming_command(cmd, passphrase=passphrase)
+        logger.info("Prune completed via client", repo_path=repo_path)
 
     def compact(
         self,
@@ -434,6 +464,7 @@ class BorgClient:
         Raises:
             BorgError: If the command fails
         """
+        logger.info("Compacting via client", repo_path=repo_path)
         cmd = [
             self.executable_path,
             "compact",
@@ -443,6 +474,7 @@ class BorgClient:
         ]
 
         yield from self._run_streaming_command(cmd, passphrase=passphrase)
+        logger.info("Compact completed via client", repo_path=repo_path)
 
     # Listing Operations
 
@@ -463,10 +495,13 @@ class BorgClient:
         Raises:
             BorgError: If the command fails
         """
+        logger.debug("Listing archives via client", repo_path=repo_path)
         cmd = [self.executable_path, "list", "--json", repo_path]
         result = self._run_command(cmd, passphrase=passphrase)
         data = json.loads(result.stdout)
-        return [RepoArchive.model_validate(arch) for arch in data.get("archives", [])]
+        archives = [RepoArchive.model_validate(arch) for arch in data.get("archives", [])]
+        logger.debug("Listed archives via client", repo_path=repo_path, archive_count=len(archives))
+        return archives
 
     def list_archive_contents(
         self,
@@ -487,6 +522,7 @@ class BorgClient:
         Raises:
             BorgError: If the command fails
         """
+        logger.debug("Listing archive contents via client", repo_path=repo_path, archive_name=archive_name)
         cmd = [
             self.executable_path,
             "list",
@@ -494,7 +530,14 @@ class BorgClient:
             "--json-lines",
         ]
         result = self._run_command(cmd, passphrase=passphrase)
-        return [ArchivedFile.model_validate_json(line) for line in result.stdout.splitlines() if line]
+        contents = [ArchivedFile.model_validate_json(line) for line in result.stdout.splitlines() if line]
+        logger.debug(
+            "Listed archive contents via client",
+            repo_path=repo_path,
+            archive_name=archive_name,
+            file_count=len(contents),
+        )
+        return contents
 
     # Key Operations
 

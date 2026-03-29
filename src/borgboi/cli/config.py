@@ -13,8 +13,11 @@ from rich.tree import Tree
 
 from borgboi.cli.main import BorgBoiContext, ContextArg, print_error_and_exit
 from borgboi.config import Config, get_default_config_path, get_env_overrides, load_config_from_path
+from borgboi.core.logging import get_logger
 from borgboi.lib.colors import COLOR_HEX, PYGMENTS_STYLES
 from borgboi.rich_utils import console
+
+logger = get_logger(__name__)
 
 config = App(
     name="config",
@@ -125,6 +128,7 @@ def _render_plain_text(config_dict: dict[str, Any], output_format: str, env_over
 
 def _load_config_for_show(ctx: BorgBoiContext, path: str | None, config_path: Path) -> Config:
     if path:
+        logger.debug("Loading configuration from custom path", config_path=str(config_path))
         base_config = load_config_from_path(config_path)
         return base_config.model_copy(
             update={
@@ -132,6 +136,7 @@ def _load_config_for_show(ctx: BorgBoiContext, path: str | None, config_path: Pa
                 "debug": ctx.debug or base_config.debug,
             }
         )
+    logger.debug("Using context configuration for config show", offline=ctx.offline, debug=ctx.debug)
     return ctx.config
 
 
@@ -172,21 +177,48 @@ def config_show(
     config_path = Path(path).expanduser() if path else get_default_config_path()
     cfg: Config | None = None
 
+    logger.info(
+        "Running config show command",
+        config_path=str(config_path),
+        has_custom_path=path is not None,
+        output_format=output_format,
+        pretty_print=pretty_print,
+    )
+
     try:
         cfg = _load_config_for_show(ctx, path, config_path)
     except FileNotFoundError as error:
+        logger.exception(
+            "Config show command failed to find configuration file", config_path=str(config_path), error=str(error)
+        )
         print_error_and_exit(f"Configuration file not found: {config_path}", error=error)
     except PermissionError as error:
+        logger.exception(
+            "Config show command failed due to permission error",
+            config_path=str(config_path),
+            error=str(error),
+        )
         print_error_and_exit(f"Permission denied when reading configuration file: {config_path}", error=error)
     except yaml.YAMLError as error:
+        logger.exception(
+            "Config show command failed due to invalid YAML", config_path=str(config_path), error=str(error)
+        )
         print_error_and_exit(f"Invalid YAML configuration in {config_path}: {error}", error=error)
     except Exception as error:
+        logger.exception("Config show command failed unexpectedly", config_path=str(config_path), error=str(error))
         print_error_and_exit(f"Unexpected error while loading configuration: {error}", error=error)
 
     assert cfg is not None
 
     config_dict = _config_to_dict(cfg)
     env_overrides = get_env_overrides()
+    logger.debug(
+        "Prepared configuration output",
+        config_path=str(config_path),
+        output_format=output_format,
+        pretty_print=pretty_print,
+        env_override_count=len(env_overrides),
+    )
 
     _write_stdout(_get_source_message(path, config_path) + "\n\n")
 
@@ -196,11 +228,22 @@ def config_show(
         output_config_dict = config_dict
 
     if output_format == "tree" or (pretty_print and env_overrides and output_format != "json"):
+        logger.debug(
+            "Rendering configuration as tree",
+            config_path=str(config_path),
+            env_override_count=len(env_overrides),
+        )
         _render_tree_panel(config_dict, env_overrides)
         return
 
     if pretty_print:
+        logger.debug(
+            "Rendering configuration with syntax highlighting",
+            config_path=str(config_path),
+            output_format=output_format,
+        )
         _render_syntax_panel(output_config_dict, output_format)
         return
 
+    logger.debug("Rendering configuration as plain text", config_path=str(config_path), output_format=output_format)
     _render_plain_text(output_config_dict, output_format, env_overrides)
