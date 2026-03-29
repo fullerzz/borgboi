@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import socket
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import Mock
 
 import pytest
@@ -58,6 +58,7 @@ class RecordingOutputHandler(CollectingOutputHandler):
         super().__init__()
         self.render_calls: list[dict[str, Any]] = []
 
+    @override
     def render_command(
         self,
         status: str,

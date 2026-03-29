@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 
@@ -91,7 +92,7 @@ def test_render_command_streams_lines_through_on_stderr(monkeypatch: pytest.Monk
         events.append(("rule", args[0]))
 
     @contextmanager
-    def fake_status(*args: Any, **kwargs: Any):
+    def fake_status(*args: Any, **kwargs: Any) -> Generator[None]:
         events.append(("status_enter", kwargs["status"]))
         try:
             yield

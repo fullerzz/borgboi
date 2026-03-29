@@ -14,12 +14,16 @@ Footer {
     color: #cdd6f4;
 }
 
-#main-content {
-    height: 1fr;
+#repos-section {
+    height: 2fr;
+    margin: 1 2 0 2;
+    border: round #313244;
+    border-title-color: #cba6f7;
+    border-title-style: bold;
 }
 
 DataTable {
-    width: 3fr;
+    width: 100%;
     background: #1e1e2e;
 }
 
@@ -80,6 +84,46 @@ CollapsibleTitle:hover {
     background: #45475a;
 }
 
+/* Archive sparkline */
+
+#sparkline-section {
+    height: 1fr;
+    margin: 1 2;
+    border: round #313244;
+    border-title-color: #cba6f7;
+    border-title-style: bold;
+    border-subtitle-color: #6c7086;
+    padding: 0 2;
+    background: #1e1e2e;
+}
+
+#archive-sparkline {
+    height: 1fr;
+    width: 100%;
+    margin: 1 0;
+}
+
+#archive-sparkline > .sparkline--min-color {
+    color: #313244;
+}
+
+#archive-sparkline > .sparkline--max-color {
+    color: #a6e3a1;
+}
+
+#sparkline-x-labels {
+    width: 100%;
+    height: auto;
+}
+
+.sparkline-x-label {
+    width: 1fr;
+    color: #6c7086;
+    text-align: center;
+    height: auto;
+    padding-bottom: 1;
+}
+
 #default-excludes-screen {
     height: 1fr;
     background: #1e1e2e;
@@ -135,4 +179,90 @@ CollapsibleTitle:hover {
 
 #default-excludes-viewer.-editing {
     border: round #a6e3a1;
+}
+
+/* Config screen */
+
+#config-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#config-screen #config-panel {
+    width: 100%;
+    max-width: 100%;
+    border-left: none;
+}
+
+/* Daily Backup screen */
+
+#daily-backup-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#daily-backup-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#daily-backup-controls {
+    height: auto;
+    padding-bottom: 1;
+    align: left middle;
+}
+
+#daily-backup-select {
+    width: 40;
+    margin-right: 2;
+}
+
+#daily-backup-s3-label {
+    padding: 1 1 0 0;
+    color: #cdd6f4;
+}
+
+#daily-backup-s3-switch {
+    margin-right: 2;
+}
+
+#daily-backup-spacer {
+    width: 1fr;
+}
+
+#daily-backup-start {
+    margin-left: 0;
+}
+
+#daily-backup-clear {
+    margin-left: 2;
+}
+
+#daily-backup-progress-wrapper {
+    height: 100%;
+    width: 1fr;
+    align: right middle;
+}
+
+#daily-backup-progress {
+    width: auto;
+}
+
+#daily-backup-progress Bar {
+    color: #cba6f7;
+    background: #313244;
+}
+
+#daily-backup-progress PercentageStatus {
+    color: #cdd6f4;
+}
+
+#daily-backup-log {
+    height: 1fr;
+    border: round #313244;
+    background: #181825;
+    color: #cdd6f4;
 }

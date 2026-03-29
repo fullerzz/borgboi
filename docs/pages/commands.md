@@ -23,22 +23,17 @@ Launch the interactive Textual TUI.
 bb tui
 ```
 
-The main screen shows a repository table and a collapsible config sidebar.
+The home screen shows a repository table and a 14-day archive activity sparkline.
 
-Main-screen keys:
+Home-screen keys:
 
 - `q`: quit the app
-- `r`: refresh the repository list
-- `c`: toggle the config sidebar
+- `r`: refresh the repository list and sparkline
+- `c`: open the config viewer screen
 - `e`: open the excludes viewer
+- `b`: open the daily backup screen
 
-In the excludes viewer:
-
-- The first tab is the shared default excludes file, followed by one tab per managed repo
-- Repo tabs indicate when BorgBoi falls back to the shared default excludes file
-- `Ctrl+E` toggles edit mode for the active excludes file
-- `Ctrl+S` saves changes directly to the active excludes file under the resolved BorgBoi home directory
-- `Esc` cancels editing or returns to the main screen
+See [TUI](tui.md) for full details on the config viewer, daily backup screen, and excludes viewer.
 
 ### `version`
 

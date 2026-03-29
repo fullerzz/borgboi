@@ -1,5 +1,6 @@
 """SQLAlchemy ORM models and database initialization for BorgBoi."""
 
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from sqlalchemy import (
     event,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
+from sqlalchemy.pool import NullPool
 
 
 class Base(DeclarativeBase):
@@ -60,6 +62,18 @@ class S3StatsCacheRow(Base):
     cached_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
 
+class BackupStageTimingRow(Base):
+    __tablename__ = "backup_stage_timings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    repo_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    stage_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    sync_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    succeeded: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC), index=True)
+
+
 class SchemaVersionRow(Base):
     __tablename__ = "schema_version"
 
@@ -77,9 +91,9 @@ def get_db_path(borgboi_dir: Path | None = None) -> Path:
     return resolve_home_dir() / ".borgboi" / ".database" / "borgboi.db"
 
 
-def _set_sqlite_wal_mode(dbapi_connection: object, _connection_record: object) -> None:
+def _set_sqlite_wal_mode(dbapi_connection: sqlite3.Connection, _connection_record: object) -> None:
     """Enable WAL mode for better concurrent read performance."""
-    cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+    cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.close()
 
@@ -87,7 +101,7 @@ def _set_sqlite_wal_mode(dbapi_connection: object, _connection_record: object) -
 def get_engine(db_path: Path) -> Engine:
     """Create a SQLAlchemy engine for the given database path."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(f"sqlite:///{db_path}", echo=False)
+    engine = create_engine(f"sqlite:///{db_path}", echo=False, poolclass=NullPool)
     event.listen(engine, "connect", _set_sqlite_wal_mode)
     return engine
 

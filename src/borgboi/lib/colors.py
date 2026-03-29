@@ -1,12 +1,11 @@
 from catppuccin import PALETTE
-from catppuccin.extras.pygments import FrappeStyle, LatteStyle, MacchiatoStyle, MochaStyle
 from pydantic import BaseModel
 
 PYGMENTS_STYLES = {
-    "catppuccin-latte": LatteStyle,
-    "catppuccin-frappe": FrappeStyle,
-    "catppuccin-macchiato": MacchiatoStyle,
-    "catppuccin-mocha": MochaStyle,
+    "catppuccin-latte": "catppuccin-latte",
+    "catppuccin-frappe": "catppuccin-frappe",
+    "catppuccin-macchiato": "catppuccin-macchiato",
+    "catppuccin-mocha": "catppuccin-mocha",
 }
 
 flavor = PALETTE.mocha

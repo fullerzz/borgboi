@@ -28,3 +28,4 @@ output.txt
 *.txt
 .claude/settings.local.json
 borgopher/
+.claude

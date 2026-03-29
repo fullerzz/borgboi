@@ -101,7 +101,7 @@ def _render_syntax_panel(config_dict: dict[str, Any], output_format: str) -> Non
         output,
         output_format,
         line_numbers=True,
-        theme=PYGMENTS_STYLES["catppuccin-mocha"],  # type: ignore[arg-type]
+        theme=PYGMENTS_STYLES["catppuccin-mocha"],
         padding=1,
     )
     panel = Panel(syntax, title="BorgBoi Config", border_style=COLOR_HEX.blue, expand=False)
