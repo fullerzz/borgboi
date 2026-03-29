@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -182,7 +183,7 @@ def test_config_show_json_format_no_pretty_print_with_env_override(
 
 
 def test_config_show_custom_path(
-    tmp_path: pytest.TempPathFactory,
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -197,7 +198,7 @@ def test_config_show_custom_path(
     monkeypatch.setattr(rich_utils.console, "print", fake_print)
 
     # Create a temporary config file
-    config_file = tmp_path / "custom_config.yaml"  # type: ignore[operator]
+    config_file = tmp_path / "custom_config.yaml"
     config_data = {
         "aws": {"s3_bucket": "custom-bucket"},
         "borg": {"compression": "lz4"},

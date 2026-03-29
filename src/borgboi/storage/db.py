@@ -1,5 +1,6 @@
 """SQLAlchemy ORM models and database initialization for BorgBoi."""
 
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -90,9 +91,9 @@ def get_db_path(borgboi_dir: Path | None = None) -> Path:
     return resolve_home_dir() / ".borgboi" / ".database" / "borgboi.db"
 
 
-def _set_sqlite_wal_mode(dbapi_connection: object, _connection_record: object) -> None:
+def _set_sqlite_wal_mode(dbapi_connection: sqlite3.Connection, _connection_record: object) -> None:
     """Enable WAL mode for better concurrent read performance."""
-    cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+    cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA journal_mode=WAL")
     cursor.close()
 

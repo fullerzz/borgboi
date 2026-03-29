@@ -119,8 +119,11 @@ def create_archive(
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
-    while out_stream.readable():  # type: ignore[union-attr]
-        line = out_stream.readline()  # type: ignore[union-attr]
+    if out_stream is None:
+        raise RuntimeError("Failed to capture stderr stream")
+
+    while out_stream.readable():
+        line = out_stream.readline()
         if not line:
             if proc.stdout:
                 proc.stdout.close()
@@ -148,19 +151,19 @@ class RepoCache(BaseModel):
     path: str
     stats: Stats
 
-    @computed_field  # type: ignore[prop-decorator]  # ty: ignore[unused-ignore-comment]
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def total_size_gb(self) -> str:
         """Original size in gigabytes."""
         return f"{(self.stats.total_size / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE):.2f}"
 
-    @computed_field  # type: ignore[prop-decorator]  # ty: ignore[unused-ignore-comment]
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def total_csize_gb(self) -> str:
         """Compressed size in gigabytes."""
         return f"{(self.stats.total_csize / 1024 / 1024 / 1024 / GIBIBYTES_IN_GIGABYTE):.2f}"
 
-    @computed_field  # type: ignore[prop-decorator]  # ty: ignore[unused-ignore-comment]
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def unique_csize_gb(self) -> str:
         """Deduplicated size in gigabytes."""
@@ -283,8 +286,11 @@ def prune(
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
-    while out_stream.readable():  # type: ignore[union-attr]
-        line = out_stream.readline()  # type: ignore[union-attr]
+    if out_stream is None:
+        raise RuntimeError("Failed to capture stderr stream")
+
+    while out_stream.readable():
+        line = out_stream.readline()
         if not line:
             if proc.stdout:
                 proc.stdout.close()
@@ -318,8 +324,11 @@ def compact(repo_path: str, log_json: bool = True, passphrase: str | None = None
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
-    while out_stream.readable():  # type: ignore[union-attr]
-        line = out_stream.readline()  # type: ignore[union-attr]
+    if out_stream is None:
+        raise RuntimeError("Failed to capture stderr stream")
+
+    while out_stream.readable():
+        line = out_stream.readline()
         if not line:
             if proc.stdout:
                 proc.stdout.close()
@@ -364,8 +373,11 @@ def extract(repo_path: str, archive_name: str, log_json: bool = True, passphrase
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
-    while out_stream.readable():  # type: ignore[union-attr]
-        line = out_stream.readline()  # type: ignore[union-attr]
+    if out_stream is None:
+        raise RuntimeError("Failed to capture stderr stream")
+
+    while out_stream.readable():
+        line = out_stream.readline()
         if not line:
             if proc.stdout:
                 proc.stdout.close()
@@ -419,8 +431,11 @@ def delete(
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
-    while out_stream.readable():  # type: ignore[union-attr]
-        line = out_stream.readline()  # type: ignore[union-attr]
+    if out_stream is None:
+        raise RuntimeError("Failed to capture stderr stream")
+
+    while out_stream.readable():
+        line = out_stream.readline()
         if not line:
             if proc.stdout:
                 proc.stdout.close()
@@ -479,8 +494,11 @@ def delete_archive(
     proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
     out_stream = proc.stderr
 
-    while out_stream.readable():  # type: ignore[union-attr]
-        line = out_stream.readline()  # type: ignore[union-attr]
+    if out_stream is None:
+        raise RuntimeError("Failed to capture stderr stream")
+
+    while out_stream.readable():
+        line = out_stream.readline()
         if not line:
             if proc.stdout:
                 proc.stdout.close()

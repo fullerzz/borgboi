@@ -32,8 +32,8 @@ SPARKLINE_DAYS = 14
 
 
 class BorgBoiApp(App[None]):
-    TITLE = "BorgBoi"  # type: ignore[mutable-override]  # ty: ignore[unused-ignore-comment]
-    CSS_PATH = "borgboi.tcss"  # type: ignore[mutable-override]  # ty: ignore[unused-ignore-comment]
+    TITLE = "BorgBoi"  # type: ignore[mutable-override]
+    CSS_PATH = "borgboi.tcss"  # type: ignore[mutable-override]
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("q", "quit", "Quit"),
