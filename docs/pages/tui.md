@@ -8,39 +8,63 @@ bb tui
 
 The TUI uses the same effective configuration as the CLI, so `--offline`, `--debug`, and `BORGBOI_*` overrides all apply here too.
 
-## Daily Backup Progress
+## Home Screen
 
-The daily backup screen keeps the existing stage boundaries (`create`, `prune`, `compact`, and optional `sync`), but progress within each stage now advances gradually instead of only jumping when a stage finishes.
+When the app starts, BorgBoi loads your managed repositories into a table with these columns:
+
+- `Name`
+- `Hostname`
+- `Last Archive`
+- `Size`
+
+Below the table an **Archive Activity** sparkline shows the number of successful archive creations per day over the last 14 days.
+
+The header subtitle indicates whether BorgBoi is running in **Online** or **Offline** mode.
+
+### Home-Screen Keys
+
+| Key | Action |
+| --- | --- |
+| `q` | Quit the app |
+| `r` | Refresh the repository list and sparkline |
+| `c` | Open the config viewer screen |
+| `e` | Open the excludes viewer |
+| `b` | Open the daily backup screen |
+
+## Config Viewer
+
+Press `c` from the home screen to open a full-screen view of the effective configuration, grouped into `General`, `AWS`, `Borg`, `Retention`, and `UI` sections.
+
+Press `Esc` to return to the home screen.
+
+## Daily Backup Screen
+
+Press `b` from the home screen to open the daily backup screen.
+
+### Controls
+
+- **Repository selector** — choose which managed repository to back up.
+- **Sync to S3 toggle** — enable or disable the final S3 sync step. Automatically disabled in offline mode.
+- **Start Backup** — begins the daily workflow (`create` → `prune` → `compact` → optional `sync`).
+- **Clear Log** — clears the log output and resets the progress bar. Available after a backup finishes.
+
+### Progress Bar
+
+The progress bar advances gradually through each stage rather than jumping when a stage finishes. Stage progress within a step is estimated from elapsed wall-clock time against predicted durations.
 
 Progress estimation improves over time because BorgBoi records successful stage durations in the local SQLite database and uses recent timing history to weight each stage more accurately for future runs. If no history is available yet, BorgBoi falls back to built-in default estimates.
 
 See [SQLite Database](sqlite-database.md) for the `backup_stage_timings` table details.
 
-## Main Screen
-
-When the app starts, BorgBoi loads your managed repositories into a table with these columns:
-
-- `Name`
-- `Local Path`
-- `Hostname`
-- `Last Archive`
-- `Size`
-- `Backup Target`
-
-You can also toggle a sidebar that shows the effective configuration grouped into `General`, `AWS`, `Borg`, `Retention`, and `UI` sections.
-
-## Main-Screen Keys
+### Daily Backup Keys
 
 | Key | Action |
 | --- | --- |
-| `q` | Quit the app |
-| `r` | Refresh the repository list |
-| `c` | Toggle the config sidebar |
-| `e` | Open the excludes viewer |
+| `Esc` | Return to the home screen (disabled while a backup is running) |
 
 ## Excludes Viewer
 
-Press `e` from the main screen to open the excludes viewer.
+Press `e` from the home screen to open the excludes viewer.
 
 The first tab shows the shared default excludes file. Each additional tab maps to a managed repository and points at that repo's repo-specific excludes file.
 
