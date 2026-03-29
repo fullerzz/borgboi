@@ -17,6 +17,7 @@ dependencies = [
     "sqlalchemy>=2.0",
     "structlog>=25.5.0",
     "textual[syntax]>=8.1.1",
+    "uuid-utils>=0.14.1",
 ]
 
 [project.scripts]

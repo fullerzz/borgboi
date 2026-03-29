@@ -31,6 +31,7 @@ class _LoggingState:
 
 def _build_shared_processors() -> list[Any]:
     return [
+        structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.ExtraAdder(),

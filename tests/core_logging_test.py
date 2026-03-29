@@ -7,6 +7,7 @@ from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
+from structlog.contextvars import bind_contextvars, clear_contextvars
 
 import borgboi.config as config_module
 from borgboi.clients.borg_client import BorgClient
@@ -26,7 +27,9 @@ from borgboi.storage.sqlite import SQLiteStorage
 @pytest.fixture(autouse=True)
 def _reset_logging(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Generator[None]:
     monkeypatch.setattr(config_module, "resolve_home_dir", lambda: tmp_path)
+    clear_contextvars()
     yield
+    clear_contextvars()
     configure_logging(Config(logging=LoggingConfig(enabled=False)))
 
 
@@ -70,6 +73,41 @@ def test_configure_logging_writes_stdlib_and_structlog_events() -> None:
         entry["event"] == "structured event" and entry["logger"] == "borgboi.cli.main" and entry["repo"] == "demo"
         for entry in entries
     )
+
+
+def test_trace_id_appears_in_structlog_and_stdlib_entries() -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True))
+    bind_contextvars(trace_id="abc123")
+
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    get_logger("borgboi.cli.main").info("structlog event")
+    logging.getLogger("borgboi.storage.sqlite").warning("stdlib event")
+
+    entries = _read_log_entries(log_file)
+
+    structlog_entry = next(e for e in entries if e["event"] == "structlog event")
+    assert structlog_entry["trace_id"] == "abc123"
+
+    stdlib_entry = next(e for e in entries if e["event"] == "stdlib event")
+    assert stdlib_entry["trace_id"] == "abc123"
+
+    config_entry = next(e for e in entries if e["event"] == "Application logging configured")
+    assert config_entry["trace_id"] == "abc123"
+
+
+def test_log_entries_have_no_trace_id_when_contextvars_not_bound() -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True))
+
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    get_logger("borgboi.test").info("no context event")
+
+    entries = _read_log_entries(log_file)
+    event_entry = next(e for e in entries if e["event"] == "no context event")
+    assert "trace_id" not in event_entry
 
 
 def test_configure_logging_filters_debug_logs_by_default() -> None:

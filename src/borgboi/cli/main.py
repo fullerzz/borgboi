@@ -14,6 +14,9 @@ from rich.traceback import install
 if TYPE_CHECKING:
     from borgboi.core.orchestrator import Orchestrator
 
+import uuid_utils as uuid
+from structlog.contextvars import bind_contextvars, clear_contextvars
+
 from borgboi.config import Config, get_config
 from borgboi.core.logging import configure_logging, get_logger
 from borgboi.rich_utils import console
@@ -27,6 +30,7 @@ class BorgBoiContext:
     def __init__(self, offline: bool = False, debug: bool = False) -> None:
         self.offline = offline
         self.debug = debug
+        self.trace_id = uuid.uuid7().hex
         self._orchestrator: Orchestrator | None = None
         self._config: Config | None = None
 
@@ -116,6 +120,8 @@ def _launcher(
     ] = False,
 ) -> Any:
     ctx = BorgBoiContext(offline=offline, debug=debug)
+    clear_contextvars()
+    bind_contextvars(trace_id=ctx.trace_id)
     config = ctx.config
     logging_enabled = configure_logging(config) is not None
     logger = get_logger(__name__) if logging_enabled else None
@@ -146,6 +152,9 @@ def _launcher(
         if logger is not None:
             logger.exception("CLI command failed", tokens=safe_tokens)
         raise
+    finally:
+        if logging_enabled:
+            console.print(f"Logs for this execution have trace_id {ctx.trace_id}")
 
 
 @app.command(name="version")
