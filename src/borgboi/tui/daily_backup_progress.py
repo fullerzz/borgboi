@@ -29,7 +29,7 @@ GLOBAL_STAGE_SAMPLE_LIMIT = 20
 class DailyBackupProgressHistory(Protocol):
     """Interface for loading and storing stage timing history."""
 
-    def get_stage_durations(self, repo_name: str, stage_ids: Iterable[str]) -> dict[str, float]:
+    def get_stage_durations(self, repo_name: str, stage_ids: Iterable[str]) -> dict[str, float]:  # pyright: ignore[reportReturnType]
         """Return predicted durations in milliseconds for the given stages."""
 
     def record_stage_timing(
