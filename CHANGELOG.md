@@ -1,3 +1,64 @@
+## v1.22.0 (2026-03-29)
+
+### 🚀 Features
+
+- **tui**: Add daily backup screen to TUI to allow creating daily backups ([ef1996c](https://github.com/fullerzz/borgboi/commit/ef1996cb8a8521a352c9155eb5634502ce1670a7))
+
+- Add Progress Bar to TUI Screen for Daily Backups (#219) ([110b3d9](https://github.com/fullerzz/borgboi/commit/110b3d99bcbf9ddc152dd6fa68ff68a08a224740))
+
+
+
+### 🐛 Bug Fixes
+
+- **tui**: Align archive sparkline labels ([0cd44b7](https://github.com/fullerzz/borgboi/commit/0cd44b745984e2d90090998ff9b48a4069538756))
+
+- Clean up lint typing compatibility ([29b479c](https://github.com/fullerzz/borgboi/commit/29b479c1047a53e1260ae7cbaf4a85fb3af96bd9))
+
+
+
+### 💼 Other
+
+- Add Progress Bar to Daily Backup TUI Screen (#220) ([b562097](https://github.com/fullerzz/borgboi/commit/b56209727a37e4151eaf3aa52a1fbfaa365d53e6))
+
+
+
+### 🚜 Refactor
+
+- **tui**: Redesign home screen as focused dashboard ([f84ff75](https://github.com/fullerzz/borgboi/commit/f84ff755c3e4a8a2a7357cafd22a0b2eb0ac3c21))
+
+
+
+### 📚 Documentation
+
+- Update docs with info on recent TUI changes ([0115795](https://github.com/fullerzz/borgboi/commit/01157951e25374668fa6fe44e80a8b307a019387))
+
+
+
+### 🎨 Styling
+
+- **tui**: Right align 'start backup' button in daily backup tui screen ([85335a4](https://github.com/fullerzz/borgboi/commit/85335a498473efc4ec8f55756760d32330d69921))
+
+- **tui**: Add Clear Log button to daily backup screen ([09eef49](https://github.com/fullerzz/borgboi/commit/09eef498063a68bd1b4412a02a7e0032c4378bba))
+
+
+
+### 🧪 Testing
+
+- **tui**: Refactor tui tests into new tests/tui submodule ([a020a5d](https://github.com/fullerzz/borgboi/commit/a020a5d1b36eb3d01c37c960233bd2379bcadcd3))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- Update .gitignore ([631c025](https://github.com/fullerzz/borgboi/commit/631c02569ce820d791b44a232bf5e5caf9b275c7))
+
+- Mypy cleanup ([3dc2109](https://github.com/fullerzz/borgboi/commit/3dc210918aa0fa0f2200179ae413d08707a8f000))
+
+- **justfile**: Add recipe 'dev-tui' to run tui with textual dev mode enabled ([e141952](https://github.com/fullerzz/borgboi/commit/e141952b9f5b7b787dfdfed01a77b3aef48c3b53))
+
+- **tui**: Add docstrings ([36ec732](https://github.com/fullerzz/borgboi/commit/36ec7329b7cac62c92227e7210371c02e3190798))
+
+
 ## v1.21.1 (2026-03-27)
 
 ### 🐛 Bug Fixes
