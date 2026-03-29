@@ -74,6 +74,50 @@ async def test_action_daily_backup_pushes_screen(tui_config: Config) -> None:
         assert isinstance(app.screen, DailyBackupScreen)
 
 
+async def test_returning_from_successful_backup_refreshes_dashboard(tui_config: Config, monkeypatch: Any) -> None:
+    orchestrator = cast(
+        Any,
+        SimpleNamespace(
+            config=tui_config,
+            borg=None,
+            storage=None,
+            s3=None,
+            list_repos=lambda: [build_repo("alpha")],
+        ),
+    )
+    app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
+
+    repo_refreshes = 0
+    sparkline_refreshes = 0
+
+    def fake_load_repos() -> None:
+        nonlocal repo_refreshes
+        repo_refreshes += 1
+
+    def fake_load_sparkline_data() -> None:
+        nonlocal sparkline_refreshes
+        sparkline_refreshes += 1
+
+    monkeypatch.setattr(app, "_load_repos", fake_load_repos)
+    monkeypatch.setattr(app, "_load_sparkline_data", fake_load_sparkline_data)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        initial_repo_refreshes = repo_refreshes
+        initial_sparkline_refreshes = sparkline_refreshes
+
+        await pilot.press("b")
+        await pilot.pause()
+        assert isinstance(app.screen, DailyBackupScreen)
+
+        app.screen._on_backup_complete()
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert repo_refreshes == initial_repo_refreshes + 1
+        assert sparkline_refreshes == initial_sparkline_refreshes + 1
+
+
 async def test_action_daily_backup_ignored_on_non_main_screen(tui_app: BorgBoiApp) -> None:
     async with tui_app.run_test() as pilot:
         await pilot.press("e")  # push excludes screen

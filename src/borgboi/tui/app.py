@@ -163,6 +163,10 @@ class BorgBoiApp(App[None]):
         """Reload the repos table and sparkline from storage."""
         if self.screen is not self._main_screen:
             return
+        self._refresh_dashboard()
+
+    def _refresh_dashboard(self) -> None:
+        """Reload the dashboard data shown on the main screen."""
         if self._repos_table is None:
             return
         self._repos_table.loading = True
@@ -179,4 +183,9 @@ class BorgBoiApp(App[None]):
         """Push the daily backup screen."""
         if self.screen is not self._main_screen:
             return
-        _ = self.push_screen(DailyBackupScreen(orchestrator=self.orchestrator))
+        _ = self.push_screen(
+            DailyBackupScreen(
+                orchestrator=self.orchestrator,
+                on_back_after_success=self._refresh_dashboard,
+            )
+        )
