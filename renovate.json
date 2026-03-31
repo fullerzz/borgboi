@@ -9,6 +9,11 @@
   "reviewers": [
     "fullerzz"
   ],
+  "minimumReleaseAge": "1 day",
+  "minimumReleaseAgeBehaviour": "timestamp-required",
+  "prCreation": "not-pending",
+  "rebaseWhen": "behind-base-branch",
+  "pruneStaleBranches": true,
   "packageRules": [
     {
       "matchManagers": [
