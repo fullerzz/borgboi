@@ -2,6 +2,10 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 
+[options]
+exclude-newer = "2026-03-30T22:38:49.147867Z"
+exclude-newer-span = "PT24H"
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
