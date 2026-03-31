@@ -11,7 +11,7 @@ from borgboi.clients import borg
 from borgboi.config import config
 from borgboi.core.logging import get_logger
 from borgboi.lib.passphrase import resolve_passphrase
-from borgboi.models import BorgBoiRepo
+from borgboi.models import BorgBoiRepo, RetentionPolicy
 from borgboi.rich_utils import console
 
 boto_config = Config(retries={"mode": "standard"})
@@ -78,6 +78,13 @@ def _convert_repo_to_table_item(repo: BorgBoiRepo) -> BorgBoiRepoTableItem:
     }
     if repo.last_backup:
         data["last_backup"] = repo.last_backup.isoformat()
+    if repo.last_s3_sync:
+        data["last_s3_sync"] = repo.last_s3_sync.isoformat()
+    if repo.retention_policy:
+        data["retention_keep_daily"] = repo.retention_policy.keep_daily
+        data["retention_keep_weekly"] = repo.retention_policy.keep_weekly
+        data["retention_keep_monthly"] = repo.retention_policy.keep_monthly
+        data["retention_keep_yearly"] = repo.retention_policy.keep_yearly
     return BorgBoiRepoTableItem.model_validate(data)
 
 
@@ -92,6 +99,19 @@ def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
         BorgBoiRepo: Borg repository
     """
     last_backup = datetime.fromisoformat(item.last_backup) if item.last_backup else None
+    last_s3_sync = datetime.fromisoformat(item.last_s3_sync) if item.last_s3_sync else None
+
+    # Build retention_policy if any retention fields are set
+    retention_policy = None
+    if any(
+        getattr(item, f"retention_keep_{period}") is not None for period in ("daily", "weekly", "monthly", "yearly")
+    ):
+        retention_policy = RetentionPolicy(
+            keep_daily=item.retention_keep_daily or 0,
+            keep_weekly=item.retention_keep_weekly or 0,
+            keep_monthly=item.retention_keep_monthly or 0,
+            keep_yearly=item.retention_keep_yearly or 0,
+        )
 
     # Resolve passphrase for local repos before getting metadata
     metadata = None
@@ -114,7 +134,9 @@ def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
         hostname=item.hostname,
         os_platform=item.os_platform or "",
         last_backup=last_backup,
+        last_s3_sync=last_s3_sync,
         metadata=metadata,
+        retention_policy=retention_policy,
         passphrase=item.passphrase,
         passphrase_file_path=item.passphrase_file_path,
         passphrase_migrated=item.passphrase_migrated or False,

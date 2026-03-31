@@ -195,6 +195,60 @@ CollapsibleTitle:hover {
     border-left: none;
 }
 
+/* Repo config screen */
+
+#repo-config-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#repo-config-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#repo-config-summary,
+#repo-config-current,
+#repo-config-status {
+    color: #cdd6f4;
+    margin-bottom: 1;
+}
+
+#repo-config-form,
+.repo-config-row,
+#repo-config-actions {
+    height: auto;
+}
+
+.repo-config-row {
+    align: left middle;
+    margin-bottom: 1;
+}
+
+.repo-config-label {
+    width: 16;
+    color: #cdd6f4;
+    padding-top: 1;
+}
+
+#repo-config-quota-input,
+#repo-config-daily-input,
+#repo-config-weekly-input,
+#repo-config-monthly-input,
+#repo-config-yearly-input {
+    width: 20;
+}
+
+#repo-config-actions {
+    margin-top: 1;
+}
+
+#repo-config-save-btn {
+    margin-right: 1;
+}
+
 /* Daily Backup screen */
 
 #daily-backup-screen {
@@ -297,7 +351,12 @@ CollapsibleTitle:hover {
 }
 
 .repo-info-tab-body {
+    height: 1fr;
     padding: 1 0 0 0;
+}
+
+#repo-info-overview-body {
+    scrollbar-gutter: stable;
 }
 
 .repo-info-card-row {
@@ -330,6 +389,7 @@ CollapsibleTitle:hover {
 
 #repo-info-summary,
 #repo-info-config,
+#repo-info-config-status,
 #repo-info-excludes-status,
 #repo-info-excludes-path,
 #repo-info-workspace-status,
@@ -343,6 +403,7 @@ CollapsibleTitle:hover {
 
 #repo-info-live-summary,
 #repo-info-command-output,
+#repo-info-config-status,
 #repo-info-excludes-status,
 #repo-info-excludes-path,
 #repo-info-workspace-status,
@@ -355,6 +416,13 @@ CollapsibleTitle:hover {
 .repo-info-pane-divider {
     color: #313244;
     margin: 1 0;
+}
+
+#repo-info-config-actions {
+    height: auto;
+    align: left middle;
+    margin-top: 1;
+    margin-bottom: 1;
 }
 
 .repo-info-protection-block {

@@ -297,6 +297,27 @@ class BorgClient:
         configured_free_space = result.stdout.strip()
         return configured_free_space or None
 
+    def get_storage_quota(self, repo_path: str, passphrase: str | None = None) -> str | None:
+        """Read the configured storage quota for a repository.
+
+        Args:
+            repo_path: Path to the repository
+            passphrase: Optional passphrase for encrypted repos
+
+        Returns:
+            Configured storage quota, or None when the config value is unset
+
+        Raises:
+            BorgError: If the command fails
+        """
+        logger.debug("Reading Borg repository storage quota", repo_path=repo_path)
+        cmd = [self.executable_path, "config", repo_path, "storage_quota"]
+        result = self._run_command(cmd, passphrase=passphrase)
+        configured_quota = result.stdout.strip()
+        if configured_quota in {"", "0"}:
+            return None
+        return configured_quota
+
     def archive_info(
         self,
         repo_path: str,

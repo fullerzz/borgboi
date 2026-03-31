@@ -127,3 +127,25 @@ def test_get_additional_free_space_reads_borg_config(monkeypatch: pytest.MonkeyP
     assert captured["cmd"] == ["borg", "config", "/repo", "additional_free_space"]
     assert captured["passphrase"] is None
     assert captured["capture_output"] is True
+
+
+def test_get_storage_quota_treats_zero_as_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    captured: dict[str, object] = {}
+
+    def fake_run_command(
+        cmd: list[str],
+        passphrase: str | None = None,
+        capture_output: bool = True,
+    ) -> SimpleNamespace:
+        captured["cmd"] = cmd
+        captured["passphrase"] = passphrase
+        captured["capture_output"] = capture_output
+        return SimpleNamespace(stdout="0\n")
+
+    monkeypatch.setattr(client, "_run_command", fake_run_command)
+
+    assert client.get_storage_quota("/repo") is None
+    assert captured["cmd"] == ["borg", "config", "/repo", "storage_quota"]
+    assert captured["passphrase"] is None
+    assert captured["capture_output"] is True

@@ -11,6 +11,7 @@ import pytest
 from borgboi.clients.borg import Encryption, RepoCache, RepoInfo, Repository, Stats
 from borgboi.config import Config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
+from borgboi.core.models import RetentionPolicy
 from borgboi.core.orchestrator import Orchestrator
 from borgboi.core.output import CollectingOutputHandler
 from borgboi.lib.colors import COLOR_HEX
@@ -752,6 +753,82 @@ def test_update_repo_storage_quota_rejects_remote_repository(output_handler: Col
 
     with pytest.raises(ValidationError, match="must be local"):
         orchestrator.update_repo_storage_quota("2G", name=remote_repo.name)
+
+
+def test_update_repo_config_can_clear_repo_specific_quota(output_handler: CollectingOutputHandler) -> None:
+    repo = _build_repo()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    passphrase_override = "override"  # noqa: S105
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    updated_quota, _ = orchestrator.update_repo_config(
+        name=repo.name,
+        storage_quota="",
+        passphrase=passphrase_override,
+    )
+
+    borg_client.set_storage_quota.assert_called_once_with(repo.path, "0", passphrase=passphrase_override)
+    assert updated_quota is None
+
+
+def test_update_repo_config_does_not_create_retention_override_for_quota_only_update(
+    output_handler: CollectingOutputHandler,
+) -> None:
+    repo = _build_repo()
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+    borg_client = Mock()
+    borg_client.set_storage_quota.return_value = iter(())
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, borg_client),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+    orchestrator.update_repo_storage_quota = Mock(return_value="2G")  # type: ignore[method-assign]
+
+    updated_quota, updated_retention = orchestrator.update_repo_config(
+        name=repo.name,
+        storage_quota="2G",
+    )
+
+    assert updated_quota == "2G"
+    assert updated_retention is None
+    assert repo.retention_policy is None
+    storage.save.assert_not_called()
+
+
+def test_update_repo_config_can_clear_retention_override(output_handler: CollectingOutputHandler) -> None:
+    repo = _build_repo()
+    repo.retention_policy = RetentionPolicy(keep_daily=30, keep_weekly=8, keep_monthly=12, keep_yearly=2)
+    storage = Mock()
+    storage.get_by_name_or_path.return_value = repo
+
+    orchestrator = Orchestrator(
+        config=Config(offline=True),
+        borg_client=cast(Any, Mock()),
+        storage=cast(Any, storage),
+        output_handler=output_handler,
+    )
+
+    updated_quota, updated_retention = orchestrator.update_repo_config(
+        name=repo.name,
+        clear_retention_policy=True,
+    )
+
+    assert updated_quota is None
+    assert updated_retention is None
+    assert repo.retention_policy is None
+    storage.save.assert_called_once_with(repo)
 
 
 def test_delete_repo_removes_storage_and_excludes_file(

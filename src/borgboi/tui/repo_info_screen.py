@@ -15,6 +15,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import (
+    Button,
     Collapsible,
     DataTable,
     DirectoryTree,
@@ -32,6 +33,7 @@ from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.core.logging import get_logger
 from borgboi.core.models import RetentionPolicy
 from borgboi.lib.utils import calculate_archive_age, format_iso_timestamp, format_last_backup, format_repo_size
+from borgboi.tui.repo_config_screen import RepoConfigResult, RepoConfigScreen, effective_quota_display
 
 logger = get_logger(__name__)
 
@@ -208,6 +210,7 @@ class RepoInfoScreen(Screen[None]):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "back", "Back"),
+        Binding("e", "edit_config", "Edit Config"),
         Binding("r", "refresh", "Refresh"),
     ]
 
@@ -223,6 +226,10 @@ class RepoInfoScreen(Screen[None]):
         self._orchestrator = orchestrator
         self._config = config or orchestrator.config
         self._workspace_state = load_repo_workspace_state(repo)
+        self._live_quota: str | None = None
+        self._quota_load_failed = False
+        self._quota_loading = False
+        self._quota_load_error: str | None = None
 
     @override
     def compose(self) -> ComposeResult:
@@ -242,7 +249,10 @@ class RepoInfoScreen(Screen[None]):
             yield Rule(id="repo-info-divider")
 
             with TabbedContent(initial="repo-info-overview-tab", id="repo-info-tabs"):
-                with TabPane("Overview", id="repo-info-overview-tab"), Vertical(classes="repo-info-tab-body"):
+                with (
+                    TabPane("Overview", id="repo-info-overview-tab"),
+                    VerticalScroll(id="repo-info-overview-body", classes="repo-info-tab-body"),
+                ):
                     with Horizontal(classes="repo-info-card-row"):
                         yield Static("", id="repo-info-last-backup-card", classes="repo-info-card", markup=True)
                         yield Static("", id="repo-info-storage-card", classes="repo-info-card", markup=True)
@@ -255,6 +265,9 @@ class RepoInfoScreen(Screen[None]):
 
                     with Collapsible(title="Quota and retention", classes="repo-info-collapsible"):
                         yield Label("", id="repo-info-config", markup=True)
+                        with Horizontal(id="repo-info-config-actions", classes="repo-info-config-actions"):
+                            yield Button("Edit settings", id="repo-info-edit-config-btn", variant="primary")
+                        yield Label("", id="repo-info-config-status", markup=True)
 
                 with TabPane("Live Borg", id="repo-info-live-tab"), Vertical(classes="repo-info-tab-body"):
                     yield Label("Loading live Borg metadata...", id="repo-info-live-summary", markup=True)
@@ -295,6 +308,11 @@ class RepoInfoScreen(Screen[None]):
         table.add_columns("Name", "Created", "Age", "ID")
         self._render_static_sections()
         self._load_repo_details()
+        if self._is_local_repo():
+            self.query_one("#repo-info-config-status", Label).update("[dim]Loading current repository quota...[/]")
+            self._load_live_quota()
+        else:
+            self._apply_remote_quota_state()
 
     def action_back(self) -> None:
         """Return to the previous screen."""
@@ -305,7 +323,31 @@ class RepoInfoScreen(Screen[None]):
         logger.debug("Refreshing repo info screen", repo_name=self._repo.name)
         self.query_one("#repo-info-loading", Static).update("Refreshing live repository data...")
         self.query_one("#repo-info-command-output", Static).update("Refreshing live Borg metadata...")
+        if self._is_local_repo():
+            self._live_quota = None
+            self._quota_load_failed = False
+            self._quota_load_error = None
+            self._refresh_quota_display()
+            self.query_one("#repo-info-config-status", Label).update("[dim]Reloading config...[/]")
+        else:
+            self._apply_remote_quota_state()
+
         self._load_repo_details()
+        if self._is_local_repo():
+            self._load_live_quota()
+
+    def action_edit_config(self) -> None:
+        """Open the dedicated repo settings editor screen."""
+        self._wait_for_config_result()
+
+    @work(exclusive=True)
+    async def _wait_for_config_result(self) -> None:
+        """Wait for the config editor to dismiss and apply any result."""
+        result = await self.app.push_screen_wait(
+            RepoConfigScreen(repo=self._repo, orchestrator=self._orchestrator, config=self._config)
+        )
+        if result is not None:
+            self._apply_config_result(result)
 
     def _render_static_sections(self) -> None:
         """Render the repository sections that come from local BorgBoi state."""
@@ -338,6 +380,95 @@ class RepoInfoScreen(Screen[None]):
         )
         self.query_one("#repo-info-excludes-viewer", TextArea).load_text(excludes.body)
 
+    def _is_local_repo(self) -> bool:
+        """Check if the repository is local to this machine."""
+        return self._workspace_state.can_browse
+
+    def _refresh_quota_display(self) -> None:
+        """Refresh both quota displays to reflect the current state."""
+        self._render_overview_cards()
+        self.query_one("#repo-info-config", Static).update(self._render_quota_and_retention())
+
+    def _effective_quota_display(self) -> tuple[str, str]:
+        """Return the quota text and source label for the current repository state."""
+        return effective_quota_display(
+            quota_load_failed=self._quota_load_failed,
+            is_local_repo=self._is_local_repo(),
+            live_quota=self._live_quota,
+            config_default_quota=self._config.borg.storage_quota if self._config is not None else None,
+        )
+
+    def _apply_remote_quota_state(self) -> None:
+        """Show the read-only quota state for repositories on another machine."""
+        self.query_one("#repo-info-config-status", Label).update(
+            "[dim]Press e or use Edit settings to update retention. Storage quota is only editable for local repositories.[/]"
+        )
+
+    @work(thread=True)
+    def _load_live_quota(self) -> None:
+        """Load the live storage quota for the repository in a worker thread."""
+        logger.debug("Loading live storage quota", repo_name=self._repo.name)
+        self._quota_loading = True
+        try:
+            quota = self._orchestrator.get_repo_storage_quota(self._repo)
+        except Exception as exc:
+            logger.warning("Failed to load live storage quota", repo_name=self._repo.name, error=str(exc))
+            self.app.call_from_thread(self._on_quota_load_error, exc)
+            return
+        finally:
+            self._quota_loading = False
+
+        self.app.call_from_thread(self._on_quota_load_success, quota)
+
+    def _on_quota_load_success(self, quota: str | None) -> None:
+        """Handle successful live quota load."""
+        self._live_quota = quota
+        self._quota_load_failed = False
+        self._quota_load_error = None
+        self._refresh_quota_display()
+        status_widget = self.query_one("#repo-info-config-status", Label)
+        if quota:
+            status_widget.update("[dim]Press e or use Edit settings to update quota and retention.[/]")
+        else:
+            status_widget.update(
+                "[dim]No repository-specific quota configured. Press e or use Edit settings to update quota and retention.[/]"
+            )
+
+    def _on_quota_load_error(self, error: Exception) -> None:
+        """Handle live quota load failure."""
+        self._live_quota = None
+        self._quota_load_failed = True
+        self._quota_load_error = str(error)
+        self._refresh_quota_display()
+        self.query_one("#repo-info-config-status", Label).update(
+            f"[#f38ba8]Unable to load live quota:[/] {escape(str(error))} [dim]Press e or use Edit settings to update retention. Quota editing stays disabled until quota reload succeeds.[/]"
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses in the repo info screen."""
+        if event.button.id != "repo-info-edit-config-btn":
+            return
+        self.action_edit_config()
+
+    def _apply_config_result(self, result: RepoConfigResult) -> None:
+        """Apply the config editor result to the parent summary state."""
+        self._live_quota = result.quota
+        self._quota_load_failed = result.quota_load_failed
+        self._quota_load_error = result.quota_load_error
+        self._repo.retention_policy = result.retention_policy
+        self._refresh_quota_display()
+
+        if result.quota_load_failed and result.quota_load_error is not None:
+            self.query_one("#repo-info-config-status", Label).update(
+                f"[#f38ba8]Live quota still unavailable:[/] {escape(result.quota_load_error)} [dim]Press e or use Edit settings to retry later.[/]"
+            )
+        else:
+            self.query_one("#repo-info-config-status", Label).update(
+                "[dim]Repository settings updated. Press e or use Edit settings to make more changes.[/]"
+            )
+
+        self.notify("Configuration saved", severity="information", title="Config Updated")
+
     def _render_info_card(self, title: str, value: str, detail: str, *, accent: str = "#89b4fa") -> str:
         """Render a compact card-like summary block."""
         return "\n".join(
@@ -367,10 +498,10 @@ class RepoInfoScreen(Screen[None]):
                 keep_monthly=self._config.borg.retention.keep_monthly,
                 keep_yearly=self._config.borg.retention.keep_yearly,
             )
-            quota = self._config.borg.storage_quota
         else:
             default_policy = RetentionPolicy()
-            quota = "Unknown"
+
+        quota, _quota_source = self._effective_quota_display()
 
         repo_retention = getattr(self._repo, "retention_policy", None)
         active_policy = repo_retention or default_policy
@@ -455,9 +586,12 @@ class RepoInfoScreen(Screen[None]):
         active_policy = repo_retention or default_policy
         retention_source = "Repo-specific" if repo_retention is not None else "Default"
 
+        quota_display, quota_source = self._effective_quota_display()
+
         return _render_fields(
             [
-                ("Max Storage Quota", self._config.borg.storage_quota if self._config else "Unknown"),
+                ("Max Storage Quota", quota_display),
+                ("Quota Source", quota_source),
                 ("Retention Source", retention_source),
                 ("Keep Daily", active_policy.keep_daily),
                 ("Keep Weekly", active_policy.keep_weekly),

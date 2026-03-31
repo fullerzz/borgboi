@@ -39,6 +39,11 @@ class BorgBoiRepo(BaseModel):
     last_backup: datetime | None = None
     metadata: RepoInfo | None
 
+    # NEW: Retention policy and timestamps
+    retention_policy: RetentionPolicy | None = None
+    last_s3_sync: datetime | None = None
+    created_at: datetime | None = None
+
     # DEPRECATED: Kept for backward compatibility
     # Passphrases are now stored in files at ~/.borgboi/passphrases/{repo-name}.key
     passphrase: str | None = None
@@ -76,6 +81,22 @@ class BorgBoiRepo(BaseModel):
             return self.path.replace("Users/", "home/", 1)
         else:
             return Path(self.path).as_posix()
+
+    def get_effective_retention(self, default: RetentionPolicy | None = None) -> RetentionPolicy:
+        """Get the effective retention policy for this repository.
+
+        Returns the repository's own retention policy if set, otherwise
+        falls back to the provided default or creates a new default policy.
+
+        Args:
+            default: Default retention policy to use if repository has none
+
+        Returns:
+            RetentionPolicy: The effective retention policy
+        """
+        if self.retention_policy is not None:
+            return self.retention_policy
+        return default or RetentionPolicy()
 
 
 # Re-export all models for convenience
