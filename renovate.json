@@ -1,7 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:best-practices"
+    "config:best-practices",
+    "mergeConfidence:all-badges",
+    "helpers:githubDigestChangelogs"
   ],
   "labels": [
     "renovate 🤖"
@@ -14,6 +16,8 @@
   "prCreation": "not-pending",
   "rebaseWhen": "behind-base-branch",
   "pruneStaleBranches": true,
+  "osvVulnerabilityAlerts": true,
+  "dependencyDashboardOSVVulnerabilitySummary": "all",
   "packageRules": [
     {
       "matchManagers": [
