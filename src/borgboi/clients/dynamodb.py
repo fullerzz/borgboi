@@ -41,6 +41,7 @@ class BorgBoiRepoTableItem(BaseModel):
     repo_name: str = Field(..., alias="common_name")
     last_backup: str | None = None
     last_s3_sync: str | None = None
+    created_at: str | None = None
     os_platform: str | None = None
 
     # DEPRECATED: Kept for backward compatibility
@@ -80,6 +81,8 @@ def _convert_repo_to_table_item(repo: BorgBoiRepo) -> BorgBoiRepoTableItem:
         data["last_backup"] = repo.last_backup.isoformat()
     if repo.last_s3_sync:
         data["last_s3_sync"] = repo.last_s3_sync.isoformat()
+    if repo.created_at:
+        data["created_at"] = repo.created_at.isoformat()
     if repo.retention_policy:
         data["retention_keep_daily"] = repo.retention_policy.keep_daily
         data["retention_keep_weekly"] = repo.retention_policy.keep_weekly
@@ -100,6 +103,7 @@ def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
     """
     last_backup = datetime.fromisoformat(item.last_backup) if item.last_backup else None
     last_s3_sync = datetime.fromisoformat(item.last_s3_sync) if item.last_s3_sync else None
+    created_at = datetime.fromisoformat(item.created_at) if item.created_at else None
 
     # Build retention_policy if any retention fields are set
     retention_policy = None
@@ -135,6 +139,7 @@ def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
         os_platform=item.os_platform or "",
         last_backup=last_backup,
         last_s3_sync=last_s3_sync,
+        created_at=created_at,
         metadata=metadata,
         retention_policy=retention_policy,
         passphrase=item.passphrase,
