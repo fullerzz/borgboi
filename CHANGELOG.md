@@ -1,3 +1,18 @@
+## v1.25.0 (2026-04-01)
+
+### 🚀 Features
+
+- **tui**: Add Repo Info Screen to TUI (#232) ([de102e1](https://github.com/fullerzz/borgboi/commit/de102e1333823d5c359d4e04a4428fdc8599ca7b))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Require Minimum Release Age of 24 hours (#229) ([0da9acb](https://github.com/fullerzz/borgboi/commit/0da9acbb1c08c03744cb20f3e6ff9736afcf574c))
+
+- **renovate**: Add additional presets and enable osv vulnerability PRs (#230) ([cd53fb0](https://github.com/fullerzz/borgboi/commit/cd53fb06291947c1653e9c7d0b22e5e5eaf86c5e))
+
+
 ## v1.24.0 (2026-03-29)
 
 ### 🚀 Features
