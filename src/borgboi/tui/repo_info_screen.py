@@ -160,6 +160,7 @@ class RepoInfoScreen(Screen[None]):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "back", "Back"),
+        Binding("b", "daily_backup", "Backup"),
         Binding("e", "edit_config", "Edit Config"),
         Binding("r", "refresh", "Refresh"),
     ]
@@ -270,6 +271,17 @@ class RepoInfoScreen(Screen[None]):
     def action_back(self) -> None:
         """Return to the previous screen."""
         _ = self.app.pop_screen()
+
+    def action_daily_backup(self) -> None:
+        """Open the daily backup screen with the current repo pre-selected."""
+        from borgboi.tui.daily_backup_screen import DailyBackupScreen
+
+        _ = self.app.push_screen(
+            DailyBackupScreen(
+                orchestrator=self._orchestrator,
+                selected_repo_name=self._repo.name,
+            )
+        )
 
     def action_refresh(self) -> None:
         """Reload the live repository details."""
