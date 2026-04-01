@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, cast, override
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 from rich.markup import escape
 from textual import work
@@ -357,7 +357,7 @@ class RepoConfigScreen(Screen[RepoConfigResult | None]):
         self.app.call_from_thread(self._update_status_message)
         self.app.call_from_thread(self._apply_form_state)
         try:
-            quota = self._orchestrator.get_repo_storage_quota(cast(Any, self._repo))
+            quota = self._orchestrator.get_repo_storage_quota(self._repo.name)
         except Exception as exc:
             logger.warning("Failed to load live storage quota", repo_name=self._repo.name, error=str(exc))
             self.app.call_from_thread(self._on_quota_load_error, exc)
