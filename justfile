@@ -66,23 +66,23 @@ validate-renovate:
 
 # interactively review and approve snapshot changes
 snapshot-review *args:
-    uv run pytest --inline-snapshot=review {{ args }}
+    uv run pytest -n0 --inline-snapshot=review {{ args }}
 
 # fill empty snapshot() placeholders with recorded values
 snapshot-create *args:
-    uv run pytest --inline-snapshot=create {{ args }}
+    uv run pytest -n0 --inline-snapshot=create {{ args }}
 
 # create missing snapshots and update changed values
 snapshot-fix *args:
-    uv run pytest --inline-snapshot=create,fix {{ args }}
+    uv run pytest -n0 --inline-snapshot=create,fix {{ args }}
 
 # trim unused snapshot data (prefer full-suite runs)
 snapshot-trim *args:
-    uv run pytest --inline-snapshot=trim {{ args }}
+    uv run pytest -n0 --inline-snapshot=trim {{ args }}
 
 # update snapshot repr formatting without value changes
 snapshot-update *args:
-    uv run pytest --inline-snapshot=update {{ args }}
+    uv run pytest -n0 --inline-snapshot=update {{ args }}
 
 # run the TUI in dev mode to enable connecting to textual console debugger
 dev-tui:

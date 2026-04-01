@@ -162,3 +162,5 @@ just test
 just lint
 just serve-docs
 ```
+
+Normal pytest runs use `pytest-xdist` and fan out across local CPUs by default. Snapshot maintenance commands must stay single-process because `inline-snapshot` cannot update snapshots while xdist is active, so use the dedicated `just snapshot-*` recipes for those workflows.
