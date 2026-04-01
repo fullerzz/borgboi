@@ -25,7 +25,7 @@ async def test_repo_config_screen_allows_retention_editing_for_remote_repo(
     tui_config_with_excludes: Config,
     repo_detail_repo: Repository,
 ) -> None:
-    monkeypatch.setattr("borgboi.tui.repo_config_screen.socket.gethostname", lambda: "other-host")
+    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: "other-host")
     app = _build_host_app(tui_config_with_excludes, repo_detail_repo)
 
     async with app.run_test() as pilot:
@@ -56,7 +56,7 @@ async def test_repo_config_screen_disables_quota_after_load_failure(
     tmp_path: Any,
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
-    monkeypatch.setattr("borgboi.tui.repo_config_screen.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
     app = _build_host_app(
         tui_config_with_excludes,
         repo_detail_repo,
@@ -87,7 +87,7 @@ async def test_repo_config_screen_can_clear_repo_specific_quota(
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
     assert repo_detail_repo.retention_policy is not None
-    monkeypatch.setattr("borgboi.tui.repo_config_screen.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
 
     results: list[RepoConfigResult | None] = []
     seen_storage_quotas: list[str | None] = []
@@ -149,7 +149,7 @@ async def test_repo_config_screen_preserves_loaded_quota_for_retention_only_save
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
     assert repo_detail_repo.retention_policy is not None
-    monkeypatch.setattr("borgboi.tui.repo_config_screen.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
 
     results: list[RepoConfigResult | None] = []
     seen_storage_quotas: list[str | None] = []
@@ -211,7 +211,7 @@ async def test_repo_config_screen_preserves_inherited_retention_on_quota_only_sa
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
     repo_detail_repo.retention_policy = None
-    monkeypatch.setattr("borgboi.tui.repo_config_screen.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
 
     results: list[RepoConfigResult | None] = []
     seen_retention_policies: list[RetentionPolicy | None] = []
@@ -276,7 +276,7 @@ async def test_repo_config_screen_clears_override_when_form_matches_defaults(
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
     repo_detail_repo.retention_policy = RetentionPolicy(keep_daily=30, keep_weekly=8, keep_monthly=12, keep_yearly=2)
-    monkeypatch.setattr("borgboi.tui.repo_config_screen.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
 
     results: list[RepoConfigResult | None] = []
     seen_retention_policies: list[RetentionPolicy | None] = []

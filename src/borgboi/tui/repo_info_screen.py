@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import socket
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -34,6 +33,7 @@ from borgboi.core.logging import get_logger
 from borgboi.core.models import RetentionPolicy
 from borgboi.lib.utils import calculate_archive_age, format_iso_timestamp, format_last_backup, format_repo_size
 from borgboi.tui.repo_config_screen import RepoConfigResult, RepoConfigScreen, effective_quota_display
+from borgboi.tui.repo_workspace import load_repo_workspace_state
 
 logger = get_logger(__name__)
 
@@ -51,16 +51,6 @@ class RepoExcludesState:
     status: str
     path: Path | None
     body: str
-
-
-@dataclass(frozen=True, slots=True)
-class RepoWorkspaceState:
-    """Workspace browsing state for a repository."""
-
-    path: Path
-    status: str
-    detail: str
-    can_browse: bool
 
 
 def _render_value(value: object) -> str:
@@ -162,46 +152,6 @@ def load_repo_excludes_state(config: Config | None, repo_name: str) -> RepoExclu
         status="No repo-specific excludes file found, and no shared default excludes file is available.",
         path=None,
         body="",
-    )
-
-
-def load_repo_workspace_state(repo: BorgBoiRepo) -> RepoWorkspaceState:
-    """Resolve whether the selected repository workspace can be browsed locally."""
-    repo_path = Path(repo.path)
-    current_hostname = socket.gethostname()
-
-    if repo.hostname != current_hostname:
-        return RepoWorkspaceState(
-            path=repo_path,
-            status="Workspace tree unavailable.",
-            detail=(
-                "Workspace tree is only available for repositories on this machine. "
-                f"Selected host: {repo.hostname}. Current host: {current_hostname}."
-            ),
-            can_browse=False,
-        )
-
-    if not repo_path.exists():
-        return RepoWorkspaceState(
-            path=repo_path,
-            status="Workspace tree unavailable.",
-            detail="Repository path is not available on this machine.",
-            can_browse=False,
-        )
-
-    if not repo_path.is_dir():
-        return RepoWorkspaceState(
-            path=repo_path,
-            status="Workspace tree unavailable.",
-            detail="Repository path exists on this machine but is not a directory.",
-            can_browse=False,
-        )
-
-    return RepoWorkspaceState(
-        path=repo_path,
-        status="Browsing local repository workspace.",
-        detail="Browsing local repository workspace.",
-        can_browse=True,
     )
 
 

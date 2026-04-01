@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import socket
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast, override
 
 from rich.markup import escape
@@ -17,6 +15,7 @@ from textual.widgets import Button, Footer, Header, Input, Label, Rule, Static
 
 from borgboi.core.logging import get_logger
 from borgboi.core.models import RetentionPolicy
+from borgboi.tui.repo_workspace import load_repo_workspace_state
 
 logger = get_logger(__name__)
 
@@ -225,8 +224,7 @@ class RepoConfigScreen(Screen[RepoConfigResult | None]):
 
     def _is_local_repo(self) -> bool:
         """Return True when the repository is browsable on this machine."""
-        repo_path = Path(self._repo.path)
-        return self._repo.hostname == socket.gethostname() and repo_path.exists() and repo_path.is_dir()
+        return load_repo_workspace_state(self._repo).can_browse
 
     def _can_edit_quota(self) -> bool:
         """Return True when the quota field can be edited safely."""
