@@ -506,9 +506,9 @@ class RepoInfoScreen(Screen[None]):
 
         quota, _quota_source = self._effective_quota_display()
 
-        repo_retention = getattr(self._repo, "retention_policy", None)
+        repo_retention = self._repo.retention_policy
         active_policy = repo_retention or default_policy
-        sync_display = _format_datetime(getattr(self._repo, "last_s3_sync", None))
+        sync_display = _format_datetime(self._repo.last_s3_sync)
 
         self.query_one("#repo-info-last-backup-card", Static).update(
             self._render_info_card(
@@ -542,7 +542,7 @@ class RepoInfoScreen(Screen[None]):
             self._render_info_card(
                 "Last S3 sync",
                 sync_display,
-                f"Created {_format_datetime(getattr(self._repo, 'created_at', None))}",
+                f"Created {_format_datetime(self._repo.created_at)}",
                 accent="#a6e3a1",
             )
         )
@@ -557,10 +557,10 @@ class RepoInfoScreen(Screen[None]):
             ("Hostname", self._repo.hostname),
             ("Platform", self._repo.os_platform),
             ("Last Backup", format_last_backup(self._repo.last_backup)),
-            ("Last S3 Sync", _format_datetime(getattr(self._repo, "last_s3_sync", None))),
-            ("Created", _format_datetime(getattr(self._repo, "created_at", None))),
+            ("Last S3 Sync", _format_datetime(self._repo.last_s3_sync)),
+            ("Created", _format_datetime(self._repo.created_at)),
             ("Stored Size", format_repo_size(metadata)),
-            ("Passphrase File", getattr(self._repo, "passphrase_file_path", None)),
+            ("Passphrase File", self._repo.passphrase_file_path),
         ]
 
         if metadata is not None:
@@ -585,7 +585,7 @@ class RepoInfoScreen(Screen[None]):
                 keep_yearly=self._config.borg.retention.keep_yearly,
             )
 
-        repo_retention = getattr(self._repo, "retention_policy", None)
+        repo_retention = self._repo.retention_policy
         active_policy = repo_retention or default_policy
         retention_source = "Repo-specific" if repo_retention is not None else "Default"
 

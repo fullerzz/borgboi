@@ -284,7 +284,7 @@ class RepoConfigScreen(Screen[RepoConfigResult | None]):
         self, requested_retention: RetentionPolicy
     ) -> tuple[RetentionPolicy | None, bool]:
         """Return the semantic retention update requested by the form."""
-        current_override = getattr(self._repo, "retention_policy", None)
+        current_override = self._repo.retention_policy
         default_retention = self._default_retention_policy()
 
         if current_override is None:
@@ -310,7 +310,7 @@ class RepoConfigScreen(Screen[RepoConfigResult | None]):
     def _refresh_current_summary(self) -> None:
         """Refresh the current effective settings summary."""
         default_policy = self._default_retention_policy()
-        repo_retention = getattr(self._repo, "retention_policy", None)
+        repo_retention = self._repo.retention_policy
         active_policy = repo_retention or default_policy
 
         quota_display, quota_source = self._effective_quota_display()
