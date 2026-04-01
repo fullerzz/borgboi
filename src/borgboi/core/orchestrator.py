@@ -526,6 +526,136 @@ class Orchestrator:
         self.output.on_log("info", f"Updated storage quota for repo '{repo.name}' to {quota_request.quota}")
         return quota_request.quota
 
+    def get_repo_storage_quota(
+        self,
+        repo: BorgBoiRepo | str,
+        passphrase: str | None = None,
+    ) -> str | None:
+        """Get the configured storage quota for a repository.
+
+        Args:
+            repo: Repository or repository name
+            passphrase: Optional passphrase override
+
+        Returns:
+            Configured storage quota (e.g., "200G", "1.5T") or None if not configured
+
+        Raises:
+            ValidationError: If the repository is remote
+        """
+        resolved_repo = self._resolve_repo(repo)
+        logger.debug("Getting repository storage quota", repo_name=resolved_repo.name, repo_path=resolved_repo.path)
+
+        if not self._is_local(resolved_repo):
+            logger.error(
+                "Cannot get quota for remote repository", repo_name=resolved_repo.name, hostname=resolved_repo.hostname
+            )
+            raise ValidationError("Repository must be local to get storage quota", field="repository")
+
+        resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        quota = self.borg.get_storage_quota(resolved_repo.path, passphrase=resolved_passphrase)
+        logger.debug("Retrieved repository storage quota", repo_name=resolved_repo.name, quota=quota)
+        return quota
+
+    def update_repo_config(
+        self,
+        *,
+        name: str | None = None,
+        path: str | None = None,
+        storage_quota: str | None = None,
+        retention_policy: RetentionPolicy | None = None,
+        clear_retention_policy: bool = False,
+        passphrase: str | None = None,
+    ) -> tuple[str | None, RetentionPolicy | None]:
+        """Update repository configuration (quota and/or retention policy).
+
+        This method updates either or both of the storage quota and retention
+        policy for a repository. Quota updates are only allowed for local
+        repositories. Retention policy updates are allowed for any repository.
+
+        Args:
+            name: Repository name
+            path: Repository path
+            storage_quota: New storage quota (e.g., "200G", "1.5T") - local only
+            retention_policy: New retention policy - allowed for any repo
+            clear_retention_policy: Clear any repo-specific retention override and inherit defaults
+            passphrase: Optional passphrase override
+
+        Returns:
+            Tuple of (updated_quota, updated_retention_policy):
+            - updated_quota: The new quota string if updated, None if not
+            - updated_retention_policy: The repo-specific retention override after the update
+
+        Raises:
+            ValidationError: If the quota or retention is invalid
+        """
+        repo = self.get_repo(name=name, path=path)
+
+        logger.info(
+            "Updating repository configuration",
+            repo_name=repo.name,
+            has_quota_update=storage_quota is not None,
+            has_retention_update=retention_policy is not None or clear_retention_policy,
+        )
+
+        if retention_policy is not None and clear_retention_policy:
+            raise ValidationError(
+                "Cannot set and clear repository retention policy in the same request",
+                field="retention_policy",
+            )
+
+        # Validate and update retention policy if provided
+        if retention_policy is not None:
+            Validator.validate_retention_policy(retention_policy)
+            repo.retention_policy = retention_policy
+            logger.info(
+                "Repository retention policy updated",
+                repo_name=repo.name,
+                keep_daily=retention_policy.keep_daily,
+                keep_weekly=retention_policy.keep_weekly,
+                keep_monthly=retention_policy.keep_monthly,
+                keep_yearly=retention_policy.keep_yearly,
+            )
+            self.output.on_log(
+                "info",
+                f"Updated retention policy for repo '{repo.name}' to "
+                f"D{retention_policy.keep_daily}/W{retention_policy.keep_weekly}/"
+                f"M{retention_policy.keep_monthly}/Y{retention_policy.keep_yearly}",
+            )
+        elif clear_retention_policy:
+            repo.retention_policy = None
+            logger.info("Repository retention policy cleared", repo_name=repo.name)
+            self.output.on_log("info", f"Cleared retention policy override for repo '{repo.name}'")
+
+        # Update storage quota if provided
+        updated_quota: str | None = None
+        if storage_quota is not None:
+            if storage_quota == "":
+                if not self._is_local(repo):
+                    logger.error(
+                        "Cannot clear quota for remote repository", repo_name=repo.name, hostname=repo.hostname
+                    )
+                    raise ValidationError("Repository must be local to update storage quota", field="repository")
+
+                resolved_passphrase = self.resolve_passphrase(repo, passphrase)
+                self.borg.set_storage_quota(repo.path, "0", passphrase=resolved_passphrase)
+                logger.info("Repository storage quota cleared", repo_name=repo.name, repo_path=repo.path)
+                self.output.on_log("info", f"Cleared storage quota override for repo '{repo.name}'")
+                updated_quota = None
+            else:
+                # Reuse existing quota update logic
+                updated_quota = self.update_repo_storage_quota(
+                    storage_quota,
+                    name=repo.name,
+                    passphrase=passphrase,
+                )
+
+        # Save repository with updated retention (if no quota update, or quota succeeded)
+        if retention_policy is not None or clear_retention_policy:
+            self.storage.save(repo)
+
+        return updated_quota, repo.retention_policy
+
     # Backup Workflows
 
     def backup(

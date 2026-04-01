@@ -195,6 +195,60 @@ CollapsibleTitle:hover {
     border-left: none;
 }
 
+/* Repo config screen */
+
+#repo-config-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#repo-config-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#repo-config-summary,
+#repo-config-current,
+#repo-config-status {
+    color: #cdd6f4;
+    margin-bottom: 1;
+}
+
+#repo-config-form,
+.repo-config-row,
+#repo-config-actions {
+    height: auto;
+}
+
+.repo-config-row {
+    align: left middle;
+    margin-bottom: 1;
+}
+
+.repo-config-label {
+    width: 16;
+    color: #cdd6f4;
+    padding-top: 1;
+}
+
+#repo-config-quota-input,
+#repo-config-daily-input,
+#repo-config-weekly-input,
+#repo-config-monthly-input,
+#repo-config-yearly-input {
+    width: 20;
+}
+
+#repo-config-actions {
+    margin-top: 1;
+}
+
+#repo-config-save-btn {
+    margin-right: 1;
+}
+
 /* Daily Backup screen */
 
 #daily-backup-screen {
@@ -258,6 +312,140 @@ CollapsibleTitle:hover {
 
 #daily-backup-progress PercentageStatus {
     color: #cdd6f4;
+}
+
+/* Repo Info screen */
+
+#repo-info-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#repo-info-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#repo-info-loading {
+    color: #89b4fa;
+    padding-bottom: 1;
+}
+
+#repo-info-hero {
+    border: round #45475a;
+    background: #181825;
+    color: #cdd6f4;
+    margin-bottom: 1;
+    padding: 1 2;
+}
+
+#repo-info-divider {
+    color: #313244;
+    margin-bottom: 1;
+}
+
+#repo-info-tabs {
+    height: auto;
+}
+
+.repo-info-tab-body {
+    height: 1fr;
+    padding: 1 0 0 0;
+}
+
+#repo-info-overview-body {
+    scrollbar-gutter: stable;
+}
+
+.repo-info-card-row {
+    height: auto;
+    margin-bottom: 1;
+}
+
+.repo-info-card {
+    width: 1fr;
+    min-height: 5;
+    border: round #45475a;
+    background: #181825;
+    color: #cdd6f4;
+    padding: 1 2;
+    margin-right: 1;
+}
+
+.repo-info-card-row .repo-info-card:last-child {
+    margin-right: 0;
+}
+
+.repo-info-collapsible {
+    margin-bottom: 1;
+}
+
+.repo-info-collapsible > Contents {
+    padding: 1 2;
+    border-left: thick #313244;
+}
+
+#repo-info-summary,
+#repo-info-config,
+#repo-info-config-status,
+#repo-info-excludes-status,
+#repo-info-excludes-path,
+#repo-info-workspace-status,
+#repo-info-workspace-path,
+#repo-info-workspace-unavailable,
+#repo-info-live-summary,
+#repo-info-command-output,
+#repo-info-archives-status {
+    color: #cdd6f4;
+}
+
+#repo-info-live-summary,
+#repo-info-command-output,
+#repo-info-config-status,
+#repo-info-excludes-status,
+#repo-info-excludes-path,
+#repo-info-workspace-status,
+#repo-info-workspace-path,
+#repo-info-workspace-unavailable,
+#repo-info-archives-status {
+    margin-bottom: 1;
+}
+
+.repo-info-pane-divider {
+    color: #313244;
+    margin: 1 0;
+}
+
+#repo-info-config-actions {
+    height: auto;
+    align: left middle;
+    margin-top: 1;
+    margin-bottom: 1;
+}
+
+.repo-info-protection-block {
+    margin-top: 1;
+}
+
+#repo-info-excludes-viewer {
+    height: 10;
+    border: round #45475a;
+    background: #181825;
+    color: #cdd6f4;
+}
+
+#repo-info-workspace-tree {
+    height: 1fr;
+    border: round #45475a;
+    background: #181825;
+    color: #cdd6f4;
+}
+
+#repo-info-archives-table {
+    height: 1fr;
+    margin-bottom: 1;
 }
 
 #daily-backup-log {

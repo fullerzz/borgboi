@@ -9,6 +9,7 @@ from sqlalchemy import Engine
 from borgboi.clients.borg import RepoInfo
 from borgboi.core.errors import RepositoryNotFoundError, StorageError
 from borgboi.core.logging import get_logger
+from borgboi.core.models import RetentionPolicy
 from borgboi.models import BorgBoiRepo
 from borgboi.storage.base import RepositoryStorage
 from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_db_path, get_session_factory
@@ -47,6 +48,18 @@ class SQLiteStorage(RepositoryStorage):
             except Exception:
                 logger.warning("Failed to parse metadata JSON", repo_name=row.name)
 
+        # Build retention_policy if any retention fields are set
+        retention_policy: RetentionPolicy | None = None
+        if any(
+            getattr(row, f"retention_keep_{period}") is not None for period in ("daily", "weekly", "monthly", "yearly")
+        ):
+            retention_policy = RetentionPolicy(
+                keep_daily=row.retention_keep_daily or 0,
+                keep_weekly=row.retention_keep_weekly or 0,
+                keep_monthly=row.retention_keep_monthly or 0,
+                keep_yearly=row.retention_keep_yearly or 0,
+            )
+
         return BorgBoiRepo(
             path=row.path,
             backup_target=row.backup_target,
@@ -55,6 +68,9 @@ class SQLiteStorage(RepositoryStorage):
             os_platform=row.os_platform,
             last_backup=row.last_backup,
             metadata=metadata,
+            retention_policy=retention_policy,
+            last_s3_sync=row.last_s3_sync,
+            created_at=row.created_at,
             passphrase=row.passphrase,
             passphrase_file_path=row.passphrase_file_path,
             passphrase_migrated=row.passphrase_migrated,
@@ -66,6 +82,19 @@ class SQLiteStorage(RepositoryStorage):
         if repo.metadata is not None:
             metadata_json = repo.metadata.model_dump_json()
 
+        # Extract retention values from policy if present
+        retention_values: dict[str, int | None] = {
+            "retention_keep_daily": None,
+            "retention_keep_weekly": None,
+            "retention_keep_monthly": None,
+            "retention_keep_yearly": None,
+        }
+        if repo.retention_policy is not None:
+            retention_values["retention_keep_daily"] = repo.retention_policy.keep_daily
+            retention_values["retention_keep_weekly"] = repo.retention_policy.keep_weekly
+            retention_values["retention_keep_monthly"] = repo.retention_policy.keep_monthly
+            retention_values["retention_keep_yearly"] = repo.retention_policy.keep_yearly
+
         return {
             "name": repo.name,
             "path": repo.path,
@@ -73,7 +102,10 @@ class SQLiteStorage(RepositoryStorage):
             "hostname": repo.hostname,
             "os_platform": repo.os_platform,
             "last_backup": repo.last_backup,
+            "last_s3_sync": repo.last_s3_sync,
+            "created_at": repo.created_at,
             "metadata_json": metadata_json,
+            **retention_values,
             "passphrase": repo.passphrase,
             "passphrase_file_path": repo.passphrase_file_path,
             "passphrase_migrated": repo.passphrase_migrated,

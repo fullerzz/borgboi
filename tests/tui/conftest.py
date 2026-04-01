@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 
+from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.config import Config
+from borgboi.core.models import RepoMetadata, Repository, RetentionPolicy
 from borgboi.models import BorgBoiRepo
 from borgboi.tui.app import BorgBoiApp
 
@@ -80,6 +83,99 @@ def tui_config_with_excludes(tui_config: Config) -> Config:
 def default_repos() -> list[BorgBoiRepo]:
     """Default list of one repo for TUI tests."""
     return [build_repo("alpha")]
+
+
+@pytest.fixture
+def live_repo_info() -> RepoInfo:
+    """Shared Borg repo metadata payload for TUI tests."""
+    return RepoInfo.model_validate(
+        {
+            "cache": {
+                "path": "/Users/test/.cache/borg/alpha",
+                "stats": {
+                    "total_chunks": 42,
+                    "total_csize": 3221225472,
+                    "total_size": 5368709120,
+                    "total_unique_chunks": 21,
+                    "unique_csize": 2147483648,
+                    "unique_size": 3221225472,
+                },
+            },
+            "encryption": {"mode": "repokey"},
+            "repository": {
+                "id": "repo-id-1234567890",
+                "last_modified": "2026-03-29T10:00:00+00:00",
+                "location": "/Users/test/alpha",
+            },
+            "security_dir": "/Users/test/.config/borg/security/repo-id-1234567890",
+            "archives": [
+                {
+                    "archive": "2026-03-28_22:00:00",
+                    "id": "archive-a",
+                    "name": "2026-03-28_22:00:00",
+                    "start": "",
+                    "time": "2026-03-28T22:00:00+00:00",
+                },
+                {
+                    "archive": "2026-03-27_22:00:00",
+                    "id": "archive-b",
+                    "name": "2026-03-27_22:00:00",
+                    "start": "",
+                    "time": "2026-03-27T22:00:00+00:00",
+                },
+            ],
+        }
+    )
+
+
+@pytest.fixture
+def repo_archives() -> list[RepoArchive]:
+    """Shared archive list for repo-detail TUI tests."""
+    return [
+        RepoArchive.model_validate(
+            {
+                "archive": "2026-03-28_22:00:00",
+                "id": "archive-a-1234567890",
+                "name": "2026-03-28_22:00:00",
+                "start": "2026-03-28T22:00:00+00:00",
+                "time": "2026-03-28T22:00:00+00:00",
+            }
+        ),
+        RepoArchive.model_validate(
+            {
+                "archive": "2026-03-27_22:00:00",
+                "id": "archive-b-1234567890",
+                "name": "2026-03-27_22:00:00",
+                "start": "2026-03-27T22:00:00+00:00",
+                "time": "2026-03-27T22:00:00+00:00",
+            }
+        ),
+    ]
+
+
+@pytest.fixture
+def repo_with_live_metadata(live_repo_info: RepoInfo) -> BorgBoiRepo:
+    """Legacy repo model populated with live metadata for dashboard tests."""
+    repo = build_repo("alpha")
+    repo.metadata = live_repo_info
+    return repo
+
+
+@pytest.fixture
+def repo_detail_repo(live_repo_info: RepoInfo) -> Repository:
+    """Rich repository model populated with metadata and retention for detail tests."""
+    return Repository(
+        name="alpha",
+        path="/Users/test/alpha",
+        backup_target="/Users/test/Documents",
+        hostname="test-host",
+        os_platform="Darwin",
+        last_backup=datetime(2026, 3, 28, 22, 0, tzinfo=UTC),
+        metadata=RepoMetadata.model_validate(live_repo_info.model_dump()),
+        retention_policy=RetentionPolicy(keep_daily=14, keep_weekly=8, keep_monthly=12, keep_yearly=2),
+        created_at=datetime(2026, 3, 1, 12, 0, tzinfo=UTC),
+        last_s3_sync=datetime(2026, 3, 29, 9, 0, tzinfo=UTC),
+    )
 
 
 @pytest.fixture

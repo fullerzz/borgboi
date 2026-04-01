@@ -13,6 +13,7 @@ from borgboi.tui.app import BorgBoiApp
 from borgboi.tui.config_screen import ConfigScreen
 from borgboi.tui.daily_backup_screen import DailyBackupScreen
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
+from borgboi.tui.repo_info_screen import RepoInfoScreen
 
 from .conftest import build_repo
 
@@ -74,6 +75,52 @@ async def test_action_daily_backup_pushes_screen(tui_config: Config) -> None:
         assert isinstance(app.screen, DailyBackupScreen)
 
 
+async def test_action_show_repo_info_pushes_screen(tui_config: Config, repo_with_live_metadata: BorgBoiRepo) -> None:
+    orchestrator = cast(
+        Any,
+        SimpleNamespace(
+            config=tui_config,
+            borg=None,
+            storage=None,
+            s3=None,
+            list_repos=lambda: [repo_with_live_metadata],
+            get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
+            list_archives=lambda _repo: [],
+        ),
+    )
+    app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+        assert isinstance(app.screen, RepoInfoScreen)
+
+
+async def test_repo_table_row_selected_opens_repo_info_screen(
+    tui_config: Config, repo_with_live_metadata: BorgBoiRepo
+) -> None:
+    orchestrator = cast(
+        Any,
+        SimpleNamespace(
+            config=tui_config,
+            borg=None,
+            storage=None,
+            s3=None,
+            list_repos=lambda: [repo_with_live_metadata],
+            get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
+            list_archives=lambda _repo: [],
+        ),
+    )
+    app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
+
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, RepoInfoScreen)
+
+
 async def test_returning_from_successful_backup_refreshes_dashboard(tui_config: Config, monkeypatch: Any) -> None:
     orchestrator = cast(
         Any,
@@ -125,6 +172,31 @@ async def test_action_daily_backup_ignored_on_non_main_screen(tui_app: BorgBoiAp
 
         await pilot.press("b")  # should be ignored
         assert isinstance(tui_app.screen, DefaultExcludesScreen)
+
+
+async def test_action_show_repo_info_ignored_on_non_main_screen(
+    tui_config: Config, repo_with_live_metadata: BorgBoiRepo
+) -> None:
+    orchestrator = cast(
+        Any,
+        SimpleNamespace(
+            config=tui_config,
+            borg=None,
+            storage=None,
+            s3=None,
+            list_repos=lambda: [repo_with_live_metadata],
+            get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
+            list_archives=lambda _repo: [],
+        ),
+    )
+    app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
+
+    async with app.run_test() as pilot:
+        await pilot.press("e")
+        assert isinstance(app.screen, DefaultExcludesScreen)
+
+        await pilot.press("i")
+        assert isinstance(app.screen, DefaultExcludesScreen)
 
 
 async def test_action_refresh_reloads_repos(tui_config: Config) -> None:

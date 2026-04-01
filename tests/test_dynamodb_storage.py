@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -37,6 +38,16 @@ def test_save_and_get_round_trip(storage: DynamoDBStorage) -> None:
     assert result.name == repo.name
     assert result.path == repo.path
     assert result.backup_target == repo.backup_target
+
+
+def test_save_and_get_round_trip_preserves_created_at(storage: DynamoDBStorage) -> None:
+    repo = _make_repo()
+    repo.created_at = datetime(2026, 3, 31, 12, 0, tzinfo=UTC)
+
+    storage.save(repo)
+    result = storage.get(repo.name)
+
+    assert result.created_at == repo.created_at
 
 
 def test_get_by_path_uses_explicit_hostname(storage: DynamoDBStorage) -> None:

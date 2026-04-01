@@ -18,6 +18,7 @@ from borgboi.tui.config_screen import ConfigScreen
 from borgboi.tui.daily_backup_progress import SQLiteDailyBackupProgressHistory
 from borgboi.tui.daily_backup_screen import DailyBackupScreen
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
+from borgboi.tui.repo_info_screen import RepoInfoScreen
 
 logger = get_logger(__name__)
 
@@ -40,6 +41,8 @@ class BorgBoiApp(App[None]):
         Binding("r", "refresh", "Refresh"),
         Binding("c", "show_config", "Config"),
         Binding("e", "show_default_excludes", "Excludes"),
+        Binding("enter", "show_repo_info", "Repo Info"),
+        Binding("i", "show_repo_info", "Repo Info"),
         Binding("b", "daily_backup", "Backup"),
     ]
 
@@ -100,6 +103,7 @@ class BorgBoiApp(App[None]):
 
         # Simplified repo table
         self._repos_table = table = self.query_one("#repos-table", DataTable)
+        table.cursor_type = "row"
         table.add_columns("Name", "Hostname", "Last Archive", "Size")
         table.loading = True
         self._load_repos()
@@ -140,6 +144,19 @@ class BorgBoiApp(App[None]):
         table.loading = False
         self.notify(str(error), severity="error", title="Failed to load repos")
         logger.error("Repository loading error notification shown", error=str(error))
+
+    def _selected_repo(self) -> BorgBoiRepo | None:
+        """Return the currently highlighted repository in the dashboard table."""
+        table = self._repos_table
+        if table is None or table.row_count == 0 or not self._repos:
+            return None
+
+        row_index = table.cursor_row
+        if not table.is_valid_row_index(row_index):
+            return None
+        if row_index >= len(self._repos):
+            return None
+        return self._repos[row_index]
 
     @work(thread=True, exclusive=True, group="sparkline")
     def _load_sparkline_data(self) -> None:
@@ -191,6 +208,20 @@ class BorgBoiApp(App[None]):
         logger.debug("Opening excludes screen", repo_count=len(self._repos))
         _ = self.push_screen(DefaultExcludesScreen(config=self._config, repos=self._repos))
 
+    def action_show_repo_info(self) -> None:
+        """Push the selected repository detail screen."""
+        if self.screen is not self._main_screen:
+            return
+
+        repo = self._selected_repo()
+        if repo is None:
+            self.notify("No repository selected", severity="warning", title="Repo Info")
+            logger.warning("Repo info requested with no selected repository")
+            return
+
+        logger.debug("Opening repo info screen", repo_name=repo.name, repo_path=repo.path)
+        _ = self.push_screen(RepoInfoScreen(repo=repo, config=self._config, orchestrator=self.orchestrator))
+
     def action_daily_backup(self) -> None:
         """Push the daily backup screen."""
         if self.screen is not self._main_screen:
@@ -202,3 +233,9 @@ class BorgBoiApp(App[None]):
                 on_back_after_success=self._refresh_dashboard,
             )
         )
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Open repo details when the dashboard table row is activated."""
+        if event.data_table.id != "repos-table":
+            return
+        self.action_show_repo_info()
