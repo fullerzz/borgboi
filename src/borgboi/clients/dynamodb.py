@@ -66,7 +66,7 @@ def _convert_repo_to_table_item(repo: BorgBoiRepo) -> BorgBoiRepoTableItem:
     Returns:
         BorgBoiRepoTableItem: Borg repository converted to a DynamoDB table item
     """
-    data = {
+    data: dict[str, str | bool | int | None] = {
         "repo_path": repo.path,
         "hostname": repo.hostname,
         "backup_target_path": repo.backup_target,

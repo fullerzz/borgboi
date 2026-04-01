@@ -780,6 +780,7 @@ def test_update_repo_config_can_clear_repo_specific_quota(output_handler: Collec
 
 
 def test_update_repo_config_does_not_create_retention_override_for_quota_only_update(
+    monkeypatch: pytest.MonkeyPatch,
     output_handler: CollectingOutputHandler,
 ) -> None:
     repo = _build_repo()
@@ -794,7 +795,7 @@ def test_update_repo_config_does_not_create_retention_override_for_quota_only_up
         storage=cast(Any, storage),
         output_handler=output_handler,
     )
-    orchestrator.update_repo_storage_quota = Mock(return_value="2G")  # type: ignore[method-assign]
+    monkeypatch.setattr(orchestrator, "update_repo_storage_quota", Mock(return_value="2G"))
 
     updated_quota, updated_retention = orchestrator.update_repo_config(
         name=repo.name,

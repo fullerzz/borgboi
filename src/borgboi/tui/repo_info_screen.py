@@ -263,11 +263,14 @@ class RepoInfoScreen(Screen[None]):
                     with Collapsible(title="Repository profile", classes="repo-info-collapsible"):
                         yield Label("", id="repo-info-summary", markup=True)
 
-                    with Collapsible(title="Quota and retention", classes="repo-info-collapsible"):
-                        yield Label("", id="repo-info-config", markup=True)
-                        with Horizontal(id="repo-info-config-actions", classes="repo-info-config-actions"):
-                            yield Button("Edit settings", id="repo-info-edit-config-btn", variant="primary")
-                        yield Label("", id="repo-info-config-status", markup=True)
+                with (
+                    TabPane("Repo Settings", id="repo-info-settings-tab"),
+                    VerticalScroll(id="repo-info-settings-body", classes="repo-info-tab-body"),
+                ):
+                    yield Label("", id="repo-info-config", markup=True)
+                    with Horizontal(id="repo-info-config-actions", classes="repo-info-config-actions"):
+                        yield Button("Edit settings", id="repo-info-edit-config-btn", variant="primary")
+                    yield Label("", id="repo-info-config-status", markup=True)
 
                 with TabPane("Live Borg", id="repo-info-live-tab"), Vertical(classes="repo-info-tab-body"):
                     yield Label("Loading live Borg metadata...", id="repo-info-live-summary", markup=True)

@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import pytest
 from textual.containers import VerticalScroll
-from textual.widgets import Button, DataTable, DirectoryTree, Input, Label, Static, TabbedContent, TextArea
+from textual.widgets import Button, DataTable, DirectoryTree, Input, Label, Static, TabbedContent, TabPane, TextArea
 
 from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.config import Config
@@ -115,6 +115,7 @@ async def test_repo_info_screen_renders_requested_sections(
         assert isinstance(repo_info_app.screen, RepoInfoScreen)
 
         tabs = repo_info_app.screen.query_one("#repo-info-tabs", TabbedContent)
+        settings_tab = repo_info_app.screen.query_one("#repo-info-settings-tab", TabPane)
         summary = repo_info_app.screen.query_one("#repo-info-summary", Static)
         quota = repo_info_app.screen.query_one("#repo-info-config", Static)
         command_output = repo_info_app.screen.query_one("#repo-info-command-output", Static)
@@ -138,6 +139,7 @@ async def test_repo_info_screen_renders_requested_sections(
             await asyncio.sleep(0.1)
 
         assert tabs.active == "repo-info-overview-tab"
+        assert settings_tab.id == "repo-info-settings-tab"
         assert "Backup Target" in str(cast(Any, summary).content)
         assert "Retention Source" in str(cast(Any, quota).content)
         assert "100G" in str(cast(Any, quota).content)
