@@ -1,3 +1,22 @@
+## v1.25.1 (2026-04-02)
+
+### 🐛 Bug Fixes
+
+- **tui**: Wire up backup shortcut on repo info screen (#234) ([f7555ef](https://github.com/fullerzz/borgboi/commit/f7555efc8069d55714e7eb46276e5450d3102983))
+
+
+
+### 🧪 Testing
+
+- Enable `pytest-xdist` for default test runs (#233) ([5621ffd](https://github.com/fullerzz/borgboi/commit/5621ffd4d05a2c2ed2f6f9869b6848069d404f32))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies (#216) ([b3f5452](https://github.com/fullerzz/borgboi/commit/b3f5452b4a1c373f651153ba9a9c97ad36eeafa1))
+
+
 ## v1.25.0 (2026-04-01)
 
 ### 🚀 Features
