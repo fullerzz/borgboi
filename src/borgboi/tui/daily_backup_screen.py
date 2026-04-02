@@ -504,10 +504,12 @@ class DailyBackupScreen(Screen[None]):
         self,
         orchestrator: Orchestrator,
         on_back_after_success: Callable[[], None] | None = None,
+        selected_repo_name: str | None = None,
     ) -> None:
         super().__init__()
         self._orchestrator = orchestrator
         self._on_back_after_success = on_back_after_success
+        self._selected_repo_name = selected_repo_name
         self._repos: list[BorgBoiRepo] = []
         self._backup_running = False
         self._backup_completed = False
@@ -559,6 +561,8 @@ class DailyBackupScreen(Screen[None]):
         self._repos = repos
         select = self.query_one("#daily-backup-select", Select)
         select.set_options([(repo.name, repo.name) for repo in repos])
+        if self._selected_repo_name and any(r.name == self._selected_repo_name for r in repos):
+            select.value = self._selected_repo_name
         select.loading = False
         self.query_one("#daily-backup-start", Button).disabled = False
         logger.debug("Repository selector populated", options=len(repos))
