@@ -15,13 +15,15 @@ from pathlib import Path
 from borgboi.clients.borg import (
     ArchivedFile,
     ArchiveInfo,
+    DiffEntry,
+    DiffResult,
     RepoArchive,
     RepoInfo,
 )
 from borgboi.config import BorgConfig, Config, get_config
 from borgboi.core.errors import BorgError, BorgExitCode
 from borgboi.core.logging import get_logger
-from borgboi.core.models import BackupOptions, RestoreOptions, RetentionPolicy
+from borgboi.core.models import BackupOptions, DiffOptions, RestoreOptions, RetentionPolicy
 from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, SilentOutputHandler
 from borgboi.lib.utils import create_archive_name
 
@@ -606,6 +608,44 @@ class BorgClient:
             file_count=len(contents),
         )
         return contents
+
+    def diff_archives(
+        self,
+        repo_path: str,
+        archive1: str,
+        archive2: str,
+        options: DiffOptions | None = None,
+        passphrase: str | None = None,
+    ) -> DiffResult:
+        """Compare two archives in a repository."""
+        opts = options or DiffOptions()
+        logger.info(
+            "Diffing archives via client",
+            repo_path=repo_path,
+            archive1=archive1,
+            archive2=archive2,
+            content_only=opts.content_only,
+            path_count=len(opts.paths),
+        )
+        cmd = [
+            self.executable_path,
+            "diff",
+            *opts.to_borg_args(),
+            "--json-lines",
+            f"{repo_path}::{archive1}",
+            archive2,
+            *opts.paths,
+        ]
+        result = self._run_command(cmd, passphrase=passphrase)
+        entries = [DiffEntry.model_validate_json(line) for line in result.stdout.splitlines() if line]
+        logger.debug(
+            "Diffed archives via client",
+            repo_path=repo_path,
+            archive1=archive1,
+            archive2=archive2,
+            entry_count=len(entries),
+        )
+        return DiffResult(archive1=archive1, archive2=archive2, entries=entries)
 
     # Key Operations
 

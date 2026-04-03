@@ -8,18 +8,25 @@ import shutil
 import socket
 import tempfile
 from collections.abc import Iterator
+from datetime import datetime
 from pathlib import Path
 from platform import system
 
 from pydantic import ValidationError as PydanticValidationError
 
-from borgboi.clients.borg import RepoArchive, RepoInfo
+from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
 from borgboi.clients.borg_client import BorgClient, create_borg_client
 from borgboi.clients.s3_client import S3ClientInterface
 from borgboi.config import Config, get_config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
 from borgboi.core.logging import get_logger
-from borgboi.core.models import BackupOptions, RepoStorageQuotaUpdateRequest, RestoreOptions, RetentionPolicy
+from borgboi.core.models import (
+    BackupOptions,
+    DiffOptions,
+    RepoStorageQuotaUpdateRequest,
+    RestoreOptions,
+    RetentionPolicy,
+)
 from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, render_command_with_fallback
 from borgboi.core.validator import Validator
 from borgboi.lib.passphrase import (
@@ -1070,6 +1077,61 @@ class Orchestrator:
 
         return self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
 
+    def get_two_most_recent_archives(
+        self,
+        repo: BorgBoiRepo | str,
+        passphrase: str | None = None,
+    ) -> tuple[RepoArchive, RepoArchive]:
+        """Return the two most recent archives as older/newer."""
+        archives = self.list_archives(repo, passphrase=passphrase)
+        if len(archives) < 2:
+            raise ValidationError("Repository must contain at least two archives to compare", field="archives")
+
+        by_time = sorted(archives, key=self._archive_sort_key)
+        return by_time[-2], by_time[-1]
+
+    def diff_archives(
+        self,
+        repo: BorgBoiRepo | str,
+        archive1: str,
+        archive2: str,
+        options: DiffOptions | None = None,
+        passphrase: str | None = None,
+        *,
+        validated: bool = False,
+    ) -> DiffResult:
+        """Compare two archives in a local repository."""
+        resolved_repo = self._resolve_repo(repo)
+        logger.info(
+            "Diffing repository archives",
+            repo_name=resolved_repo.name,
+            repo_path=resolved_repo.path,
+            archive1=archive1,
+            archive2=archive2,
+        )
+
+        if not self._is_local(resolved_repo):
+            logger.error("Cannot diff archives from remote repository", repo_name=resolved_repo.name)
+            raise ValidationError("Repository must be local to compare archives", field="repository")
+        if archive1 == archive2:
+            raise ValidationError("Select two different archives to compare", field="archive2", value=archive2)
+
+        if not validated:
+            available_archives = {archive.name for archive in self.list_archives(resolved_repo, passphrase=passphrase)}
+            if archive1 not in available_archives:
+                raise ValidationError(f"Archive not found: {archive1}", field="archive1", value=archive1)
+            if archive2 not in available_archives:
+                raise ValidationError(f"Archive not found: {archive2}", field="archive2", value=archive2)
+
+        resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        return self.borg.diff_archives(
+            resolved_repo.path,
+            archive1,
+            archive2,
+            options=options,
+            passphrase=resolved_passphrase,
+        )
+
     # Exclusions Management
 
     def create_exclusions(
@@ -1372,6 +1434,10 @@ class Orchestrator:
             True if local
         """
         return repo.hostname == socket.gethostname()
+
+    def _archive_sort_key(self, archive: RepoArchive) -> datetime:
+        """Parse archive timestamps for ordering comparisons."""
+        return datetime.fromisoformat(archive.start)
 
     def _get_excludes_path(self, repo_name: str) -> Path:
         """Get the path to a repository's excludes file.

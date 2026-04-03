@@ -619,6 +619,28 @@ class ArchivedFile(BaseModel):
     mtime: datetime
 
 
+class DiffChange(BaseModel):
+    type: str
+    added: int | None = None
+    removed: int | None = None
+    size: int | None = None
+    old: str | int | float | None = None
+    new: str | int | float | None = None
+    old_mode: str | None = None
+    new_mode: str | None = None
+
+
+class DiffEntry(BaseModel):
+    path: Path
+    changes: list[DiffChange] = Field(default_factory=list)
+
+
+class DiffResult(BaseModel):
+    archive1: str
+    archive2: str
+    entries: list[DiffEntry] = Field(default_factory=list)
+
+
 def list_archive_contents(
     repo_path: str, archive_name: str, json_log: bool = True, passphrase: str | None = None
 ) -> list[ArchivedFile]:

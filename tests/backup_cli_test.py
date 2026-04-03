@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import pytest
 from inline_snapshot import snapshot
 
-from borgboi.cli.backup import _build_archive_stats_tables
-from borgboi.clients.borg import ArchiveInfo
-from borgboi.core.models import BackupOptions
+from borgboi.cli.backup import _build_archive_stats_tables, _format_diff_change, _summarize_diff_changes
+from borgboi.clients.borg import ArchiveInfo, DiffResult
+from borgboi.core.models import BackupOptions, DiffOptions
 from tests.cli_helpers import invoke_cli
 
 cli_main = importlib.import_module("borgboi.cli.main")
@@ -269,6 +269,197 @@ def test_backup_daily_rejects_both_name_and_path(tmp_path: Path, capsys: pytest.
 
     assert exit_code != 0
     assert "mutually exclusive" in captured.out
+
+
+def test_summarize_diff_changes_counts_entries_by_type() -> None:
+    result = DiffResult.model_validate(
+        {
+            "archive1": "archive-old",
+            "archive2": "archive-new",
+            "entries": [
+                {"path": "added.txt", "changes": [{"type": "added", "size": 42}]},
+                {"path": "removed.txt", "changes": [{"type": "removed", "size": 11}]},
+                {
+                    "path": "modified.txt",
+                    "changes": [{"type": "modified", "added": 12, "removed": 4}],
+                },
+                {
+                    "path": "mode.txt",
+                    "changes": [{"type": "mode", "old_mode": "-rw-r--r--", "new_mode": "-rwxr-xr-x"}],
+                },
+            ],
+        }
+    )
+
+    assert _summarize_diff_changes(result) == {
+        "added": 1,
+        "removed": 1,
+        "modified": 1,
+        "mode": 1,
+        "bytes_added": 54,
+        "bytes_removed": 15,
+    }
+
+
+def test_format_diff_change_includes_metadata_values() -> None:
+    result = DiffResult.model_validate(
+        {
+            "archive1": "archive-old",
+            "archive2": "archive-new",
+            "entries": [
+                {
+                    "path": "docs/file.txt",
+                    "changes": [
+                        {
+                            "type": "mtime",
+                            "old": "2026-04-03T10:00:00",
+                            "new": "2026-04-03T11:00:00",
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert _format_diff_change(result.entries[0].changes[0]) == "mtime 2026-04-03T10:00:00 -> 2026-04-03T11:00:00"
+
+
+def test_backup_diff_defaults_to_two_most_recent_archives(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    get_two_most_recent_calls: list[tuple[object, str | None]] = []
+    diff_calls: list[tuple[object, str, str, DiffOptions, str | None]] = []
+    fake_repo = SimpleNamespace(name="demo-repo", path="/fake/repo")
+    fake_result = DiffResult.model_validate({"archive1": "archive-1", "archive2": "archive-2", "entries": []})
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            _ = (name, path)
+            return fake_repo
+
+        def get_two_most_recent_archives(self, repo: object, passphrase: str | None = None) -> tuple[object, object]:
+            get_two_most_recent_calls.append((repo, passphrase))
+            return (SimpleNamespace(name="archive-1"), SimpleNamespace(name="archive-2"))
+
+        def diff_archives(
+            self,
+            repo: object,
+            archive1: str,
+            archive2: str,
+            options: DiffOptions | None = None,
+            passphrase: str | None = None,
+            *,
+            validated: bool = False,
+        ) -> DiffResult:
+            assert options is not None
+            diff_calls.append((repo, archive1, archive2, options, passphrase))
+            return fake_result
+
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
+
+    exit_code = invoke_cli(cli_main.cli, ["backup", "diff", "--name", "demo-repo"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert get_two_most_recent_calls == [(fake_repo, None)]
+    assert len(diff_calls) == 1
+    assert diff_calls[0][1:3] == ("archive-1", "archive-2")
+    assert diff_calls[0][3].content_only is False
+    assert diff_calls[0][3].paths == []
+    assert "No changed paths found." in captured.out
+
+
+def test_backup_diff_passes_explicit_archives_and_filters(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    diff_calls: list[tuple[object, str, str, DiffOptions, str | None]] = []
+    fake_repo = SimpleNamespace(name="demo-repo", path="/fake/repo")
+    fake_result = DiffResult.model_validate(
+        {
+            "archive1": "archive-a",
+            "archive2": "archive-b",
+            "entries": [{"path": "docs/file.txt", "changes": [{"type": "modified", "added": 8, "removed": 2}]}],
+        }
+    )
+
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            _ = (name, path)
+            return fake_repo
+
+        def diff_archives(
+            self,
+            repo: object,
+            archive1: str,
+            archive2: str,
+            options: DiffOptions | None = None,
+            passphrase: str | None = None,
+            *,
+            validated: bool = False,
+        ) -> DiffResult:
+            assert options is not None
+            diff_calls.append((repo, archive1, archive2, options, passphrase))
+            return fake_result
+
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
+
+    exit_code = invoke_cli(
+        cli_main.cli,
+        [
+            "backup",
+            "diff",
+            "--name",
+            "demo-repo",
+            "--archive1",
+            "archive-a",
+            "--archive2",
+            "archive-b",
+            "--filter-path",
+            "docs",
+            "--filter-path",
+            "src/app.py",
+            "--content-only",
+            "--passphrase",
+            "secret",
+        ],
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert len(diff_calls) == 1
+    assert diff_calls[0][1:3] == ("archive-a", "archive-b")
+    assert diff_calls[0][3].content_only is True
+    assert diff_calls[0][3].paths == ["docs", "src/app.py"]
+    assert diff_calls[0][4] == "secret"
+    assert "docs/file.txt" in captured.out
+
+
+def test_backup_diff_requires_both_explicit_archives(capsys: pytest.CaptureFixture[str]) -> None:
+    class _FakeOrchestrator:
+        def __init__(self, config: object) -> None:
+            del config
+
+        def get_repo(self, name: str | None = None, path: str | None = None) -> object:
+            _ = (name, path)
+            return SimpleNamespace(name="demo-repo", path="/fake/repo")
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
+
+    exit_code = invoke_cli(cli_main.cli, ["backup", "diff", "--name", "demo-repo", "--archive1", "archive-a"])
+    try:
+        captured = capsys.readouterr()
+
+        assert exit_code != 0
+        assert "Provide both --archive1 and --archive2" in captured.out
+    finally:
+        monkeypatch.undo()
 
 
 def test_backup_restore_aborts_cleanly_when_confirmation_is_declined(

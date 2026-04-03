@@ -84,6 +84,7 @@ Inspect repositories and archives:
 ```bash
 bb repo list
 bb backup list --name my-docs-backup
+bb backup diff --name my-docs-backup
 bb repo info --name my-docs-backup
 ```
 
@@ -132,7 +133,7 @@ Use `bb config show --format tree` to inspect the merged effective configuration
 The primary command surface includes grouped subcommands plus root commands:
 
 - `repo` for repository lifecycle operations
-- `backup` for archive creation, listing, restore, and deletion
+- `backup` for archive creation, listing, diff, restore, and deletion
 - `s3` for sync, restore, and bucket stats
 - `exclusions` for managing backup exclusion files
 - `config` for displaying effective configuration

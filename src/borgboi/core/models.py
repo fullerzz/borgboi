@@ -143,6 +143,22 @@ class RestoreOptions(BaseModel):
         return args
 
 
+class DiffOptions(BaseModel):
+    """Options for archive diff operations."""
+
+    content_only: bool = Field(default=False, description="Ignore metadata-only changes")
+    paths: list[str] = Field(default_factory=list, description="Optional path filters to compare")
+
+    def to_borg_args(self) -> list[str]:
+        """Convert diff options to Borg command line arguments."""
+        args: list[str] = []
+
+        if self.content_only:
+            args.append("--content-only")
+
+        return args
+
+
 class RepoStats(BaseModel):
     """Statistics about a Borg repository cache.
 

@@ -4,14 +4,14 @@ import socket
 import types
 from pathlib import Path
 from typing import Any, cast, override
-from unittest.mock import Mock
+from unittest.mock import ANY, Mock
 
 import pytest
 
 from borgboi.clients.borg import Encryption, RepoCache, RepoInfo, Repository, Stats
 from borgboi.config import Config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
-from borgboi.core.models import RetentionPolicy
+from borgboi.core.models import DiffOptions, RetentionPolicy
 from borgboi.core.orchestrator import Orchestrator
 from borgboi.core.output import CollectingOutputHandler
 from borgboi.lib.colors import COLOR_HEX
@@ -53,6 +53,19 @@ def _build_repo(name: str = "repo-one", hostname: str | None = None, passphrase:
 @pytest.fixture
 def output_handler() -> CollectingOutputHandler:
     return CollectingOutputHandler()
+
+
+@pytest.fixture
+def orchestrator_factory(output_handler: CollectingOutputHandler) -> Any:
+    def _create(*, borg_client: Any, storage: Any) -> Orchestrator:
+        return Orchestrator(
+            config=Config(offline=True),
+            borg_client=borg_client,
+            storage=storage,
+            output_handler=output_handler,
+        )
+
+    return _create
 
 
 class RecordingOutputHandler(CollectingOutputHandler):
@@ -1103,6 +1116,95 @@ def test_delete_archive_compacts_and_refreshes_metadata(output_handler: Collecti
     compact.assert_called_once_with(repo, passphrase=resolved_passphrase)
     storage.save.assert_called_once_with(repo)
     assert repo.metadata == {"metadata": "fresh"}
+
+
+def test_get_two_most_recent_archives_returns_older_then_newer(
+    monkeypatch: pytest.MonkeyPatch,
+    orchestrator_factory: Any,
+) -> None:
+    repo = _build_repo()
+    storage = Mock()
+    borg_client = Mock()
+    borg_client.list_archives.return_value = [
+        types.SimpleNamespace(name="archive-older", start="2026-02-01T00:00:00+00:00"),
+        types.SimpleNamespace(name="archive-newest", start="2026-02-03T00:00:00+00:00"),
+        types.SimpleNamespace(name="archive-middle", start="2026-02-02T00:00:00+00:00"),
+    ]
+
+    orchestrator = orchestrator_factory(borg_client=borg_client, storage=storage)
+    monkeypatch.setattr(orchestrator, "resolve_passphrase", lambda repo_obj, cli_passphrase=None: "resolved-passphrase")
+
+    archive1, archive2 = orchestrator.get_two_most_recent_archives(repo)
+
+    assert archive1.name == "archive-middle"
+    assert archive2.name == "archive-newest"
+
+
+def test_get_two_most_recent_archives_requires_two_archives(orchestrator_factory: Any) -> None:
+    repo = _build_repo()
+    storage = Mock()
+    borg_client = Mock()
+    borg_client.list_archives.return_value = [
+        types.SimpleNamespace(name="archive-only", start="2026-02-03T00:00:00+00:00")
+    ]
+
+    orchestrator = orchestrator_factory(borg_client=borg_client, storage=storage)
+
+    with pytest.raises(ValidationError, match="at least two archives"):
+        orchestrator.get_two_most_recent_archives(repo)
+
+
+def test_diff_archives_validates_names_and_forwards_options(
+    monkeypatch: pytest.MonkeyPatch,
+    orchestrator_factory: Any,
+) -> None:
+    repo = _build_repo()
+    storage = Mock()
+    borg_client = Mock()
+    resolved_passphrase = "resolved-passphrase"  # noqa: S105
+    borg_client.list_archives.return_value = [
+        types.SimpleNamespace(name="archive-1", start="2026-02-01T00:00:00+00:00"),
+        types.SimpleNamespace(name="archive-2", start="2026-02-02T00:00:00+00:00"),
+    ]
+    borg_client.diff_archives.return_value = {"entries": []}
+
+    orchestrator = orchestrator_factory(borg_client=borg_client, storage=storage)
+    monkeypatch.setattr(orchestrator, "resolve_passphrase", lambda repo_obj, cli_passphrase=None: resolved_passphrase)
+
+    result = orchestrator.diff_archives(
+        repo,
+        "archive-1",
+        "archive-2",
+        options=DiffOptions(content_only=True, paths=["docs"]),
+    )
+
+    borg_client.diff_archives.assert_called_once_with(
+        repo.path,
+        "archive-1",
+        "archive-2",
+        options=ANY,
+        passphrase=resolved_passphrase,
+    )
+    assert result == {"entries": []}
+
+
+def test_diff_archives_rejects_unknown_archive(
+    monkeypatch: pytest.MonkeyPatch,
+    orchestrator_factory: Any,
+) -> None:
+    repo = _build_repo()
+    storage = Mock()
+    borg_client = Mock()
+    borg_client.list_archives.return_value = [
+        types.SimpleNamespace(name="archive-1", start="2026-02-01T00:00:00+00:00"),
+        types.SimpleNamespace(name="archive-2", start="2026-02-02T00:00:00+00:00"),
+    ]
+
+    orchestrator = orchestrator_factory(borg_client=borg_client, storage=storage)
+    monkeypatch.setattr(orchestrator, "resolve_passphrase", lambda repo_obj, cli_passphrase=None: None)
+
+    with pytest.raises(ValidationError, match="Archive not found: archive-missing"):
+        orchestrator.diff_archives(repo, "archive-missing", "archive-2")
 
 
 def test_auto_migrate_passphrase_updates_repo_on_success(
