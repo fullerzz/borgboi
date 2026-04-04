@@ -1,11 +1,17 @@
 import importlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from inline_snapshot import snapshot
 
-from borgboi.cli.backup import _build_archive_stats_tables, _format_diff_change, _summarize_diff_changes
+from borgboi.cli.backup import (
+    _build_archive_stats_tables,
+    _format_diff_change,
+    _render_diff_result,
+    _summarize_diff_changes,
+)
 from borgboi.clients.borg import ArchiveInfo, DiffResult
 from borgboi.core.models import BackupOptions, DiffOptions
 from tests.cli_helpers import invoke_cli
@@ -322,6 +328,26 @@ def test_format_diff_change_includes_metadata_values() -> None:
     )
 
     assert _format_diff_change(result.entries[0].changes[0]) == "mtime 2026-04-03T10:00:00 -> 2026-04-03T11:00:00"
+
+
+def test_render_diff_result_json_outputs_raw_json(capsys: pytest.CaptureFixture[str]) -> None:
+    result = DiffResult.model_validate(
+        {
+            "archive1": "archive-old",
+            "archive2": "archive-new",
+            "entries": [
+                {
+                    "path": "/home/user/[vendor]/" + ("a" * 120),
+                    "changes": [{"type": "modified", "added": 8, "removed": 2}],
+                }
+            ],
+        }
+    )
+
+    _render_diff_result(result, json_output=True)
+    captured = capsys.readouterr()
+
+    assert captured.out == json.dumps(result.model_dump(mode="json"), indent=2) + "\n"
 
 
 def test_backup_diff_defaults_to_two_most_recent_archives(

@@ -1083,7 +1083,12 @@ class Orchestrator:
         passphrase: str | None = None,
     ) -> tuple[RepoArchive, RepoArchive]:
         """Return the two most recent archives as older/newer."""
-        archives = self.list_archives(repo, passphrase=passphrase)
+        resolved_repo = self._resolve_repo(repo)
+        if not self._is_local(resolved_repo):
+            logger.error("Cannot diff archives from remote repository", repo_name=resolved_repo.name)
+            raise ValidationError("Repository must be local to compare archives", field="repository")
+
+        archives = self.list_archives(resolved_repo, passphrase=passphrase)
         if len(archives) < 2:
             raise ValidationError("Repository must contain at least two archives to compare", field="archives")
 

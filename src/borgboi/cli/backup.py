@@ -136,7 +136,7 @@ def _render_diff_result(result: DiffResult, *, json_output: bool) -> None:
     from borgboi.lib import utils
 
     if json_output:
-        console.print(json.dumps(result.model_dump(mode="json"), indent=2))
+        console.out(json.dumps(result.model_dump(mode="json"), indent=2), highlight=False)
         return
 
     console.rule("[bold]Archive Diff[/]")

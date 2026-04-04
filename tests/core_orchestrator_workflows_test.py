@@ -1154,6 +1154,18 @@ def test_get_two_most_recent_archives_requires_two_archives(orchestrator_factory
         orchestrator.get_two_most_recent_archives(repo)
 
 
+def test_get_two_most_recent_archives_requires_local_repo(orchestrator_factory: Any) -> None:
+    repo = _build_repo(hostname="other-host")
+    storage = Mock()
+    borg_client = Mock()
+    orchestrator = orchestrator_factory(borg_client=borg_client, storage=storage)
+
+    with pytest.raises(ValidationError, match="Repository must be local to compare archives"):
+        orchestrator.get_two_most_recent_archives(repo)
+
+    borg_client.list_archives.assert_not_called()
+
+
 def test_diff_archives_validates_names_and_forwards_options(
     monkeypatch: pytest.MonkeyPatch,
     orchestrator_factory: Any,
