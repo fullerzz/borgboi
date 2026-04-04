@@ -1,3 +1,10 @@
+## v1.26.0 (2026-04-04)
+
+### 🚀 Features
+
+- **backup**: Add `backup diff` command to compare archives (#235) ([70a1e11](https://github.com/fullerzz/borgboi/commit/70a1e11edc3a1f769c3262c7041957707a78644f))
+
+
 ## v1.25.1 (2026-04-02)
 
 ### 🐛 Bug Fixes
