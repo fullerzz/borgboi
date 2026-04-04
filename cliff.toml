@@ -20,6 +20,7 @@ body = """
 trim = true
 render_always = true
 postprocessors = [
+    { pattern = '(^|[^\[])#([0-9]+)', replace = '${1}[#${2}](https://github.com/fullerzz/borgboi/issues/${2})' },
     { pattern = "<REPO>", replace = "https://github.com/fullerzz/borgboi" },
 ]
 
