@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, Annotated
 
 from cyclopts import App, Parameter
@@ -13,7 +14,7 @@ from borgboi.rich_utils import console
 if TYPE_CHECKING:
     from rich.table import Table
 
-    from borgboi.clients.borg import ArchiveInfo
+    from borgboi.clients.borg import ArchiveInfo, DiffChange, DiffResult
 
 
 logger = get_logger(__name__)
@@ -74,6 +75,94 @@ def _render_archive_stats_table(repo_path: str, archive_info: ArchiveInfo) -> No
     summary_table, size_table = _build_archive_stats_tables(repo_path, archive_info)
     console.print(summary_table)
     console.print(size_table)
+
+
+def _summarize_diff_changes(result: DiffResult) -> dict[str, int]:
+    summary = {
+        "added": 0,
+        "removed": 0,
+        "modified": 0,
+        "mode": 0,
+        "bytes_added": 0,
+        "bytes_removed": 0,
+    }
+
+    for entry in result.entries:
+        entry_categories = {change.type for change in entry.changes}
+        if "added" in entry_categories:
+            summary["added"] += 1
+        if "removed" in entry_categories:
+            summary["removed"] += 1
+        if "modified" in entry_categories:
+            summary["modified"] += 1
+        if "mode" in entry_categories:
+            summary["mode"] += 1
+
+        for change in entry.changes:
+            added_bytes = change.added or 0
+            removed_bytes = change.removed or 0
+            if change.type == "added":
+                summary["bytes_added"] += added_bytes or change.size or 0
+            elif change.type == "removed":
+                summary["bytes_removed"] += removed_bytes or change.size or 0
+            elif change.type == "modified":
+                summary["bytes_added"] += added_bytes
+                summary["bytes_removed"] += removed_bytes
+
+    return summary
+
+
+def _format_diff_change(change: DiffChange) -> str:
+    from borgboi.lib import utils
+
+    match change.type:
+        case "added":
+            return f"added ({utils.format_size_bytes(change.added or change.size or 0)})"
+        case "removed":
+            return f"removed ({utils.format_size_bytes(change.removed or change.size or 0)})"
+        case "modified":
+            added = utils.format_size_bytes(change.added or 0)
+            removed = utils.format_size_bytes(change.removed or 0)
+            return f"modified (+{added}, -{removed})"
+        case "mode":
+            return f"mode {change.old_mode or '?'} -> {change.new_mode or '?'}"
+        case _ if change.old is not None or change.new is not None:
+            return f"{change.type} {change.old if change.old is not None else '?'} -> {change.new if change.new is not None else '?'}"
+        case _:
+            return change.type
+
+
+def _render_diff_result(result: DiffResult, *, json_output: bool) -> None:
+    from borgboi.lib import utils
+
+    if json_output:
+        console.out(json.dumps(result.model_dump(mode="json"), indent=2), highlight=False)
+        return
+
+    console.rule("[bold]Archive Diff[/]")
+    console.print(f"Archive 1: [bold cyan]{result.archive1}[/]")
+    console.print(f"Archive 2: [bold cyan]{result.archive2}[/]")
+
+    if not result.entries:
+        console.print("No changed paths found.")
+        console.rule()
+        return
+
+    for entry in result.entries:
+        changes = ", ".join(_format_diff_change(change) for change in entry.changes)
+        console.print(f"[bold]{entry.path}[/]")
+        console.print(f"  {changes}")
+
+    summary = _summarize_diff_changes(result)
+    console.rule("[bold]Summary[/]")
+    console.print(f"Changed paths: {len(result.entries)}")
+    console.print(f"Added: {summary['added']}")
+    console.print(f"Removed: {summary['removed']}")
+    console.print(f"Modified: {summary['modified']}")
+    console.print(f"Mode changes: {summary['mode']}")
+    console.print(f"Bytes added: {utils.format_size_bytes(summary['bytes_added'])}")
+    console.print(f"Bytes removed: {utils.format_size_bytes(summary['bytes_removed'])}")
+    console.rule()
 
 
 backup = App(
@@ -369,5 +458,81 @@ def backup_contents(
             repo_path=path,
             archive_name=archive,
             output=output,
+        )
+        print_error_and_exit(str(error), error=error)
+
+
+@backup.command(name="diff")
+def backup_diff(
+    *,
+    path: Annotated[str | None, Parameter(name=["--path", "-p"], help="Repository path")] = None,
+    name: Annotated[str | None, Parameter(name=["--name", "-n"], help="Repository name")] = None,
+    archive1: Annotated[str | None, Parameter(name=["--archive1", "-a"], help="Older archive name")] = None,
+    archive2: Annotated[str | None, Parameter(name=["--archive2", "-b"], help="Newer archive name")] = None,
+    filter_path: Annotated[
+        tuple[str, ...],
+        Parameter(name="--filter-path", help="Limit diff to one or more archive paths; repeat to provide multiple"),
+    ] = (),
+    content_only: Annotated[
+        bool,
+        Parameter(name="--content-only", negative="", help="Compare file contents only"),
+    ] = False,
+    json_output: Annotated[bool, Parameter(name="--json", negative="", help="Render JSON output")] = False,
+    passphrase: Annotated[str | None, Parameter(name="--passphrase", help="Passphrase override")] = None,
+    ctx: ContextArg,
+) -> None:
+    """Compare two archives in a repository."""
+    from borgboi.core.models import DiffOptions
+
+    logger.info(
+        "Running archive diff command",
+        repo_name=name,
+        repo_path=path,
+        archive1=archive1,
+        archive2=archive2,
+        content_only=content_only,
+        json_output=json_output,
+        filter_path_count=len(filter_path),
+    )
+    try:
+        repo_info = ctx.orchestrator.get_repo(name=name, path=path)
+
+        if (archive1 is None) != (archive2 is None):
+            print_error_and_exit(
+                "Provide both --archive1 and --archive2, or omit both to compare the two most recent archives."
+            )
+
+        archives_validated = False
+        if archive1 is None and archive2 is None:
+            selected_archive1, selected_archive2 = ctx.orchestrator.get_two_most_recent_archives(
+                repo_info,
+                passphrase=passphrase,
+            )
+            archive1 = selected_archive1.name
+            archive2 = selected_archive2.name
+            archives_validated = True
+
+        assert archive1 is not None
+        assert archive2 is not None
+
+        result = ctx.orchestrator.diff_archives(
+            repo_info,
+            archive1,
+            archive2,
+            options=DiffOptions(content_only=content_only, paths=list(filter_path)),
+            passphrase=passphrase,
+            validated=archives_validated,
+        )
+        _render_diff_result(result, json_output=json_output)
+    except Exception as error:
+        logger.exception(
+            "Archive diff command failed",
+            error=str(error),
+            repo_name=name,
+            repo_path=path,
+            archive1=archive1,
+            archive2=archive2,
+            content_only=content_only,
+            json_output=json_output,
         )
         print_error_and_exit(str(error), error=error)

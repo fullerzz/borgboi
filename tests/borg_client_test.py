@@ -1,11 +1,13 @@
 import sys
 from collections.abc import Generator
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from borgboi.clients.borg_client import BorgClient
 from borgboi.config import BorgConfig
+from borgboi.core.models import DiffOptions
 from borgboi.core.output import SilentOutputHandler
 
 
@@ -149,3 +151,70 @@ def test_get_storage_quota_treats_zero_as_unset(monkeypatch: pytest.MonkeyPatch)
     assert captured["cmd"] == ["borg", "config", "/repo", "storage_quota"]
     assert captured["passphrase"] is None
     assert captured["capture_output"] is True
+
+
+def test_diff_archives_builds_borg_diff_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    captured: dict[str, object] = {}
+    test_passphrase = "secret"  # noqa: S105
+
+    def fake_run_command(
+        cmd: list[str],
+        passphrase: str | None = None,
+        capture_output: bool = True,
+    ) -> SimpleNamespace:
+        captured["cmd"] = cmd
+        captured["passphrase"] = passphrase
+        captured["capture_output"] = capture_output
+        return SimpleNamespace(
+            stdout='{"path":"docs/file.txt","changes":[{"type":"modified","added":12,"removed":4}]}\n'
+        )
+
+    monkeypatch.setattr(client, "_run_command", fake_run_command)
+
+    result = client.diff_archives(
+        "/repo",
+        "archive-old",
+        "archive-new",
+        options=DiffOptions(content_only=True, paths=["docs", "src/app.py"]),
+        passphrase=test_passphrase,
+    )
+
+    assert captured["cmd"] == [
+        "borg",
+        "diff",
+        "--content-only",
+        "--json-lines",
+        "/repo::archive-old",
+        "archive-new",
+        "docs",
+        "src/app.py",
+    ]
+    assert captured["passphrase"] == test_passphrase
+    assert captured["capture_output"] is True
+    assert result.archive1 == "archive-old"
+    assert result.archive2 == "archive-new"
+    assert len(result.entries) == 1
+    assert result.entries[0].path == Path("docs/file.txt")
+
+
+def test_diff_archives_preserves_metadata_change_values(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+
+    def fake_run_command(
+        cmd: list[str],
+        passphrase: str | None = None,
+        capture_output: bool = True,
+    ) -> SimpleNamespace:
+        _ = (cmd, passphrase, capture_output)
+        return SimpleNamespace(
+            stdout='{"path":"docs/file.txt","changes":[{"type":"mtime","old":"2026-04-03T10:00:00","new":"2026-04-03T11:00:00"}]}'
+        )
+
+    monkeypatch.setattr(client, "_run_command", fake_run_command)
+
+    result = client.diff_archives("/repo", "archive-old", "archive-new")
+
+    assert result.entries[0].changes[0].type == "mtime"
+    assert result.entries[0].changes[0].old == "2026-04-03T10:00:00"
+    assert result.entries[0].changes[0].new == "2026-04-03T11:00:00"

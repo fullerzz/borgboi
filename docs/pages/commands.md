@@ -159,6 +159,21 @@ List contents of an archive.
 
 When `--output` points to a file, BorgBoi writes the archive paths there instead of printing them.
 
+### `backup diff`
+
+Compare two archives in a repository.
+
+- Target the repository with `--name/-n` or `--path/-p`
+- Optional: `--archive1/-a`, `--archive2/-b`, repeated `--filter-path`, `--content-only`, `--json`, `--passphrase`
+
+If you omit both archive names, BorgBoi compares the two most recent archives automatically.
+
+```sh
+bb backup diff --name my-docs-backup
+bb backup diff --name my-docs-backup --archive1 2026-04-01_00:00:00 --archive2 2026-04-02_00:00:00
+bb backup diff --name my-docs-backup --filter-path Documents/report.md --content-only
+```
+
 ### `backup restore`
 
 Restore an archive into the current working directory.
