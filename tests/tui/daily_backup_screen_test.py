@@ -81,8 +81,13 @@ async def test_tui_daily_backup_start_runs_selected_repo(tui_config_with_exclude
 
         select.value = repo.name
         await pilot.click("#daily-backup-start")
-        await pilot.pause()
 
+        for _ in range(100):
+            await pilot.pause(0.05)
+            if not screen._backup_running:
+                break
+
+        assert screen._backup_running is False
         assert start_button.disabled is False
         assert borg.create_calls == [f"{repo.path}:{repo.backup_target}"]
         assert borg.prune_calls == [repo.path]
