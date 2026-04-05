@@ -161,6 +161,7 @@ class RepoInfoScreen(Screen[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "back", "Back"),
         Binding("b", "daily_backup", "Backup"),
+        Binding("d", "compare_archives", "Compare"),
         Binding("e", "edit_config", "Edit Config"),
         Binding("r", "refresh", "Refresh"),
     ]
@@ -233,6 +234,13 @@ class RepoInfoScreen(Screen[None]):
 
                 with TabPane("Archives", id="repo-info-archives-tab"), Vertical(classes="repo-info-tab-body"):
                     yield Label("", id="repo-info-archives-status")
+                    with Horizontal(id="repo-info-archives-actions"):
+                        yield Button(
+                            "Compare archives",
+                            id="repo-info-compare-archives-btn",
+                            variant="primary",
+                            disabled=not self._is_local_repo(),
+                        )
                     yield DataTable(id="repo-info-archives-table")
 
                 with (
@@ -300,6 +308,29 @@ class RepoInfoScreen(Screen[None]):
         self._load_repo_details()
         if self._is_local_repo():
             self._load_live_quota()
+
+    def action_compare_archives(self) -> None:
+        """Open the archive compare screen for the current repository."""
+        if not self._is_local_repo():
+            self.notify("Archive comparison is only available for repositories on this machine.", severity="warning")
+            return
+
+        table = self.query_one("#repo-info-archives-table", DataTable)
+        if table.row_count < 2:
+            self.notify("This repository needs at least two archives to compare.", severity="warning")
+            return
+
+        from borgboi.tui.archive_compare_screen import ArchiveCompareScreen
+
+        older_archive, newer_archive = self._default_compare_archives()
+        _ = self.app.push_screen(
+            ArchiveCompareScreen(
+                repo=self._repo,
+                orchestrator=self._orchestrator,
+                initial_older_archive=older_archive,
+                initial_newer_archive=newer_archive,
+            )
+        )
 
     def action_edit_config(self) -> None:
         """Open the dedicated repo settings editor screen."""
@@ -411,9 +442,11 @@ class RepoInfoScreen(Screen[None]):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses in the repo info screen."""
-        if event.button.id != "repo-info-edit-config-btn":
+        if event.button.id == "repo-info-edit-config-btn":
+            self.action_edit_config()
             return
-        self.action_edit_config()
+        if event.button.id == "repo-info-compare-archives-btn":
+            self.action_compare_archives()
 
     def _apply_config_result(self, result: RepoConfigResult) -> None:
         """Apply the config editor result to the parent summary state."""
@@ -649,9 +682,13 @@ class RepoInfoScreen(Screen[None]):
 
         if not archives:
             self.query_one("#repo-info-archives-status", Static).update("No archives found for this repository.")
+            self.query_one("#repo-info-compare-archives-btn", Button).disabled = True
             return
 
         self.query_one("#repo-info-archives-status", Static).update(f"{len(archives)} archives found.")
+        self.query_one("#repo-info-compare-archives-btn", Button).disabled = not (
+            self._is_local_repo() and len(archives) >= 2
+        )
         for archive in archives:
             table.add_row(
                 archive.name,
@@ -659,6 +696,19 @@ class RepoInfoScreen(Screen[None]):
                 _format_archive_age(archive.name),
                 archive.id[:12],
             )
+
+    def _default_compare_archives(self) -> tuple[str | None, str | None]:
+        """Return the older/newer archive names from the current archive table selection."""
+        table = self.query_one("#repo-info-archives-table", DataTable)
+        rows: list[str] = []
+        for row_index in range(table.row_count):
+            row_key = table.get_row_at(row_index)
+            rows.append(str(row_key[0]))
+
+        if len(rows) < 2:
+            return None, None
+
+        return rows[1], rows[0]
 
     def _on_load_error(self, error: Exception) -> None:
         """Handle live data loading failures."""
@@ -675,4 +725,5 @@ class RepoInfoScreen(Screen[None]):
         self.query_one("#repo-info-command-output", Static).update(_render_fields([("Error", str(error))]))
         self.query_one("#repo-info-archives-status", Static).update("Archive list unavailable.")
         self.query_one("#repo-info-archives-table", DataTable).clear()
+        self.query_one("#repo-info-compare-archives-btn", Button).disabled = True
         self.notify(str(error), severity="error", title="Failed to load repo info")

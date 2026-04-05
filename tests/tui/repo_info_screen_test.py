@@ -11,6 +11,7 @@ from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import Repository, RetentionPolicy
 from borgboi.tui.app import BorgBoiApp
+from borgboi.tui.archive_compare_screen import ArchiveCompareScreen
 from borgboi.tui.repo_config_screen import RepoConfigScreen
 from borgboi.tui.repo_info_screen import RepoInfoScreen, load_repo_excludes_state
 
@@ -331,6 +332,7 @@ async def test_repo_info_screen_hides_workspace_tree_for_remote_repo(
         quota_summary = repo_info_app.screen.query_one("#repo-info-config", Static)
         storage_card = repo_info_app.screen.query_one("#repo-info-storage-card", Static)
         edit_button = repo_info_app.screen.query_one("#repo-info-edit-config-btn", Button)
+        compare_button = repo_info_app.screen.query_one("#repo-info-compare-archives-btn", Button)
 
         assert "Workspace tree unavailable" in str(cast(Any, workspace_status).content)
         assert "only available for repositories on this machine" in str(cast(Any, workspace_unavailable).content)
@@ -340,7 +342,33 @@ async def test_repo_info_screen_hides_workspace_tree_for_remote_repo(
         assert "Unavailable" in str(cast(Any, quota_summary).content)
         assert "Quota Unknown" in str(cast(Any, storage_card).content)
         assert edit_button.disabled is False
+        assert compare_button.disabled is True
         assert len(repo_info_app.screen.query("#repo-info-workspace-tree")) == 0
+
+
+async def test_repo_info_screen_opens_archive_compare_screen(
+    monkeypatch: pytest.MonkeyPatch,
+    repo_info_app: BorgBoiApp,
+    repo_detail_repo: Repository,
+    tmp_path: Any,
+) -> None:
+    repo_detail_repo.path = tmp_path.as_posix()
+    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+
+    async with repo_info_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        assert isinstance(repo_info_app.screen, RepoInfoScreen)
+
+        await pilot.press("d")
+        for _ in range(60):
+            await pilot.pause(0.05)
+            if isinstance(repo_info_app.screen, ArchiveCompareScreen):
+                break
+
+        assert isinstance(repo_info_app.screen, ArchiveCompareScreen)
 
 
 async def test_repo_info_screen_opens_repo_config_screen(
