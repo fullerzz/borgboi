@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, override
 
 from rich.markup import escape
 from textual import work
@@ -14,7 +15,9 @@ from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, DirectoryTree, Footer, Header, Label, Select, Static, Switch
+from textual.widgets import Button, DirectoryTree, Footer, Header, Label, Select, Static, Switch, Tree
+from textual.widgets.directory_tree import DirEntry
+from textual.widgets.tree import TreeNode
 
 from borgboi.clients.borg import DiffChange, DiffResult, RepoArchive
 from borgboi.core.logging import get_logger
@@ -68,6 +71,67 @@ def _archive_sort_key(archive: RepoArchive) -> tuple[str, str]:
     return (archive.time or archive.start or "", archive.name)
 
 
+class CompareDirectoryTree(DirectoryTree):
+    """Directory tree that reports directory expand/collapse changes to the screen."""
+
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        on_directory_expanded: Callable[[CompareDirectoryTree, Path], Awaitable[None]] | None = None,
+        on_directory_collapsed: Callable[[CompareDirectoryTree, Path], Awaitable[None]] | None = None,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+        disabled: bool = False,
+    ) -> None:
+        self._on_directory_expanded = on_directory_expanded
+        self._on_directory_collapsed = on_directory_collapsed
+        super().__init__(path, name=name, id=id, classes=classes, disabled=disabled)
+
+    @override
+    async def _on_tree_node_expanded(self, event: Tree.NodeExpanded[DirEntry]) -> None:
+        """Emit a screen-friendly message after Textual finishes loading a directory."""
+        await super()._on_tree_node_expanded(event)
+        dir_entry = event.node.data
+        if dir_entry is None or not event.node.allow_expand:
+            return
+        if self._on_directory_expanded is not None:
+            await self._on_directory_expanded(self, dir_entry.path)
+
+    async def _on_tree_node_collapsed(self, event: Tree.NodeCollapsed[DirEntry]) -> None:
+        """Emit a screen-friendly message after a directory node is collapsed."""
+        dir_entry = event.node.data
+        if dir_entry is None or not event.node.allow_expand:
+            return
+        if self._on_directory_collapsed is not None:
+            await self._on_directory_collapsed(self, dir_entry.path)
+
+    async def ensure_node_loaded(self, node: TreeNode[DirEntry]) -> None:
+        """Ensure a directory node's children are loaded into memory."""
+        if not node.allow_expand or node.data is None or node.data.loaded:
+            return
+        await self._add_to_load_queue(node)
+
+    async def find_node_by_relative_path(self, relative_path: Path) -> TreeNode[DirEntry] | None:
+        """Locate a node by relative path, loading ancestor directories as needed."""
+        current_node = self.root
+        if not relative_path.parts:
+            return current_node
+
+        for part in relative_path.parts:
+            await self.ensure_node_loaded(current_node)
+            child_node: TreeNode[DirEntry] | None = next(
+                (child for child in current_node.children if child.data is not None and child.data.path.name == part),
+                None,
+            )
+            if child_node is None:
+                return None
+            current_node = child_node
+
+        return current_node
+
+
 class ArchiveCompareScreen(Screen[None]):
     """Screen for visually comparing two archives from the same repository."""
 
@@ -97,6 +161,9 @@ class ArchiveCompareScreen(Screen[None]):
         self._compare_temp_root = Path(self._tempdir.name)
         self._older_root = self._compare_temp_root / "older"
         self._newer_root = self._compare_temp_root / "newer"
+        self._older_root_resolved = self._older_root.resolve()
+        self._newer_root_resolved = self._newer_root.resolve()
+        self._mirrored_tree_operations: set[tuple[str, str, str]] = set()
         self._older_root.mkdir(parents=True, exist_ok=True)
         self._newer_root.mkdir(parents=True, exist_ok=True)
         super().__init__(**kwargs)
@@ -112,7 +179,12 @@ class ArchiveCompareScreen(Screen[None]):
                 with Vertical(classes="archive-compare-pane"):
                     yield Select[str]([], prompt="Older archive", id="archive-compare-older-select", disabled=True)
                     yield Static("Older archive", id="archive-compare-older-heading", markup=True)
-                    yield DirectoryTree(self._older_root, id="archive-compare-older-tree")
+                    yield CompareDirectoryTree(
+                        self._older_root,
+                        id="archive-compare-older-tree",
+                        on_directory_expanded=self._mirror_directory_expansion,
+                        on_directory_collapsed=self._mirror_directory_collapse,
+                    )
                 with Vertical(id="archive-compare-details", classes="archive-compare-pane"):
                     with Horizontal(id="archive-compare-center-controls"):
                         yield Label("Content only", id="archive-compare-content-only-label")
@@ -123,13 +195,19 @@ class ArchiveCompareScreen(Screen[None]):
                 with Vertical(classes="archive-compare-pane"):
                     yield Select[str]([], prompt="Newer archive", id="archive-compare-newer-select", disabled=True)
                     yield Static("Newer archive", id="archive-compare-newer-heading", markup=True)
-                    yield DirectoryTree(self._newer_root, id="archive-compare-newer-tree")
+                    yield CompareDirectoryTree(
+                        self._newer_root,
+                        id="archive-compare-newer-tree",
+                        on_directory_expanded=self._mirror_directory_expansion,
+                        on_directory_collapsed=self._mirror_directory_collapse,
+                    )
         yield Footer()
 
     def on_mount(self) -> None:
         """Prepare the trees and start loading archive choices."""
-        for tree_id in ("#archive-compare-older-tree", "#archive-compare-newer-tree"):
-            tree = self.query_one(tree_id, DirectoryTree)
+        self._older_tree = self.query_one("#archive-compare-older-tree", CompareDirectoryTree)
+        self._newer_tree = self.query_one("#archive-compare-newer-tree", CompareDirectoryTree)
+        for tree in (self._older_tree, self._newer_tree):
             tree.show_root = False
             tree.root.expand()
 
@@ -294,9 +372,10 @@ class ArchiveCompareScreen(Screen[None]):
         )
         self.query_one("#archive-compare-older-heading", Static).update(self._render_archive_heading(result.archive1))
         self.query_one("#archive-compare-newer-heading", Static).update(self._render_archive_heading(result.archive2))
+        self._mirrored_tree_operations.clear()
 
-        _ = self.query_one("#archive-compare-older-tree", DirectoryTree).reload()
-        _ = self.query_one("#archive-compare-newer-tree", DirectoryTree).reload()
+        _ = self._older_tree.reload()
+        _ = self._newer_tree.reload()
 
     def _on_compare_error(self, error: Exception) -> None:
         """Handle archive compare failures."""
@@ -328,6 +407,49 @@ class ArchiveCompareScreen(Screen[None]):
     def on_directory_tree_directory_selected(self, event: DirectoryTree.DirectorySelected) -> None:
         """Update the detail panel when a directory is selected in either tree."""
         self._show_selected_path(event.path)
+
+    async def _mirror_directory_expansion(self, source_tree: CompareDirectoryTree, expanded_path: Path) -> None:
+        """Mirror user-driven directory expansions into the opposite archive tree."""
+        await self._sync_directory_state(source_tree, expanded_path, operation="expand")
+
+    async def _mirror_directory_collapse(self, source_tree: CompareDirectoryTree, collapsed_path: Path) -> None:
+        """Mirror user-driven directory collapses into the opposite archive tree."""
+        await self._sync_directory_state(source_tree, collapsed_path, operation="collapse")
+
+    async def _sync_directory_state(
+        self, source_tree: CompareDirectoryTree, directory_path: Path, *, operation: Literal["expand", "collapse"]
+    ) -> None:
+        """Synchronize a directory expand/collapse operation into the opposite tree."""
+        relative_path = self._relative_compare_path(directory_path)
+        if relative_path is None or not relative_path.parts:
+            return
+
+        message_key = (operation, source_tree.id or "", relative_path.as_posix())
+        if message_key in self._mirrored_tree_operations:
+            self._mirrored_tree_operations.remove(message_key)
+            return
+
+        peer_tree = self._get_peer_tree(source_tree)
+        if peer_tree is None:
+            return
+
+        matching_node = await peer_tree.find_node_by_relative_path(relative_path)
+        if matching_node is None or not matching_node.allow_expand:
+            return
+
+        if operation == "expand":
+            if matching_node.is_expanded:
+                return
+            self._mirrored_tree_operations.add((operation, peer_tree.id or "", relative_path.as_posix()))
+            matching_node.expand()
+            await peer_tree.ensure_node_loaded(matching_node)
+            return
+
+        if operation == "collapse":
+            if matching_node.is_collapsed:
+                return
+            self._mirrored_tree_operations.add((operation, peer_tree.id or "", relative_path.as_posix()))
+            matching_node.collapse()
 
     def _show_selected_path(self, selected_path: Path) -> None:
         """Render details for the selected compare path or directory."""
@@ -364,11 +486,20 @@ class ArchiveCompareScreen(Screen[None]):
 
     def _relative_compare_path(self, absolute_path: Path) -> Path | None:
         """Convert an absolute selected path into a relative compare path."""
-        for root in (self._older_root, self._newer_root):
+        resolved_path = absolute_path.resolve()
+        for root in (self._older_root_resolved, self._newer_root_resolved):
             try:
-                return absolute_path.relative_to(root)
+                return resolved_path.relative_to(root)
             except ValueError:
                 continue
+        return None
+
+    def _get_peer_tree(self, source_tree: CompareDirectoryTree) -> CompareDirectoryTree | None:
+        """Return the opposite compare tree for a given source tree."""
+        if source_tree is self._older_tree:
+            return self._newer_tree
+        if source_tree is self._newer_tree:
+            return self._older_tree
         return None
 
     def _render_archive_heading(self, archive_name: str) -> str:

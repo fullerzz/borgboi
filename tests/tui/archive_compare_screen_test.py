@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -10,7 +11,7 @@ from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import Repository
 from borgboi.tui.app import BorgBoiApp
-from borgboi.tui.archive_compare_screen import ArchiveCompareScreen, build_compare_path_states
+from borgboi.tui.archive_compare_screen import ArchiveCompareScreen, CompareDirectoryTree, build_compare_path_states
 from borgboi.tui.repo_info_screen import RepoInfoScreen
 
 
@@ -23,6 +24,7 @@ def archive_compare_result() -> DiffResult:
             "entries": [
                 {"path": "added.txt", "changes": [{"type": "added", "size": 42}]},
                 {"path": "removed.txt", "changes": [{"type": "removed", "size": 11}]},
+                {"path": "only-older/file.txt", "changes": [{"type": "removed", "size": 7}]},
                 {"path": "docs/file.txt", "changes": [{"type": "modified", "added": 12, "removed": 4}]},
                 {
                     "path": "docs/mode.txt",
@@ -121,6 +123,95 @@ async def test_archive_compare_screen_builds_changed_path_trees(archive_compare_
         assert "Changed paths" in str(cast(Any, summary).content)
         assert "2026-03-27_22:00:00" in str(cast(Any, summary).content)
         assert "2026-03-28_22:00:00" in str(cast(Any, summary).content)
+
+
+async def test_archive_compare_screen_mirrors_directory_expansion_when_path_exists(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        older_tree = screen.query_one("#archive-compare-older-tree", CompareDirectoryTree)
+        newer_tree = screen.query_one("#archive-compare-newer-tree", CompareDirectoryTree)
+        older_docs = await older_tree.find_node_by_relative_path(Path("docs"))
+        newer_docs = await newer_tree.find_node_by_relative_path(Path("docs"))
+
+        assert older_docs is not None
+        assert newer_docs is not None
+        assert older_docs.is_collapsed is True
+        assert newer_docs.is_collapsed is True
+
+        older_docs.expand()
+
+        for _ in range(40):
+            await pilot.pause(0.05)
+            newer_docs = await newer_tree.find_node_by_relative_path(Path("docs"))
+            if newer_docs is not None and newer_docs.is_expanded:
+                break
+
+        assert older_docs.is_expanded is True
+        assert newer_docs is not None
+        assert newer_docs.is_expanded is True
+
+
+async def test_archive_compare_screen_mirrors_directory_collapse_when_path_exists(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        older_tree = screen.query_one("#archive-compare-older-tree", CompareDirectoryTree)
+        newer_tree = screen.query_one("#archive-compare-newer-tree", CompareDirectoryTree)
+        older_docs = await older_tree.find_node_by_relative_path(Path("docs"))
+        newer_docs = await newer_tree.find_node_by_relative_path(Path("docs"))
+
+        assert older_docs is not None
+        assert newer_docs is not None
+
+        older_docs.expand()
+
+        for _ in range(40):
+            await pilot.pause(0.05)
+            newer_docs = await newer_tree.find_node_by_relative_path(Path("docs"))
+            if newer_docs is not None and newer_docs.is_expanded:
+                break
+
+        assert newer_docs is not None
+        assert older_docs.is_expanded is True
+        assert newer_docs.is_expanded is True
+
+        older_docs.collapse()
+
+        for _ in range(40):
+            await pilot.pause(0.05)
+            newer_docs = await newer_tree.find_node_by_relative_path(Path("docs"))
+            if newer_docs is not None and newer_docs.is_collapsed:
+                break
+
+        assert older_docs.is_collapsed is True
+        assert newer_docs is not None
+        assert newer_docs.is_collapsed is True
+
+
+async def test_archive_compare_screen_ignores_missing_matching_directory(archive_compare_app: BorgBoiApp) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        older_tree = screen.query_one("#archive-compare-older-tree", CompareDirectoryTree)
+        newer_tree = screen.query_one("#archive-compare-newer-tree", CompareDirectoryTree)
+        older_only = await older_tree.find_node_by_relative_path(Path("only-older"))
+
+        assert older_only is not None
+        assert older_only.allow_expand is True
+        assert await newer_tree.find_node_by_relative_path(Path("only-older")) is None
+
+        older_only.expand()
+
+        for _ in range(10):
+            await pilot.pause(0.05)
+
+        assert older_only.is_expanded is True
+        assert await newer_tree.find_node_by_relative_path(Path("only-older")) is None
 
 
 async def test_archive_compare_screen_updates_selected_path_details(archive_compare_app: BorgBoiApp) -> None:
