@@ -9,6 +9,8 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, override
 
 from rich.markup import escape
+from rich.style import Style
+from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -43,6 +45,9 @@ class ComparePathState:
     changes: tuple[DiffChange, ...]
 
 
+CompareRowHighlight = Literal["green", "red"]
+
+
 def build_compare_path_states(result: DiffResult) -> dict[Path, ComparePathState]:
     """Build a lookup of changed paths and which side each path exists on."""
     states: dict[Path, ComparePathState] = {}
@@ -72,8 +77,66 @@ def _archive_sort_key(archive: RepoArchive) -> tuple[str, str]:
     return (archive.time or archive.start or "", archive.name)
 
 
+def build_compare_tree_highlights(
+    path_states: dict[Path, ComparePathState],
+) -> tuple[dict[Path, CompareRowHighlight], dict[Path, CompareRowHighlight]]:
+    """Build side-specific highlight maps for compare tree rows."""
+    older_highlights: dict[Path, CompareRowHighlight] = {}
+    newer_highlights: dict[Path, CompareRowHighlight] = {}
+
+    for state in path_states.values():
+        _record_compare_highlight(older_highlights, state.relative_path, _resolve_side_highlight(state, side="older"))
+        _record_compare_highlight(newer_highlights, state.relative_path, _resolve_side_highlight(state, side="newer"))
+
+    return older_highlights, newer_highlights
+
+
+def _resolve_side_highlight(state: ComparePathState, *, side: Literal["older", "newer"]) -> CompareRowHighlight | None:
+    """Resolve the row highlight for one path on one compare side."""
+    if side == "older":
+        if not state.older_exists:
+            return None
+        if not state.newer_exists:
+            return "red"
+        return "green"
+
+    if not state.newer_exists:
+        return None
+    return "green"
+
+
+def _record_compare_highlight(
+    highlights: dict[Path, CompareRowHighlight],
+    relative_path: Path,
+    highlight: CompareRowHighlight | None,
+) -> None:
+    """Apply one highlight to a path and its parent directories."""
+    if highlight is None or not relative_path.parts:
+        return
+
+    _merge_compare_highlight(highlights, relative_path, highlight)
+    for parent in relative_path.parents:
+        if parent.parts:
+            _merge_compare_highlight(highlights, parent, highlight)
+
+
+def _merge_compare_highlight(
+    highlights: dict[Path, CompareRowHighlight], relative_path: Path, highlight: CompareRowHighlight
+) -> None:
+    """Merge one highlight into the lookup, preferring green over red."""
+    current = highlights.get(relative_path)
+    if current == "green" or current == highlight:
+        return
+    highlights[relative_path] = highlight if highlight == "green" or current is None else current
+
+
 class CompareDirectoryTree(DirectoryTree):
     """Directory tree with compare-specific helpers and sync messages."""
+
+    ROW_HIGHLIGHT_STYLES: ClassVar[dict[CompareRowHighlight, Style]] = {
+        "green": Style.parse("on #213a2c"),
+        "red": Style.parse("on #3a2430"),
+    }
 
     class DirectoryExpanded(Message):
         """Posted when a directory node is expanded."""
@@ -101,6 +164,8 @@ class CompareDirectoryTree(DirectoryTree):
         disabled: bool = False,
     ) -> None:
         super().__init__(path, name=name, id=id, classes=classes, disabled=disabled)
+        self._compare_root_resolved = Path(path).resolve()
+        self._row_highlights: dict[Path, CompareRowHighlight] = {}
 
     def on_tree_node_expanded(self, event: Tree.NodeExpanded[DirEntry]) -> None:
         """Relay directory expansion through a public custom message."""
@@ -139,6 +204,32 @@ class CompareDirectoryTree(DirectoryTree):
             current_node = child_node
 
         return current_node
+
+    def set_row_highlights(self, highlights: dict[Path, CompareRowHighlight]) -> None:
+        """Replace the row highlight map for this tree."""
+        self._row_highlights = highlights
+        self.refresh()
+
+    def render_label(self, node: TreeNode[DirEntry], base_style: Style, style: Style) -> Text:
+        """Render a label with compare-specific tinting for changed paths."""
+        highlight = self._highlight_for_node(node)
+        if highlight is None:
+            return super().render_label(node, base_style, style)
+
+        highlight_style = self.ROW_HIGHLIGHT_STYLES[highlight]
+        return super().render_label(node, base_style + highlight_style, style + highlight_style)
+
+    def _highlight_for_node(self, node: TreeNode[DirEntry]) -> CompareRowHighlight | None:
+        """Return the compare highlight for a tree node, if any."""
+        if node.data is None:
+            return None
+
+        try:
+            relative_path = node.data.path.resolve().relative_to(self._compare_root_resolved)
+        except ValueError:
+            return None
+
+        return self._row_highlights.get(relative_path)
 
 
 class ArchiveCompareScreen(Screen[None]):
@@ -379,6 +470,9 @@ class ArchiveCompareScreen(Screen[None]):
         self.query_one("#archive-compare-older-heading", Static).update(self._render_archive_heading(result.archive1))
         self.query_one("#archive-compare-newer-heading", Static).update(self._render_archive_heading(result.archive2))
         self.expanded_paths = frozenset()
+        older_highlights, newer_highlights = build_compare_tree_highlights(path_states)
+        self._older_tree.set_row_highlights(older_highlights)
+        self._newer_tree.set_row_highlights(newer_highlights)
 
         _ = self._older_tree.reload()
         _ = self._newer_tree.reload()
