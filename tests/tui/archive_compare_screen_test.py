@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from rich.style import Style
 from textual.widgets import DirectoryTree, Select, Static, Switch
 
 from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
@@ -16,6 +17,8 @@ from borgboi.tui.archive_compare_screen import (
     CompareDirectoryTree,
     build_compare_path_states,
     build_compare_tree_highlights,
+    build_compare_tree_modified_paths,
+    build_compare_tree_parent_indicators,
 )
 from borgboi.tui.repo_info_screen import RepoInfoScreen
 
@@ -94,32 +97,68 @@ def test_build_compare_tree_highlights_assigns_side_specific_file_and_directory_
 
     assert older_highlights[Path("removed.txt")] == "red"
     assert Path("added.txt") not in older_highlights
-    assert older_highlights[Path("docs/file.txt")] == "green"
-    assert older_highlights[Path("docs")] == "green"
-    assert older_highlights[Path("only-older")] == "red"
+    assert Path("docs/file.txt") not in older_highlights
+    assert Path("docs/mode.txt") not in older_highlights
+    assert Path("docs") not in older_highlights
+    assert Path("only-older") not in older_highlights
 
     assert newer_highlights[Path("added.txt")] == "green"
     assert Path("removed.txt") not in newer_highlights
-    assert newer_highlights[Path("docs/file.txt")] == "green"
-    assert newer_highlights[Path("docs")] == "green"
+    assert Path("docs/file.txt") not in newer_highlights
+    assert Path("docs/mode.txt") not in newer_highlights
+    assert Path("docs") not in newer_highlights
 
 
-def test_build_compare_tree_highlights_prefers_green_for_mixed_directories() -> None:
+def test_build_compare_tree_modified_paths_marks_direct_modified_files_and_directories() -> None:
     result = DiffResult.model_validate(
         {
             "archive1": "older",
             "archive2": "newer",
             "entries": [
-                {"path": "docs/removed.txt", "changes": [{"type": "removed", "size": 1}]},
-                {"path": "docs/updated.txt", "changes": [{"type": "modified", "added": 2, "removed": 1}]},
+                {"path": "docs/file.txt", "changes": [{"type": "modified", "added": 2, "removed": 1}]},
+                {
+                    "path": "docs/mode.txt",
+                    "changes": [{"type": "mode", "old_mode": "-rw-r--r--", "new_mode": "-rwxr-xr-x"}],
+                },
+                {"path": "direct-dir", "changes": [{"type": "modified", "added": 1, "removed": 0}]},
+                {"path": "added-dir", "changes": [{"type": "added", "size": 1}]},
             ],
         }
     )
 
-    older_highlights, newer_highlights = build_compare_tree_highlights(build_compare_path_states(result))
+    older_modified, newer_modified = build_compare_tree_modified_paths(build_compare_path_states(result))
 
-    assert older_highlights[Path("docs")] == "green"
-    assert newer_highlights[Path("docs")] == "green"
+    assert Path("docs/file.txt") in older_modified
+    assert Path("docs/file.txt") in newer_modified
+    assert Path("docs/mode.txt") in older_modified
+    assert Path("docs/mode.txt") in newer_modified
+    assert Path("direct-dir") in older_modified
+    assert Path("direct-dir") in newer_modified
+    assert Path("added-dir") not in older_modified
+    assert Path("added-dir") not in newer_modified
+
+
+def test_build_compare_tree_parent_indicators_marks_ancestor_only_directories() -> None:
+    result = DiffResult.model_validate(
+        {
+            "archive1": "older",
+            "archive2": "newer",
+            "entries": [
+                {"path": "docs/subdir/removed.txt", "changes": [{"type": "removed", "size": 1}]},
+                {"path": "docs/subdir/updated.txt", "changes": [{"type": "modified", "added": 2, "removed": 1}]},
+                {"path": "direct-dir", "changes": [{"type": "removed", "size": 1}]},
+            ],
+        }
+    )
+
+    older_indicators, newer_indicators = build_compare_tree_parent_indicators(build_compare_path_states(result))
+
+    assert Path("docs") in older_indicators
+    assert Path("docs/subdir") in older_indicators
+    assert Path("docs") in newer_indicators
+    assert Path("docs/subdir") in newer_indicators
+    assert Path("direct-dir") not in older_indicators
+    assert Path("direct-dir") not in newer_indicators
 
 
 async def _open_archive_compare_screen(app: BorgBoiApp, pilot: Any) -> ArchiveCompareScreen:
@@ -176,18 +215,44 @@ async def test_archive_compare_screen_assigns_row_highlights_to_tree_nodes(archi
 
         older_removed = await older_tree.find_node_by_relative_path(Path("removed.txt"))
         older_only_directory = await older_tree.find_node_by_relative_path(Path("only-older"))
+        assert older_only_directory is not None
+        older_only_directory.expand()
+        await pilot.pause()
+        older_only_file = await older_tree.find_node_by_relative_path(Path("only-older/file.txt"))
         newer_added = await newer_tree.find_node_by_relative_path(Path("added.txt"))
         older_docs = await older_tree.find_node_by_relative_path(Path("docs"))
+        newer_docs = await newer_tree.find_node_by_relative_path(Path("docs"))
+
+        assert older_docs is not None
+        older_docs.expand()
+        await pilot.pause()
+        older_modified_file = await older_tree.find_node_by_relative_path(Path("docs/file.txt"))
+        newer_modified_file = await newer_tree.find_node_by_relative_path(Path("docs/file.txt"))
 
         assert older_removed is not None
-        assert older_only_directory is not None
+        assert older_only_file is not None
         assert newer_added is not None
         assert older_docs is not None
+        assert newer_docs is not None
+        assert older_modified_file is not None
+        assert newer_modified_file is not None
 
         assert older_tree._highlight_for_node(older_removed) == "red"
-        assert older_tree._highlight_for_node(older_only_directory) == "red"
+        assert older_tree._highlight_for_node(older_only_directory) is None
+        assert older_tree._highlight_for_node(older_only_file) == "red"
         assert newer_tree._highlight_for_node(newer_added) == "green"
-        assert older_tree._highlight_for_node(older_docs) == "green"
+        assert older_tree._highlight_for_node(older_docs) is None
+        assert older_tree._highlight_for_node(older_modified_file) is None
+        assert newer_tree._highlight_for_node(newer_modified_file) is None
+
+        older_docs_label = older_tree.render_label(older_docs, Style(), Style())
+        older_only_directory_label = older_tree.render_label(older_only_directory, Style(), Style())
+        older_modified_file_label = older_tree.render_label(older_modified_file, Style(), Style())
+        newer_modified_file_label = newer_tree.render_label(newer_modified_file, Style(), Style())
+        assert "(modified)" in older_docs_label.plain
+        assert "(modified)" in older_only_directory_label.plain
+        assert "(modified)" in older_modified_file_label.plain
+        assert "(modified)" in newer_modified_file_label.plain
 
         red_bg = CompareDirectoryTree.ROW_HIGHLIGHT_STYLES["red"].bgcolor
         green_bg = CompareDirectoryTree.ROW_HIGHLIGHT_STYLES["green"].bgcolor
@@ -195,10 +260,16 @@ async def test_archive_compare_screen_assigns_row_highlights_to_tree_nodes(archi
         assert green_bg is not None
 
         older_removed_strip = older_tree.render_line(older_removed.line)
+        older_only_directory_strip = older_tree.render_line(older_only_directory.line)
+        older_modified_file_strip = older_tree.render_line(older_modified_file.line)
         newer_added_strip = newer_tree.render_line(newer_added.line)
+        newer_modified_file_strip = newer_tree.render_line(newer_modified_file.line)
 
         assert any(style is not None and style.bgcolor == red_bg for _, style, _ in older_removed_strip)
+        assert all(style is None or style.bgcolor != red_bg for _, style, _ in older_only_directory_strip)
         assert any(style is not None and style.bgcolor == green_bg for _, style, _ in newer_added_strip)
+        assert all(style is None or style.bgcolor != green_bg for _, style, _ in older_modified_file_strip)
+        assert all(style is None or style.bgcolor != green_bg for _, style, _ in newer_modified_file_strip)
 
 
 async def test_archive_compare_screen_mirrors_directory_expansion_when_path_exists(

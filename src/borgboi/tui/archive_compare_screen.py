@@ -46,6 +46,7 @@ class ComparePathState:
 
 
 CompareRowHighlight = Literal["green", "red"]
+ComparePathKind = Literal["added", "removed", "modified"]
 
 
 def build_compare_path_states(result: DiffResult) -> dict[Path, ComparePathState]:
@@ -80,7 +81,7 @@ def _archive_sort_key(archive: RepoArchive) -> tuple[str, str]:
 def build_compare_tree_highlights(
     path_states: dict[Path, ComparePathState],
 ) -> tuple[dict[Path, CompareRowHighlight], dict[Path, CompareRowHighlight]]:
-    """Build side-specific highlight maps for compare tree rows."""
+    """Build side-specific direct highlight maps for compare tree rows."""
     older_highlights: dict[Path, CompareRowHighlight] = {}
     newer_highlights: dict[Path, CompareRowHighlight] = {}
 
@@ -91,18 +92,50 @@ def build_compare_tree_highlights(
     return older_highlights, newer_highlights
 
 
+def build_compare_tree_modified_paths(path_states: dict[Path, ComparePathState]) -> tuple[set[Path], set[Path]]:
+    """Build side-specific direct modified-path markers for compare tree rows."""
+    older_modified = _build_side_modified_paths(path_states, side="older")
+    newer_modified = _build_side_modified_paths(path_states, side="newer")
+    return older_modified, newer_modified
+
+
+def build_compare_tree_parent_indicators(path_states: dict[Path, ComparePathState]) -> tuple[set[Path], set[Path]]:
+    """Build side-specific ancestor directories that contain changed descendants."""
+    older_indicators = _build_side_parent_indicators(path_states, side="older")
+    newer_indicators = _build_side_parent_indicators(path_states, side="newer")
+    return older_indicators, newer_indicators
+
+
 def _resolve_side_highlight(state: ComparePathState, *, side: Literal["older", "newer"]) -> CompareRowHighlight | None:
     """Resolve the row highlight for one path on one compare side."""
-    if side == "older":
-        if not state.older_exists:
-            return None
-        if not state.newer_exists:
-            return "red"
+    path_kind = _resolve_path_kind(state)
+    if path_kind == "removed" and side == "older":
+        return "red"
+    if path_kind == "added" and side == "newer":
         return "green"
+    return None
 
-    if not state.newer_exists:
-        return None
-    return "green"
+
+def _resolve_path_kind(state: ComparePathState) -> ComparePathKind:
+    """Classify one changed path as added, removed, or modified."""
+    change_types = {change.type for change in state.changes}
+    if change_types == {"added"}:
+        return "added"
+    if change_types == {"removed"}:
+        return "removed"
+    return "modified"
+
+
+def _path_exists_on_side(state: ComparePathState, *, side: Literal["older", "newer"]) -> bool:
+    """Return whether a changed path exists on one side of the compare."""
+    if side == "older":
+        return state.older_exists
+    return state.newer_exists
+
+
+def _is_directly_modified_on_side(state: ComparePathState, *, side: Literal["older", "newer"]) -> bool:
+    """Return whether a changed path should show a direct modified marker on one side."""
+    return _resolve_path_kind(state) == "modified" and _path_exists_on_side(state, side=side)
 
 
 def _record_compare_highlight(
@@ -110,14 +143,61 @@ def _record_compare_highlight(
     relative_path: Path,
     highlight: CompareRowHighlight | None,
 ) -> None:
-    """Apply one highlight to a path and its parent directories."""
+    """Apply one highlight to the changed path itself."""
     if highlight is None or not relative_path.parts:
         return
 
     _merge_compare_highlight(highlights, relative_path, highlight)
-    for parent in relative_path.parents:
-        if parent.parts:
-            _merge_compare_highlight(highlights, parent, highlight)
+
+
+def _build_side_modified_paths(
+    path_states: dict[Path, ComparePathState], *, side: Literal["older", "newer"]
+) -> set[Path]:
+    """Collect directly modified paths that should show a dim modified marker."""
+    return {
+        state.relative_path
+        for state in path_states.values()
+        if state.relative_path.parts and _is_directly_modified_on_side(state, side=side)
+    }
+
+
+def _build_side_visible_changed_paths(
+    path_states: dict[Path, ComparePathState], *, side: Literal["older", "newer"]
+) -> set[Path]:
+    """Collect changed paths visible on one compare side."""
+    return {
+        state.relative_path
+        for state in path_states.values()
+        if state.relative_path.parts and _path_exists_on_side(state, side=side)
+    }
+
+
+def _build_side_direct_marker_paths(
+    path_states: dict[Path, ComparePathState], *, side: Literal["older", "newer"]
+) -> set[Path]:
+    """Collect direct paths that render their own special state on one side."""
+    return {
+        state.relative_path
+        for state in path_states.values()
+        if state.relative_path.parts
+        and (_resolve_side_highlight(state, side=side) is not None or _is_directly_modified_on_side(state, side=side))
+    }
+
+
+def _build_side_parent_indicators(
+    path_states: dict[Path, ComparePathState], *, side: Literal["older", "newer"]
+) -> set[Path]:
+    """Collect ancestor directories that should show a dim modified marker."""
+    indicators: set[Path] = set()
+    visible_paths = _build_side_visible_changed_paths(path_states, side=side)
+    direct_marker_paths = _build_side_direct_marker_paths(path_states, side=side)
+
+    for visible_path in visible_paths:
+        for parent in visible_path.parents:
+            if parent.parts and parent not in direct_marker_paths:
+                indicators.add(parent)
+
+    return indicators
 
 
 def _merge_compare_highlight(
@@ -166,6 +246,8 @@ class CompareDirectoryTree(DirectoryTree):
         super().__init__(path, name=name, id=id, classes=classes, disabled=disabled)
         self._compare_root_resolved = Path(path).resolve()
         self._row_highlights: dict[Path, CompareRowHighlight] = {}
+        self._modified_paths: set[Path] = set()
+        self._modified_parent_paths: set[Path] = set()
 
     def on_tree_node_expanded(self, event: Tree.NodeExpanded[DirEntry]) -> None:
         """Relay directory expansion through a public custom message."""
@@ -210,26 +292,53 @@ class CompareDirectoryTree(DirectoryTree):
         self._row_highlights = highlights
         self.refresh()
 
+    def set_modified_paths(self, modified_paths: set[Path]) -> None:
+        """Replace the direct modified-path marker set for this tree."""
+        self._modified_paths = modified_paths
+        self.refresh()
+
+    def set_modified_parent_paths(self, parent_paths: set[Path]) -> None:
+        """Replace the parent-directory indicator set for this tree."""
+        self._modified_parent_paths = parent_paths
+        self.refresh()
+
+    @override
     def render_label(self, node: TreeNode[DirEntry], base_style: Style, style: Style) -> Text:
-        """Render a label with compare-specific tinting for changed paths."""
+        """Render a label with compare-specific tinting and parent indicators."""
         highlight = self._highlight_for_node(node)
+        label = super().render_label(node, base_style, style)
         if highlight is None:
-            return super().render_label(node, base_style, style)
+            if self._shows_modified_marker(node):
+                label.append(" (modified)", Style.parse("dim #7f849c"))
+            return label
 
         highlight_style = self.ROW_HIGHLIGHT_STYLES[highlight]
         return super().render_label(node, base_style + highlight_style, style + highlight_style)
 
     def _highlight_for_node(self, node: TreeNode[DirEntry]) -> CompareRowHighlight | None:
         """Return the compare highlight for a tree node, if any."""
+        relative_path = self._relative_path_for_node(node)
+        if relative_path is None:
+            return None
+
+        return self._row_highlights.get(relative_path)
+
+    def _shows_modified_marker(self, node: TreeNode[DirEntry]) -> bool:
+        """Return whether a node should show the dim modified marker."""
+        relative_path = self._relative_path_for_node(node)
+        if relative_path is None:
+            return False
+        return relative_path in self._modified_paths or relative_path in self._modified_parent_paths
+
+    def _relative_path_for_node(self, node: TreeNode[DirEntry]) -> Path | None:
+        """Resolve the compare-relative path for one tree node."""
         if node.data is None:
             return None
 
         try:
-            relative_path = node.data.path.resolve().relative_to(self._compare_root_resolved)
+            return node.data.path.resolve().relative_to(self._compare_root_resolved)
         except ValueError:
             return None
-
-        return self._row_highlights.get(relative_path)
 
 
 class ArchiveCompareScreen(Screen[None]):
@@ -471,8 +580,14 @@ class ArchiveCompareScreen(Screen[None]):
         self.query_one("#archive-compare-newer-heading", Static).update(self._render_archive_heading(result.archive2))
         self.expanded_paths = frozenset()
         older_highlights, newer_highlights = build_compare_tree_highlights(path_states)
+        older_modified_paths, newer_modified_paths = build_compare_tree_modified_paths(path_states)
+        older_parent_indicators, newer_parent_indicators = build_compare_tree_parent_indicators(path_states)
         self._older_tree.set_row_highlights(older_highlights)
         self._newer_tree.set_row_highlights(newer_highlights)
+        self._older_tree.set_modified_paths(older_modified_paths)
+        self._newer_tree.set_modified_paths(newer_modified_paths)
+        self._older_tree.set_modified_parent_paths(older_parent_indicators)
+        self._newer_tree.set_modified_parent_paths(newer_parent_indicators)
 
         _ = self._older_tree.reload()
         _ = self._newer_tree.reload()
