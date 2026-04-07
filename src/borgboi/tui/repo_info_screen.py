@@ -160,6 +160,7 @@ class RepoInfoScreen(Screen[None]):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "back", "Back"),
+        Binding("a", "show_archives", "Archives"),
         Binding("b", "daily_backup", "Backup"),
         Binding("d", "compare_archives", "Compare"),
         Binding("e", "edit_config", "Edit Config"),
@@ -331,6 +332,11 @@ class RepoInfoScreen(Screen[None]):
                 initial_newer_archive=newer_archive,
             )
         )
+
+    def action_show_archives(self) -> None:
+        """Open the Archives tab and focus the archive table."""
+        self.query_one("#repo-info-tabs", TabbedContent).active = "repo-info-archives-tab"
+        self.query_one("#repo-info-archives-table", DataTable).focus()
 
     def action_edit_config(self) -> None:
         """Open the dedicated repo settings editor screen."""

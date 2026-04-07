@@ -371,6 +371,24 @@ async def test_repo_info_screen_opens_archive_compare_screen(
         assert isinstance(repo_info_app.screen, ArchiveCompareScreen)
 
 
+async def test_repo_info_screen_shortcut_opens_archives_tab_and_focuses_table(repo_info_app: BorgBoiApp) -> None:
+    async with repo_info_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        assert isinstance(repo_info_app.screen, RepoInfoScreen)
+
+        tabs = repo_info_app.screen.query_one("#repo-info-tabs", TabbedContent)
+        archives_table = repo_info_app.screen.query_one("#repo-info-archives-table", DataTable)
+
+        await pilot.press("a")
+        await pilot.pause()
+
+        assert tabs.active == "repo-info-archives-tab"
+        assert repo_info_app.focused is archives_table
+
+
 async def test_repo_info_screen_opens_repo_config_screen(
     monkeypatch: pytest.MonkeyPatch,
     repo_info_app: BorgBoiApp,
