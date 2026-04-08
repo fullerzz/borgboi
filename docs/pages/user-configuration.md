@@ -57,6 +57,13 @@ logging:
   max_bytes: 10485760
   backup_count: 5
 
+telemetry:
+  enabled: false
+  service_name: borgboi
+  export_logs: false
+  capture_tui: true
+  capture_subprocess_output_attributes: false
+
 offline: false
 debug: false
 ```
@@ -138,6 +145,16 @@ sequenceDiagram
 | `aws.region` | string | `us-west-1` | Any string | Typically an AWS region like `us-east-1`, `eu-west-1`, etc. |
 | `aws.profile` | string or `null` | `null` | Any string or `null` | Optional AWS profile name. |
 
+### `telemetry` Section
+
+| Key | Type | Default | Allowed Values | Notes |
+| --- | --- | --- | --- | --- |
+| `telemetry.enabled` | boolean | `false` | `true` or `false` | Enables OpenTelemetry tracing for CLI and TUI execution paths. |
+| `telemetry.service_name` | string | `borgboi` | Any string | Default OpenTelemetry `service.name` when `OTEL_SERVICE_NAME` is not set. |
+| `telemetry.export_logs` | boolean | `false` | `true` or `false` | Adds an OTLP log export pipeline so application logs can be routed to Loki. |
+| `telemetry.capture_tui` | boolean | `true` | `true` or `false` | When telemetry is enabled, traces the TUI session and background workers. |
+| `telemetry.capture_subprocess_output_attributes` | boolean | `false` | `true` or `false` | Reserved for future opt-in capture of Borg subprocess output metadata. |
+
 ### `borg` Section
 
 | Key | Type | Default | Allowed Values | Notes |
@@ -192,6 +209,11 @@ Use `BORGBOI_` variables to override config file values at runtime.
 | `BORGBOI_LOGGING__LEVEL` | `logging.level` |
 | `BORGBOI_LOGGING__MAX_BYTES` | `logging.max_bytes` |
 | `BORGBOI_LOGGING__BACKUP_COUNT` | `logging.backup_count` |
+| `BORGBOI_TELEMETRY__ENABLED` | `telemetry.enabled` |
+| `BORGBOI_TELEMETRY__SERVICE_NAME` | `telemetry.service_name` |
+| `BORGBOI_TELEMETRY__EXPORT_LOGS` | `telemetry.export_logs` |
+| `BORGBOI_TELEMETRY__CAPTURE_TUI` | `telemetry.capture_tui` |
+| `BORGBOI_TELEMETRY__CAPTURE_SUBPROCESS_OUTPUT_ATTRIBUTES` | `telemetry.capture_subprocess_output_attributes` |
 | `BORGBOI_AWS__DYNAMODB_REPOS_TABLE` | `aws.dynamodb_repos_table` |
 | `BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE` | `aws.dynamodb_archives_table` |
 | `BORGBOI_AWS__S3_BUCKET` | `aws.s3_bucket` |

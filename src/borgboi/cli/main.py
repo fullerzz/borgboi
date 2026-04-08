@@ -19,6 +19,13 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from borgboi.config import Config, get_config
 from borgboi.core.logging import configure_logging, get_logger
+from borgboi.core.telemetry import (
+    bind_trace_contextvars,
+    configure_telemetry,
+    force_flush_telemetry,
+    get_current_trace_id,
+    get_tracer,
+)
 from borgboi.rich_utils import console
 
 install(suppress=[cyclopts])
@@ -59,6 +66,7 @@ ContextArg = Annotated[BorgBoiContext, Parameter(parse=False)]
 MetaTokens = Annotated[str, Parameter(show=False, allow_leading_hyphen=True)]  # pyright: ignore[reportCallIssue]
 _REDACTED = "[REDACTED]"
 _SENSITIVE_FLAGS = {"--passphrase"}
+_TRACER = get_tracer(__name__)
 
 
 def _redact_sensitive_tokens(tokens: Iterable[str]) -> list[str]:
@@ -121,11 +129,9 @@ def _launcher(
 ) -> Any:
     ctx = BorgBoiContext(offline=offline, debug=debug)
     clear_contextvars()
-    bind_contextvars(trace_id=ctx.trace_id)
     config = ctx.config
-    logging_enabled = configure_logging(config) is not None
-    logger = get_logger(__name__) if logging_enabled else None
     safe_tokens = _redact_sensitive_tokens(tokens)
+    telemetry = configure_telemetry(config)
 
     try:
         command, bound, ignored = app.parse_args(tokens)
@@ -136,25 +142,45 @@ def _launcher(
                 additional_kwargs[parameter_name] = ctx
 
         command_name = getattr(command, "__name__", command.__class__.__name__)
-        if logger is not None:
-            logger.info(
-                "Running CLI command",
-                command=command_name,
-                tokens=safe_tokens,
-                offline=config.offline,
-                debug=config.debug,
-            )
+        span_name = f"cli.{command_name.removeprefix('_').replace('_', '.')}"
+        with _TRACER.start_as_current_span(span_name) as span:
+            span.set_attribute("borgboi.command.name", command_name)
+            span.set_attribute("borgboi.command.tokens", safe_tokens)
+            span.set_attribute("borgboi.mode.offline", config.offline)
+            span.set_attribute("borgboi.mode.debug", config.debug)
 
-        return command(*bound.args, **bound.kwargs, **additional_kwargs)
+            if telemetry.enabled:
+                bind_trace_contextvars()
+            else:
+                bind_contextvars(trace_id=ctx.trace_id)
+
+            logging_enabled = configure_logging(config) is not None
+            logger = get_logger(__name__) if logging_enabled or telemetry.enabled else None
+            if logger is not None:
+                logger.info(
+                    "Running CLI command",
+                    command=command_name,
+                    tokens=safe_tokens,
+                    offline=config.offline,
+                    debug=config.debug,
+                )
+
+            return command(*bound.args, **bound.kwargs, **additional_kwargs)
     except SystemExit:
         raise
     except Exception:
+        logger = get_logger(__name__)
         if logger is not None:
             logger.exception("CLI command failed", tokens=safe_tokens)
         raise
     finally:
-        if logging_enabled:
-            console.print(f"Logs for this execution have trace_id {ctx.trace_id}")
+        active_trace_id = get_current_trace_id() or ctx.trace_id
+        if config.logging.enabled:
+            console.print(f"Logs for this execution have trace_id {active_trace_id}")
+        elif telemetry.enabled:
+            console.print(f"Trace for this execution has trace_id {active_trace_id}")
+        force_flush_telemetry()
+        clear_contextvars()
 
 
 @app.command(name="version")
@@ -176,6 +202,14 @@ def tui(*, ctx: ContextArg) -> None:
     from borgboi.tui import BorgBoiApp
 
     tui_app = BorgBoiApp(config=ctx.config)
+    if ctx.config.telemetry.enabled and ctx.config.telemetry.capture_tui:
+        with _TRACER.start_as_current_span("tui.session") as span:
+            span.set_attribute("borgboi.mode.offline", ctx.config.offline)
+            span.set_attribute("borgboi.ui.theme", ctx.config.ui.theme)
+            bind_trace_contextvars()
+            tui_app.run()
+            return
+
     tui_app.run()
 
 

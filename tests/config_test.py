@@ -12,6 +12,7 @@ from borgboi.config import (
     Config,
     LoggingConfig,
     RetentionConfig,
+    TelemetryConfig,
     UIConfig,
     get_env_overrides,
     load_config_from_path,
@@ -143,6 +144,16 @@ def test_logging_config_normalizes_level_case() -> None:
     assert logging_config.level == "warning"
 
 
+def test_telemetry_config_defaults() -> None:
+    telemetry = TelemetryConfig()
+
+    assert telemetry.enabled is False
+    assert telemetry.service_name == "borgboi"
+    assert telemetry.export_logs is False
+    assert telemetry.capture_tui is True
+    assert telemetry.capture_subprocess_output_attributes is False
+
+
 def test_config_defaults() -> None:
     """Test that Config has correct defaults."""
     cfg = Config()
@@ -150,6 +161,8 @@ def test_config_defaults() -> None:
     assert cfg.borg.compression == "zstd,6"
     assert cfg.ui.theme == "catppuccin"
     assert cfg.logging.enabled is False
+    assert cfg.telemetry.enabled is False
+    assert cfg.telemetry.service_name == "borgboi"
     assert cfg.offline is False
     assert cfg.debug is False
 
@@ -161,6 +174,7 @@ def test_config_custom_values() -> None:
         borg=BorgConfig(compression="lz4"),
         ui=UIConfig(theme="monokai"),
         logging=LoggingConfig(enabled=True, level="error", max_bytes=1024, backup_count=3),
+        telemetry=TelemetryConfig(enabled=True, service_name="borgboi-cli", export_logs=True),
         offline=True,
         debug=True,
     )
@@ -171,6 +185,9 @@ def test_config_custom_values() -> None:
     assert cfg.logging.level == "error"
     assert cfg.logging.max_bytes == 1024
     assert cfg.logging.backup_count == 3
+    assert cfg.telemetry.enabled is True
+    assert cfg.telemetry.service_name == "borgboi-cli"
+    assert cfg.telemetry.export_logs is True
     assert cfg.offline is True
     assert cfg.debug is True
 
@@ -304,6 +321,9 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BORGBOI_LOGGING__LEVEL", "warning")
     monkeypatch.setenv("BORGBOI_LOGGING__MAX_BYTES", "4096")
     monkeypatch.setenv("BORGBOI_LOGGING__BACKUP_COUNT", "2")
+    monkeypatch.setenv("BORGBOI_TELEMETRY__ENABLED", "true")
+    monkeypatch.setenv("BORGBOI_TELEMETRY__SERVICE_NAME", "borgboi-test")
+    monkeypatch.setenv("BORGBOI_TELEMETRY__EXPORT_LOGS", "true")
     monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "env-bucket")
     monkeypatch.setenv("BORGBOI_AWS__REGION", "us-east-1")
     monkeypatch.setenv("BORGBOI_BORG__COMPRESSION", "lz4")
@@ -318,6 +338,9 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.logging.level == "warning"
     assert cfg.logging.max_bytes == 4096
     assert cfg.logging.backup_count == 2
+    assert cfg.telemetry.enabled is True
+    assert cfg.telemetry.service_name == "borgboi-test"
+    assert cfg.telemetry.export_logs is True
     assert cfg.aws.s3_bucket == "env-bucket"
     assert cfg.aws.region == "us-east-1"
     assert cfg.borg.compression == "lz4"
@@ -333,6 +356,10 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
         ("BORGBOI_LOGGING__LEVEL", "logging.level", "error"),
         ("BORGBOI_LOGGING__MAX_BYTES", "logging.max_bytes", 2048),
         ("BORGBOI_LOGGING__BACKUP_COUNT", "logging.backup_count", 7),
+        ("BORGBOI_TELEMETRY__ENABLED", "telemetry.enabled", True),
+        ("BORGBOI_TELEMETRY__SERVICE_NAME", "telemetry.service_name", "borgboi-test"),
+        ("BORGBOI_TELEMETRY__EXPORT_LOGS", "telemetry.export_logs", True),
+        ("BORGBOI_TELEMETRY__CAPTURE_TUI", "telemetry.capture_tui", False),
         ("BORGBOI_AWS__DYNAMODB_REPOS_TABLE", "aws.dynamodb_repos_table", "custom-table"),
         ("BORGBOI_AWS__S3_BUCKET", "aws.s3_bucket", "custom-bucket"),
         ("BORGBOI_AWS__REGION", "aws.region", "eu-west-1"),
@@ -416,6 +443,11 @@ def test_config_env_var_map_completeness() -> None:
         "logging.level",
         "logging.max_bytes",
         "logging.backup_count",
+        "telemetry.enabled",
+        "telemetry.service_name",
+        "telemetry.export_logs",
+        "telemetry.capture_tui",
+        "telemetry.capture_subprocess_output_attributes",
         "aws.s3_bucket",
         "aws.region",
         "aws.profile",
