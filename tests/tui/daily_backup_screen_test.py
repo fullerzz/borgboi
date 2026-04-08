@@ -22,6 +22,11 @@ from .conftest import FakeBorg, FakeStorage, build_repo
 class _ProgressBorg(FakeBorg):
     """FakeBorg that yields a 50% progress event during create, then sleeps."""
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.create_progress_reported = threading.Event()
+        self.allow_create_finish = threading.Event()
+
     @override
     def create(self, repo_path: str, backup_target: str, **_kwargs: Any) -> Generator[str]:
         self.create_calls.append(f"{repo_path}:{backup_target}")
@@ -29,7 +34,8 @@ class _ProgressBorg(FakeBorg):
             '{"type":"progress_percent","operation":0,"msgid":"archive.create",'
             '"finished":false,"current":50,"total":100,"time":"2026-01-01T00:00:00"}\n'
         )
-        time.sleep(0.4)
+        self.create_progress_reported.set()
+        self.allow_create_finish.wait(timeout=5)
 
 
 def _build_daily_backup_app(
@@ -304,7 +310,8 @@ async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_syn
 
     repo = build_repo("alpha")
 
-    app, _, _ = _build_daily_backup_app(config, [repo], borg=_ProgressBorg(), s3=MockS3Client())
+    borg = _ProgressBorg()
+    app, _, _ = _build_daily_backup_app(config, [repo], borg=borg, s3=MockS3Client())
 
     async with app.run_test() as pilot:
         screen = await _open_daily_backup_screen(app, pilot)
@@ -313,7 +320,9 @@ async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_syn
         select.value = repo.name
         screen.query_one("#daily-backup-s3-switch", Switch).value = False
         await pilot.click("#daily-backup-start")
-        await pilot.pause(0.2)
+
+        borg.create_progress_reported.wait(timeout=5)
+        await pilot.pause(0.05)
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
         expected_create_span = (
@@ -325,6 +334,8 @@ async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_syn
             )
         ) * 100.0
         assert progress_bar.progress == pytest.approx(expected_create_span / 2.0)
+
+        borg.allow_create_finish.set()
 
 
 async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_sync_enabled(
@@ -338,7 +349,8 @@ async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_syn
 
     repo = build_repo("alpha")
 
-    app, _, _ = _build_daily_backup_app(config, [repo], borg=_ProgressBorg(), s3=MockS3Client())
+    borg = _ProgressBorg()
+    app, _, _ = _build_daily_backup_app(config, [repo], borg=borg, s3=MockS3Client())
 
     async with app.run_test() as pilot:
         screen = await _open_daily_backup_screen(app, pilot)
@@ -346,7 +358,9 @@ async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_syn
         select = screen.query_one("#daily-backup-select", Select)
         select.value = repo.name
         await pilot.click("#daily-backup-start")
-        await pilot.pause(0.2)
+
+        borg.create_progress_reported.wait(timeout=5)
+        await pilot.pause(0.05)
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
         expected_create_span = (
@@ -359,6 +373,8 @@ async def test_daily_backup_progress_uses_default_duration_weighting_when_s3_syn
             )
         ) * 100.0
         assert progress_bar.progress == pytest.approx(expected_create_span / 2.0)
+
+        borg.allow_create_finish.set()
 
 
 async def test_daily_backup_progress_advances_during_prune_without_percent_output(
