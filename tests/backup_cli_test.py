@@ -276,7 +276,7 @@ def test_backup_daily_rejects_both_name_and_path(tmp_path: Path, capsys: pytest.
     assert "mutually exclusive" in captured.out
 
 
-def testsummarize_diff_changes_counts_entries_by_type() -> None:
+def test_summarize_diff_changes_counts_entries_by_type() -> None:
     result = DiffResult.model_validate(
         {
             "archive1": "archive-old",
@@ -306,7 +306,7 @@ def testsummarize_diff_changes_counts_entries_by_type() -> None:
     }
 
 
-def testformat_diff_change_includes_metadata_values() -> None:
+def test_format_diff_change_includes_metadata_values() -> None:
     result = DiffResult.model_validate(
         {
             "archive1": "archive-old",
