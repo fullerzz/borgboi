@@ -67,13 +67,22 @@ async def test_repo_config_screen_disables_quota_after_load_failure(
         await app.push_screen(
             RepoConfigScreen(repo=repo_detail_repo, orchestrator=app.orchestrator, config=tui_config_with_excludes)
         )
-        await pilot.pause(0.2)
+        await pilot.pause()
 
         assert isinstance(app.screen, RepoConfigScreen)
 
+        # Wait for quota load failure to be applied
         quota_input = app.screen.query_one("#repo-config-quota-input", Input)
         daily_input = app.screen.query_one("#repo-config-daily-input", Input)
         current = app.screen.query_one("#repo-config-current", Static)
+
+        import asyncio
+
+        for _ in range(50):
+            if quota_input.disabled and "Unavailable" in str(cast(Any, current).content):
+                break
+            await asyncio.sleep(0.05)
+
         assert quota_input.disabled is True
         assert daily_input.disabled is False
         assert "Unavailable" in str(cast(Any, current).content)

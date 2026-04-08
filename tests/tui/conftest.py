@@ -37,15 +37,24 @@ class FakeBorg:
 
     def create(self, repo_path: str, backup_target: str, **_kwargs: Any) -> Generator[str]:
         self.create_calls.append(f"{repo_path}:{backup_target}")
-        yield '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"create","msgid":"archive.create"}\n'
+        yield (
+            '{"type":"log_message","name":"borg.output.info","levelname":"INFO",'
+            '"message":"create","msgid":"archive.create","time":"2026-01-01T00:00:00"}\n'
+        )
 
     def prune(self, repo_path: str, **_kwargs: Any) -> Generator[str]:
         self.prune_calls.append(repo_path)
-        yield '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"prune","msgid":"archive.prune"}\n'
+        yield (
+            '{"type":"log_message","name":"borg.output.info","levelname":"INFO",'
+            '"message":"prune","msgid":"archive.prune","time":"2026-01-01T00:00:00"}\n'
+        )
 
     def compact(self, repo_path: str, **_kwargs: Any) -> Generator[str]:
         self.compact_calls.append(repo_path)
-        yield '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"compact","msgid":"archive.compact"}\n'
+        yield (
+            '{"type":"log_message","name":"borg.output.info","levelname":"INFO",'
+            '"message":"compact","msgid":"archive.compact","time":"2026-01-01T00:00:00"}\n'
+        )
 
     def info(self, repo_path: str, **_kwargs: Any) -> dict[str, str]:
         return {"repository": repo_path}
