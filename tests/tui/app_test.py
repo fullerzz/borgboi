@@ -31,8 +31,12 @@ async def test_app_loads_and_populates_repos_table(tui_config: Config) -> None:
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for repos to load via worker
         table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count == 2:
+                break
         assert table.row_count == 2
 
 
@@ -91,7 +95,12 @@ async def test_action_show_repo_info_pushes_screen(tui_config: Config, repo_with
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for repos to load and table to be populated
+        table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count > 0:
+                break
         await pilot.press("i")
         await pilot.pause()
         assert isinstance(app.screen, RepoInfoScreen)
@@ -115,7 +124,12 @@ async def test_repo_table_row_selected_opens_repo_info_screen(
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for repos to load and table to be populated
+        table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count > 0:
+                break
         await pilot.press("enter")
         await pilot.pause()
         assert isinstance(app.screen, RepoInfoScreen)
@@ -211,11 +225,20 @@ async def test_action_refresh_reloads_repos(tui_config: Config) -> None:
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()  # initial load
+        # Wait for initial load
+        table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if not table.loading:
+                break
         initial_count = call_count
 
         await pilot.press("r")
-        await pilot.pause()
+        # Wait for refresh to increase call count
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if call_count > initial_count:
+                break
         assert call_count > initial_count
 
 
@@ -248,7 +271,12 @@ async def test_app_loads_sparkline_history_from_configured_db(
     expected_labels = [(today - timedelta(days=13 - index)).strftime("%m/%d") for index in range(14)]
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for sparkline labels to be populated
+        for _ in range(50):
+            await pilot.pause(0.05)
+            label = app.query_one("#sparkline-x-label-0", Static)
+            if label.content:
+                break
         actual_labels = [app.query_one(f"#sparkline-x-label-{index}", Static).content for index in range(14)]
         assert actual_labels == expected_labels
 
@@ -263,7 +291,11 @@ async def test_load_repos_error_shows_notification(tui_config: Config) -> None:
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for loading to complete (even with error)
         table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if not table.loading:
+                break
         assert table.loading is False
         assert table.row_count == 0

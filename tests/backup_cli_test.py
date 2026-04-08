@@ -8,12 +8,11 @@ from inline_snapshot import snapshot
 
 from borgboi.cli.backup import (
     _build_archive_stats_tables,
-    _format_diff_change,
     _render_diff_result,
-    _summarize_diff_changes,
 )
 from borgboi.clients.borg import ArchiveInfo, DiffResult
 from borgboi.core.models import BackupOptions, DiffOptions
+from borgboi.lib.diff import format_diff_change, summarize_diff_changes
 from tests.cli_helpers import invoke_cli
 
 cli_main = importlib.import_module("borgboi.cli.main")
@@ -297,7 +296,7 @@ def test_summarize_diff_changes_counts_entries_by_type() -> None:
         }
     )
 
-    assert _summarize_diff_changes(result) == {
+    assert summarize_diff_changes(result) == {
         "added": 1,
         "removed": 1,
         "modified": 1,
@@ -327,7 +326,7 @@ def test_format_diff_change_includes_metadata_values() -> None:
         }
     )
 
-    assert _format_diff_change(result.entries[0].changes[0]) == "mtime 2026-04-03T10:00:00 -> 2026-04-03T11:00:00"
+    assert format_diff_change(result.entries[0].changes[0]) == "mtime 2026-04-03T10:00:00 -> 2026-04-03T11:00:00"
 
 
 def test_render_diff_result_json_outputs_raw_json(capsys: pytest.CaptureFixture[str]) -> None:

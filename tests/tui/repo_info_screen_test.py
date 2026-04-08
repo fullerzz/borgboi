@@ -11,6 +11,7 @@ from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import Repository, RetentionPolicy
 from borgboi.tui.app import BorgBoiApp
+from borgboi.tui.archive_compare_screen import ArchiveCompareScreen
 from borgboi.tui.repo_config_screen import RepoConfigScreen
 from borgboi.tui.repo_info_screen import RepoInfoScreen, load_repo_excludes_state
 
@@ -175,15 +176,35 @@ async def test_repo_info_screen_handles_unreadable_excludes_file(
     repo_specific_path.write_bytes(b"\xff\xfe")
 
     async with repo_info_app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for main screen repos to load
+        table = repo_info_app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count > 0:
+                break
         await pilot.press("i")
-        await pilot.pause()
+
+        # Wait for RepoInfoScreen to be active
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if isinstance(repo_info_app.screen, RepoInfoScreen):
+                break
 
         assert isinstance(repo_info_app.screen, RepoInfoScreen)
 
         excludes_status = repo_info_app.screen.query_one("#repo-info-excludes-status", Static)
         excludes_viewer = repo_info_app.screen.query_one("#repo-info-excludes-viewer", TextArea)
         command_output = repo_info_app.screen.query_one("#repo-info-command-output", Static)
+
+        # Wait for worker results
+        import asyncio
+
+        for _ in range(50):
+            if "could not be read" in str(cast(Any, excludes_status).content) and "Deduplicated Size" in str(
+                cast(Any, command_output).content
+            ):
+                break
+            await asyncio.sleep(0.05)
 
         assert "could not be read" in str(cast(Any, excludes_status).content)
         assert excludes_viewer.text == ""
@@ -192,9 +213,19 @@ async def test_repo_info_screen_handles_unreadable_excludes_file(
 
 async def test_repo_info_screen_handles_live_load_errors(repo_info_error_app: BorgBoiApp) -> None:
     async with repo_info_error_app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for main screen repos to load
+        table = repo_info_error_app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count > 0:
+                break
         await pilot.press("i")
-        await pilot.pause()
+
+        # Wait for RepoInfoScreen to be active
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if isinstance(repo_info_error_app.screen, RepoInfoScreen):
+                break
 
         assert isinstance(repo_info_error_app.screen, RepoInfoScreen)
 
@@ -202,6 +233,18 @@ async def test_repo_info_screen_handles_live_load_errors(repo_info_error_app: Bo
         command_output = repo_info_error_app.screen.query_one("#repo-info-command-output", Static)
         archives_status = repo_info_error_app.screen.query_one("#repo-info-archives-status", Static)
         archives_table = repo_info_error_app.screen.query_one("#repo-info-archives-table", DataTable)
+
+        # Wait for worker error results
+        import asyncio
+
+        for _ in range(50):
+            if (
+                "Failed to load live repository data." in str(cast(Any, loading).content)
+                and "borg unavailable" in str(cast(Any, command_output).content)
+                and "Archive list unavailable." in str(cast(Any, archives_status).content)
+            ):
+                break
+            await asyncio.sleep(0.05)
 
         assert str(cast(Any, loading).content) == "Failed to load live repository data."
         assert "borg unavailable" in str(cast(Any, command_output).content)
@@ -331,6 +374,7 @@ async def test_repo_info_screen_hides_workspace_tree_for_remote_repo(
         quota_summary = repo_info_app.screen.query_one("#repo-info-config", Static)
         storage_card = repo_info_app.screen.query_one("#repo-info-storage-card", Static)
         edit_button = repo_info_app.screen.query_one("#repo-info-edit-config-btn", Button)
+        compare_button = repo_info_app.screen.query_one("#repo-info-compare-archives-btn", Button)
 
         assert "Workspace tree unavailable" in str(cast(Any, workspace_status).content)
         assert "only available for repositories on this machine" in str(cast(Any, workspace_unavailable).content)
@@ -340,7 +384,51 @@ async def test_repo_info_screen_hides_workspace_tree_for_remote_repo(
         assert "Unavailable" in str(cast(Any, quota_summary).content)
         assert "Quota Unknown" in str(cast(Any, storage_card).content)
         assert edit_button.disabled is False
+        assert compare_button.disabled is True
         assert len(repo_info_app.screen.query("#repo-info-workspace-tree")) == 0
+
+
+async def test_repo_info_screen_opens_archive_compare_screen(
+    monkeypatch: pytest.MonkeyPatch,
+    repo_info_app: BorgBoiApp,
+    repo_detail_repo: Repository,
+    tmp_path: Any,
+) -> None:
+    repo_detail_repo.path = tmp_path.as_posix()
+    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+
+    async with repo_info_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        assert isinstance(repo_info_app.screen, RepoInfoScreen)
+
+        await pilot.press("d")
+        for _ in range(60):
+            await pilot.pause(0.05)
+            if isinstance(repo_info_app.screen, ArchiveCompareScreen):
+                break
+
+        assert isinstance(repo_info_app.screen, ArchiveCompareScreen)
+
+
+async def test_repo_info_screen_shortcut_opens_archives_tab_and_focuses_table(repo_info_app: BorgBoiApp) -> None:
+    async with repo_info_app.run_test() as pilot:
+        await pilot.pause()
+        await pilot.press("i")
+        await pilot.pause()
+
+        assert isinstance(repo_info_app.screen, RepoInfoScreen)
+
+        tabs = repo_info_app.screen.query_one("#repo-info-tabs", TabbedContent)
+        archives_table = repo_info_app.screen.query_one("#repo-info-archives-table", DataTable)
+
+        await pilot.press("a")
+        await pilot.pause()
+
+        assert tabs.active == "repo-info-archives-tab"
+        assert repo_info_app.focused is archives_table
 
 
 async def test_repo_info_screen_opens_repo_config_screen(

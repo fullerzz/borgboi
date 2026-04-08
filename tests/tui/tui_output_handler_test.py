@@ -234,7 +234,10 @@ def test_on_stderr_skips_empty_lines() -> None:
 
 def test_on_stderr_parses_log_message_json() -> None:
     handler, written = _make_handler()
-    log_line = '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"archive created","msgid":"archive.create"}'
+    log_line = (
+        '{"type":"log_message","name":"borg.output.info","levelname":"INFO",'
+        '"message":"archive created","msgid":"archive.create","time":"2026-01-01T00:00:00"}'
+    )
 
     handler.on_stderr(log_line)
 
@@ -276,7 +279,7 @@ def test_on_stats_formats_key_value_pairs() -> None:
 def test_render_command_writes_header_body_and_footer() -> None:
     handler, written = _make_handler()
     log_lines = [
-        '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"pruning","msgid":"archive.prune"}\n',
+        '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"pruning","msgid":"archive.prune","time":"2026-01-01T00:00:00"}\n',
     ]
 
     handler.render_command("Pruning", "Prune complete", log_lines)
@@ -322,7 +325,7 @@ def test_handler_without_progress_bar_does_not_fail() -> None:
 def test_render_command_resets_progress_before_streaming() -> None:
     handler, _, progress_bar, cft_calls = _make_handler_with_progress()
     log_lines = [
-        '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"working","msgid":"test"}\n',
+        '{"type":"log_message","name":"borg.output.info","levelname":"INFO","message":"working","msgid":"test","time":"2026-01-01T00:00:00"}\n',
     ]
 
     handler.render_command("Creating", "Create done", log_lines)

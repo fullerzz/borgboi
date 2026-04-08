@@ -9,12 +9,13 @@ from cyclopts import App, Parameter
 
 from borgboi.cli.main import ContextArg, confirm_action, print_error_and_exit
 from borgboi.core.logging import get_logger
+from borgboi.lib.diff import format_diff_change, summarize_diff_changes
 from borgboi.rich_utils import console
 
 if TYPE_CHECKING:
     from rich.table import Table
 
-    from borgboi.clients.borg import ArchiveInfo, DiffChange, DiffResult
+    from borgboi.clients.borg import ArchiveInfo, DiffResult
 
 
 logger = get_logger(__name__)
@@ -77,61 +78,6 @@ def _render_archive_stats_table(repo_path: str, archive_info: ArchiveInfo) -> No
     console.print(size_table)
 
 
-def _summarize_diff_changes(result: DiffResult) -> dict[str, int]:
-    summary = {
-        "added": 0,
-        "removed": 0,
-        "modified": 0,
-        "mode": 0,
-        "bytes_added": 0,
-        "bytes_removed": 0,
-    }
-
-    for entry in result.entries:
-        entry_categories = {change.type for change in entry.changes}
-        if "added" in entry_categories:
-            summary["added"] += 1
-        if "removed" in entry_categories:
-            summary["removed"] += 1
-        if "modified" in entry_categories:
-            summary["modified"] += 1
-        if "mode" in entry_categories:
-            summary["mode"] += 1
-
-        for change in entry.changes:
-            added_bytes = change.added or 0
-            removed_bytes = change.removed or 0
-            if change.type == "added":
-                summary["bytes_added"] += added_bytes or change.size or 0
-            elif change.type == "removed":
-                summary["bytes_removed"] += removed_bytes or change.size or 0
-            elif change.type == "modified":
-                summary["bytes_added"] += added_bytes
-                summary["bytes_removed"] += removed_bytes
-
-    return summary
-
-
-def _format_diff_change(change: DiffChange) -> str:
-    from borgboi.lib import utils
-
-    match change.type:
-        case "added":
-            return f"added ({utils.format_size_bytes(change.added or change.size or 0)})"
-        case "removed":
-            return f"removed ({utils.format_size_bytes(change.removed or change.size or 0)})"
-        case "modified":
-            added = utils.format_size_bytes(change.added or 0)
-            removed = utils.format_size_bytes(change.removed or 0)
-            return f"modified (+{added}, -{removed})"
-        case "mode":
-            return f"mode {change.old_mode or '?'} -> {change.new_mode or '?'}"
-        case _ if change.old is not None or change.new is not None:
-            return f"{change.type} {change.old if change.old is not None else '?'} -> {change.new if change.new is not None else '?'}"
-        case _:
-            return change.type
-
-
 def _render_diff_result(result: DiffResult, *, json_output: bool) -> None:
     from borgboi.lib import utils
 
@@ -149,11 +95,11 @@ def _render_diff_result(result: DiffResult, *, json_output: bool) -> None:
         return
 
     for entry in result.entries:
-        changes = ", ".join(_format_diff_change(change) for change in entry.changes)
+        changes = ", ".join(format_diff_change(change) for change in entry.changes)
         console.print(f"[bold]{entry.path}[/]")
         console.print(f"  {changes}")
 
-    summary = _summarize_diff_changes(result)
+    summary = summarize_diff_changes(result)
     console.rule("[bold]Summary[/]")
     console.print(f"Changed paths: {len(result.entries)}")
     console.print(f"Added: {summary['added']}")
