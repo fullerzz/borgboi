@@ -761,4 +761,11 @@ class ArchiveCompareScreen(Screen[None]):
 
     def _cleanup_tempdir(self) -> None:
         """Release the synthetic compare tree directory."""
-        self._tempdir.cleanup()
+        try:
+            self._tempdir.cleanup()
+        except OSError as exc:
+            logger.warning(
+                "Failed to clean up temporary compare directory",
+                tempdir=self._compare_temp_root.as_posix(),
+                error=str(exc),
+            )

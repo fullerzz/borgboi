@@ -29,12 +29,12 @@ def summarize_diff_changes(result: DiffResult) -> dict[str, int]:
             summary["mode"] += 1
 
         for change in entry.changes:
-            added_bytes = change.added or 0
-            removed_bytes = change.removed or 0
+            added_bytes = change.added if change.added is not None else 0
+            removed_bytes = change.removed if change.removed is not None else 0
             if change.type == "added":
-                summary["bytes_added"] += added_bytes or change.size or 0
+                summary["bytes_added"] += added_bytes if change.added is not None else (change.size or 0)
             elif change.type == "removed":
-                summary["bytes_removed"] += removed_bytes or change.size or 0
+                summary["bytes_removed"] += removed_bytes if change.removed is not None else (change.size or 0)
             elif change.type == "modified":
                 summary["bytes_added"] += added_bytes
                 summary["bytes_removed"] += removed_bytes
@@ -46,12 +46,14 @@ def format_diff_change(change: DiffChange) -> str:
     """Render a single diff change into compact human-readable text."""
     match change.type:
         case "added":
-            return f"added ({format_size_bytes(change.added or change.size or 0)})"
+            size = change.added if change.added is not None else (change.size or 0)
+            return f"added ({format_size_bytes(size)})"
         case "removed":
-            return f"removed ({format_size_bytes(change.removed or change.size or 0)})"
+            size = change.removed if change.removed is not None else (change.size or 0)
+            return f"removed ({format_size_bytes(size)})"
         case "modified":
-            added = format_size_bytes(change.added or 0)
-            removed = format_size_bytes(change.removed or 0)
+            added = format_size_bytes(change.added if change.added is not None else 0)
+            removed = format_size_bytes(change.removed if change.removed is not None else 0)
             return f"modified (+{added}, -{removed})"
         case "mode":
             return f"mode {change.old_mode or '?'} -> {change.new_mode or '?'}"
