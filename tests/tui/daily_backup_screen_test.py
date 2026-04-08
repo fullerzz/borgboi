@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-import time
 from collections.abc import Generator
 from types import SimpleNamespace
 from typing import Any, cast, override
@@ -67,7 +66,12 @@ async def _open_daily_backup_screen(app: BorgBoiApp, pilot: Any) -> DailyBackupS
     await pilot.press("b")
     await pilot.pause()
     assert isinstance(app.screen, DailyBackupScreen)
-    await pilot.pause()  # let repos load via worker
+    # Wait for repo loading to complete via worker
+    select = app.screen.query_one("#daily-backup-select", Select)
+    for _ in range(50):
+        await pilot.pause(0.05)
+        if not select.loading:
+            break
     return app.screen
 
 
@@ -146,9 +150,15 @@ async def test_backup_failed_shows_error_and_reenables_controls(tui_config_with_
         select = screen.query_one("#daily-backup-select", Select)
         select.value = repo.name
         await pilot.click("#daily-backup-start")
-        await pilot.pause()
 
-        assert screen.query_one("#daily-backup-start", Button).disabled is False
+        # Wait for backup to complete and controls to be re-enabled
+        start_button = screen.query_one("#daily-backup-start", Button)
+        for _ in range(100):
+            await pilot.pause(0.05)
+            if not start_button.disabled:
+                break
+
+        assert start_button.disabled is False
         assert screen.query_one("#daily-backup-select", Select).disabled is False
 
 
@@ -216,7 +226,12 @@ async def test_progress_bar_remains_visible_after_backup_completes(tui_config_wi
         select = screen.query_one("#daily-backup-select", Select)
         select.value = repo.name
         await pilot.click("#daily-backup-start")
-        await pilot.pause()
+
+        # Wait for backup completion
+        for _ in range(100):
+            await pilot.pause(0.05)
+            if not screen._backup_running:
+                break
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
         assert progress_bar.display is True
@@ -238,7 +253,12 @@ async def test_progress_bar_remains_visible_after_backup_fails(tui_config_with_e
         select = screen.query_one("#daily-backup-select", Select)
         select.value = repo.name
         await pilot.click("#daily-backup-start")
-        await pilot.pause()
+
+        # Wait for backup to complete (failure)
+        for _ in range(100):
+            await pilot.pause(0.05)
+            if not screen._backup_running:
+                break
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
         assert progress_bar.display is True
@@ -268,6 +288,9 @@ async def test_clear_log_resets_progress_bar_state(tui_config_with_excludes: Con
 async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_config_with_excludes: Config) -> None:
     repo = build_repo("alpha")
 
+    streaming_started = threading.Event()
+    streaming_continue = threading.Event()
+
     class _StreamingBorg(FakeBorg):
         @override
         def create(self, repo_path: str, backup_target: str, **_kwargs: Any) -> Generator[str]:
@@ -276,7 +299,8 @@ async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_co
                 '{"type":"archive_progress","finished":false,"path":"/some/file.txt","time":"2026-01-01T00:00:00"}\n'
             )
             yield '{"type":"archive_progress","finished":true,"time":"2026-01-01T00:00:00"}\n'
-            time.sleep(0.5)
+            streaming_started.set()
+            streaming_continue.wait(timeout=5)
             yield (
                 '{"type":"log_message","name":"borg.output.stats","levelname":"INFO",'
                 '"message":"Repository: /repo","time":"2026-01-01T00:00:00"}\n'
@@ -290,12 +314,23 @@ async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_co
         select = screen.query_one("#daily-backup-select", Select)
         select.value = repo.name
         await pilot.click("#daily-backup-start")
-        await pilot.pause(0.2)
+
+        # Wait until streaming has started but hasn't finished
+        assert streaming_started.wait(timeout=5) is True
+        await pilot.pause(0.05)
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
         assert progress_bar.display is True
 
-        await pilot.pause(0.5)
+        # Let streaming complete
+        streaming_continue.set()
+
+        # Wait for backup to complete
+        for _ in range(100):
+            await pilot.pause(0.05)
+            if not screen._backup_running:
+                break
+
         assert progress_bar.display is True
 
 
@@ -419,11 +454,17 @@ async def test_daily_backup_progress_advances_during_prune_without_percent_outpu
 
         # Wait until the prune step has actually started in the worker thread
         prune_entered.wait(timeout=5)
-        await pilot.pause(0.15)
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)
         create_boundary = (1_000.0 / 2_200.0) * 100.0
         prune_boundary = ((1_000.0 + 200.0) / 2_200.0) * 100.0
+
+        # Poll until progress advances into the prune range
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if create_boundary < progress_bar.progress < prune_boundary:
+                break
+
         assert create_boundary < progress_bar.progress < prune_boundary
 
         prune_continue.set()

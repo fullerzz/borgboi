@@ -176,15 +176,35 @@ async def test_repo_info_screen_handles_unreadable_excludes_file(
     repo_specific_path.write_bytes(b"\xff\xfe")
 
     async with repo_info_app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for main screen repos to load
+        table = repo_info_app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count > 0:
+                break
         await pilot.press("i")
-        await pilot.pause()
+
+        # Wait for RepoInfoScreen to be active
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if isinstance(repo_info_app.screen, RepoInfoScreen):
+                break
 
         assert isinstance(repo_info_app.screen, RepoInfoScreen)
 
         excludes_status = repo_info_app.screen.query_one("#repo-info-excludes-status", Static)
         excludes_viewer = repo_info_app.screen.query_one("#repo-info-excludes-viewer", TextArea)
         command_output = repo_info_app.screen.query_one("#repo-info-command-output", Static)
+
+        # Wait for worker results
+        import asyncio
+
+        for _ in range(50):
+            if "could not be read" in str(cast(Any, excludes_status).content) and "Deduplicated Size" in str(
+                cast(Any, command_output).content
+            ):
+                break
+            await asyncio.sleep(0.05)
 
         assert "could not be read" in str(cast(Any, excludes_status).content)
         assert excludes_viewer.text == ""
@@ -193,9 +213,19 @@ async def test_repo_info_screen_handles_unreadable_excludes_file(
 
 async def test_repo_info_screen_handles_live_load_errors(repo_info_error_app: BorgBoiApp) -> None:
     async with repo_info_error_app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for main screen repos to load
+        table = repo_info_error_app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count > 0:
+                break
         await pilot.press("i")
-        await pilot.pause()
+
+        # Wait for RepoInfoScreen to be active
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if isinstance(repo_info_error_app.screen, RepoInfoScreen):
+                break
 
         assert isinstance(repo_info_error_app.screen, RepoInfoScreen)
 
@@ -203,6 +233,18 @@ async def test_repo_info_screen_handles_live_load_errors(repo_info_error_app: Bo
         command_output = repo_info_error_app.screen.query_one("#repo-info-command-output", Static)
         archives_status = repo_info_error_app.screen.query_one("#repo-info-archives-status", Static)
         archives_table = repo_info_error_app.screen.query_one("#repo-info-archives-table", DataTable)
+
+        # Wait for worker error results
+        import asyncio
+
+        for _ in range(50):
+            if (
+                "Failed to load live repository data." in str(cast(Any, loading).content)
+                and "borg unavailable" in str(cast(Any, command_output).content)
+                and "Archive list unavailable." in str(cast(Any, archives_status).content)
+            ):
+                break
+            await asyncio.sleep(0.05)
 
         assert str(cast(Any, loading).content) == "Failed to load live repository data."
         assert "borg unavailable" in str(cast(Any, command_output).content)
