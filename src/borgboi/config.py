@@ -84,6 +84,7 @@ class TelemetryConfig(BaseModel):
     enabled: bool = False
     service_name: str = "borgboi"
     export_logs: bool = False
+    logs_endpoint: str | None = None
     capture_tui: bool = True
     capture_subprocess_output_attributes: bool = False
 
@@ -368,6 +369,7 @@ CONFIG_ENV_VAR_MAP: dict[str, str] = {
     "telemetry.enabled": "BORGBOI_TELEMETRY__ENABLED",
     "telemetry.service_name": "BORGBOI_TELEMETRY__SERVICE_NAME",
     "telemetry.export_logs": "BORGBOI_TELEMETRY__EXPORT_LOGS",
+    "telemetry.logs_endpoint": "BORGBOI_TELEMETRY__LOGS_ENDPOINT",
     "telemetry.capture_tui": "BORGBOI_TELEMETRY__CAPTURE_TUI",
     "telemetry.capture_subprocess_output_attributes": "BORGBOI_TELEMETRY__CAPTURE_SUBPROCESS_OUTPUT_ATTRIBUTES",
 }

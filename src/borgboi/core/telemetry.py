@@ -77,12 +77,13 @@ def _ensure_trace_provider(resource: Resource) -> None:
     _TelemetryState.traces_initialized = True
 
 
-def _ensure_log_export(resource: Resource) -> None:
+def _ensure_log_export(resource: Resource, logs_endpoint: str | None) -> None:
     if _TelemetryState.logs_initialized:
         return
 
+    exporter = OTLPLogExporter(endpoint=logs_endpoint) if logs_endpoint else OTLPLogExporter()
     logger_provider = LoggerProvider(resource=resource)
-    logger_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
     set_logger_provider(logger_provider)
 
     handler = LoggingHandler(level=stdlib_logging.NOTSET, logger_provider=logger_provider)
@@ -112,12 +113,12 @@ def configure_telemetry(config: Config) -> TelemetrySession:
     _ensure_botocore_instrumentation()
 
     if config.telemetry.export_logs:
-        _ensure_log_export(resource)
+        _ensure_log_export(resource, config.telemetry.logs_endpoint)
 
     return TelemetrySession(enabled=True, logs_export_enabled=config.telemetry.export_logs)
 
 
-def get_tracer(name: str):
+def get_tracer(name: str) -> trace.Tracer:
     """Return a tracer for borgboi instrumentation."""
     return trace.get_tracer(name, _get_service_version())
 
