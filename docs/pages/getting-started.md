@@ -88,6 +88,7 @@ logging:
 telemetry:
   enabled: false
   service_name: borgboi
+  trace_endpoint: null
   export_logs: false
   logs_endpoint: null
   capture_tui: true
@@ -109,6 +110,7 @@ Configuration can be overridden using environment variables with the `BORGBOI_` 
 | `BORGBOI_LOGGING__BACKUP_COUNT` | `logging.backup_count` | Set how many older timestamped log sessions to retain alongside the active log file |
 | `BORGBOI_TELEMETRY__ENABLED` | `telemetry.enabled` | Enable OpenTelemetry tracing for CLI and TUI workflows |
 | `BORGBOI_TELEMETRY__SERVICE_NAME` | `telemetry.service_name` | Override the default OpenTelemetry service name |
+| `BORGBOI_TELEMETRY__TRACE_ENDPOINT` | `telemetry.trace_endpoint` | Optional OTLP trace exporter endpoint override |
 | `BORGBOI_TELEMETRY__EXPORT_LOGS` | `telemetry.export_logs` | Export application logs over OTLP so they can land in Loki |
 | `BORGBOI_TELEMETRY__LOGS_ENDPOINT` | `telemetry.logs_endpoint` | Optional OTLP log exporter endpoint override (e.g. Loki's native `/otlp/v1/logs` URL) |
 | `BORGBOI_TELEMETRY__CAPTURE_TUI` | `telemetry.capture_tui` | Capture TUI session and worker spans when telemetry is enabled |
@@ -135,6 +137,16 @@ export BORGBOI_TELEMETRY__EXPORT_LOGS=true
 ```
 
 `docker-otel-lgtm` serves Grafana at `http://localhost:3000` with the default credentials `admin` / `admin`.
+
+### Sending Traces Directly to Another OTLP Endpoint
+
+Set `telemetry.trace_endpoint` when traces should bypass the default `OTEL_EXPORTER_OTLP_ENDPOINT` value:
+
+```sh
+export BORGBOI_TELEMETRY__ENABLED=true
+export BORGBOI_TELEMETRY__TRACE_ENDPOINT=http://tempo:4318/v1/traces
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+```
 
 ### Sending Logs Directly to Loki
 

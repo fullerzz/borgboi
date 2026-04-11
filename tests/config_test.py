@@ -149,6 +149,7 @@ def test_telemetry_config_defaults() -> None:
 
     assert telemetry.enabled is False
     assert telemetry.service_name == "borgboi"
+    assert telemetry.trace_endpoint is None
     assert telemetry.export_logs is False
     assert telemetry.logs_endpoint is None
     assert telemetry.capture_tui is True
@@ -178,6 +179,7 @@ def test_config_custom_values() -> None:
         telemetry=TelemetryConfig(
             enabled=True,
             service_name="borgboi-cli",
+            trace_endpoint="http://tempo.example:4318/v1/traces",
             export_logs=True,
             logs_endpoint="http://loki.example:3100/otlp",
         ),
@@ -193,6 +195,7 @@ def test_config_custom_values() -> None:
     assert cfg.logging.backup_count == 3
     assert cfg.telemetry.enabled is True
     assert cfg.telemetry.service_name == "borgboi-cli"
+    assert cfg.telemetry.trace_endpoint == "http://tempo.example:4318/v1/traces"
     assert cfg.telemetry.export_logs is True
     assert cfg.telemetry.logs_endpoint == "http://loki.example:3100/otlp"
     assert cfg.offline is True
@@ -330,6 +333,7 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BORGBOI_LOGGING__BACKUP_COUNT", "2")
     monkeypatch.setenv("BORGBOI_TELEMETRY__ENABLED", "true")
     monkeypatch.setenv("BORGBOI_TELEMETRY__SERVICE_NAME", "borgboi-test")
+    monkeypatch.setenv("BORGBOI_TELEMETRY__TRACE_ENDPOINT", "http://tempo.example:4318/v1/traces")
     monkeypatch.setenv("BORGBOI_TELEMETRY__EXPORT_LOGS", "true")
     monkeypatch.setenv("BORGBOI_TELEMETRY__LOGS_ENDPOINT", "http://loki.example:3100/otlp")
     monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "env-bucket")
@@ -348,6 +352,7 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cfg.logging.backup_count == 2
     assert cfg.telemetry.enabled is True
     assert cfg.telemetry.service_name == "borgboi-test"
+    assert cfg.telemetry.trace_endpoint == "http://tempo.example:4318/v1/traces"
     assert cfg.telemetry.export_logs is True
     assert cfg.telemetry.logs_endpoint == "http://loki.example:3100/otlp"
     assert cfg.aws.s3_bucket == "env-bucket"
@@ -367,6 +372,7 @@ def test_get_config_with_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
         ("BORGBOI_LOGGING__BACKUP_COUNT", "logging.backup_count", 7),
         ("BORGBOI_TELEMETRY__ENABLED", "telemetry.enabled", True),
         ("BORGBOI_TELEMETRY__SERVICE_NAME", "telemetry.service_name", "borgboi-test"),
+        ("BORGBOI_TELEMETRY__TRACE_ENDPOINT", "telemetry.trace_endpoint", "http://tempo.example:4318/v1/traces"),
         ("BORGBOI_TELEMETRY__EXPORT_LOGS", "telemetry.export_logs", True),
         ("BORGBOI_TELEMETRY__LOGS_ENDPOINT", "telemetry.logs_endpoint", "http://loki.example:3100/otlp"),
         ("BORGBOI_TELEMETRY__CAPTURE_TUI", "telemetry.capture_tui", False),
@@ -455,6 +461,7 @@ def test_config_env_var_map_completeness() -> None:
         "logging.backup_count",
         "telemetry.enabled",
         "telemetry.service_name",
+        "telemetry.trace_endpoint",
         "telemetry.export_logs",
         "telemetry.logs_endpoint",
         "telemetry.capture_tui",

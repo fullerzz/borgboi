@@ -66,12 +66,13 @@ def _build_resource(config: Config) -> Resource:
     return Resource.create(attributes)
 
 
-def _ensure_trace_provider(resource: Resource) -> None:
+def _ensure_trace_provider(resource: Resource, trace_endpoint: str | None) -> None:
     if _TelemetryState.traces_initialized:
         return
 
     tracer_provider = TracerProvider(resource=resource)
-    tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    exporter = OTLPSpanExporter(endpoint=trace_endpoint) if trace_endpoint else OTLPSpanExporter()
+    tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(tracer_provider)
     _TelemetryState.tracer_provider = tracer_provider
     _TelemetryState.traces_initialized = True
@@ -109,7 +110,7 @@ def configure_telemetry(config: Config) -> TelemetrySession:
         return TelemetrySession(enabled=False, logs_export_enabled=False)
 
     resource = _build_resource(config)
-    _ensure_trace_provider(resource)
+    _ensure_trace_provider(resource, config.telemetry.trace_endpoint)
     _ensure_botocore_instrumentation()
 
     if config.telemetry.export_logs:

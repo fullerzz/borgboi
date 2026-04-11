@@ -51,6 +51,46 @@ def test_configure_telemetry_log_export_uses_default_endpoint(monkeypatch: pytes
     assert captured == {}
 
 
+def test_configure_telemetry_trace_export_uses_default_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _StubExporter:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def shutdown(self) -> None:
+            pass
+
+    monkeypatch.setattr(telemetry, "OTLPSpanExporter", _StubExporter)
+
+    cfg = Config(telemetry=TelemetryConfig(enabled=True))
+    session = configure_telemetry(cfg)
+
+    assert session.enabled is True
+    assert captured == {}
+
+
+def test_configure_telemetry_trace_export_honors_trace_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _StubExporter:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def shutdown(self) -> None:
+            pass
+
+    monkeypatch.setattr(telemetry, "OTLPSpanExporter", _StubExporter)
+
+    trace_endpoint = "http://tempo.example:4318/v1/traces"
+    cfg = Config(telemetry=TelemetryConfig(enabled=True, trace_endpoint=trace_endpoint))
+
+    session = configure_telemetry(cfg)
+
+    assert session.enabled is True
+    assert cast(str, captured.get("endpoint")) == trace_endpoint
+
+
 def test_configure_telemetry_log_export_honors_loki_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
