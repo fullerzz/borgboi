@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from importlib.metadata import version as get_version
 from typing import TYPE_CHECKING, Annotated, Any, NoReturn
@@ -20,6 +21,7 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 from borgboi.config import Config, get_config
 from borgboi.core.logging import configure_logging, get_logger
 from borgboi.core.telemetry import (
+    TelemetrySession,
     bind_trace_contextvars,
     configure_telemetry,
     force_flush_telemetry,
@@ -102,6 +104,26 @@ def confirm_action(prompt: str) -> bool:
     return Confirm.ask(prompt, console=console, default=False)
 
 
+def _resolve_trace_endpoint(config: Config) -> str:
+    return (
+        config.telemetry.trace_endpoint
+        or os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+        or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+        or "default OTLP endpoint"
+    )
+
+
+def _print_exit_summary(ctx: BorgBoiContext, config: Config, telemetry: TelemetrySession) -> None:
+    active_trace_id = get_current_trace_id() or ctx.trace_id
+    trace_suffix = ""
+    if telemetry.enabled:
+        trace_suffix = f" [dim](Traces sent to {_resolve_trace_endpoint(config)})[/dim]"
+    if config.logging.enabled:
+        console.print(f"Logs for this execution have trace_id {active_trace_id}{trace_suffix}")
+    elif telemetry.enabled:
+        console.print(f"Trace for this execution has trace_id {active_trace_id}{trace_suffix}")
+
+
 _VERSION = get_version("borgboi")
 
 app = App(
@@ -174,11 +196,7 @@ def _launcher(
             logger.exception("CLI command failed", tokens=safe_tokens)
         raise
     finally:
-        active_trace_id = get_current_trace_id() or ctx.trace_id
-        if config.logging.enabled:
-            console.print(f"Logs for this execution have trace_id {active_trace_id}")
-        elif telemetry.enabled:
-            console.print(f"Trace for this execution has trace_id {active_trace_id}")
+        _print_exit_summary(ctx, config, telemetry)
         force_flush_telemetry()
         clear_contextvars()
 
