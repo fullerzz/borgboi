@@ -1,5 +1,6 @@
 import importlib
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -17,6 +18,13 @@ cli_main = importlib.import_module("borgboi.cli.main")
 BorgBoiContext = cli_main.BorgBoiContext
 _print_exit_summary = cli_main._print_exit_summary
 _resolve_trace_endpoint = cli_main._resolve_trace_endpoint
+
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Strip ANSI SGR escape codes (e.g. from FORCE_COLOR=1 in CI environments)."""
+    return _ANSI_ESCAPE.sub("", text)
 
 
 def _read_active_log_entries() -> list[dict[str, object]]:
@@ -352,7 +360,7 @@ class TestPrintExitSummary:
             otel_trace_id="otel-xyz",
             flush_ok=True,
         )
-        out = capsys.readouterr().out
+        out = _strip_ansi(capsys.readouterr().out)
         assert "otel-xyz" in out
         assert "fallback-trace" not in out
         assert "Traces sent to http://tempo" in out
@@ -369,7 +377,7 @@ class TestPrintExitSummary:
             otel_trace_id="otel-xyz",
             flush_ok=False,
         )
-        out = capsys.readouterr().out
+        out = _strip_ansi(capsys.readouterr().out)
         assert "Traces queued for http://tempo" in out
         assert "Traces sent to" not in out
 
@@ -385,6 +393,6 @@ class TestPrintExitSummary:
             otel_trace_id="otel-xyz",
             flush_ok=True,
         )
-        normalized = " ".join(capsys.readouterr().out.split())
+        normalized = " ".join(_strip_ansi(capsys.readouterr().out).split())
         assert "the configured OTLP endpoint" in normalized
         assert "Traces sent to the configured OTLP endpoint" in normalized
