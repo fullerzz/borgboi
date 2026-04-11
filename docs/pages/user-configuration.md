@@ -57,6 +57,14 @@ logging:
   max_bytes: 10485760
   backup_count: 5
 
+telemetry:
+  enabled: false
+  service_name: borgboi
+  trace_endpoint: null
+  export_logs: false
+  logs_endpoint: null
+  capture_tui: true
+
 offline: false
 debug: false
 ```
@@ -138,6 +146,17 @@ sequenceDiagram
 | `aws.region` | string | `us-west-1` | Any string | Typically an AWS region like `us-east-1`, `eu-west-1`, etc. |
 | `aws.profile` | string or `null` | `null` | Any string or `null` | Optional AWS profile name. |
 
+### `telemetry` Section
+
+| Key | Type | Default | Allowed Values | Notes |
+| --- | --- | --- | --- | --- |
+| `telemetry.enabled` | boolean | `false` | `true` or `false` | Enables OpenTelemetry tracing for CLI and TUI execution paths. |
+| `telemetry.service_name` | string | `borgboi` | Any string | Default OpenTelemetry `service.name` when `OTEL_SERVICE_NAME` is not set. |
+| `telemetry.trace_endpoint` | string or `null` | `null` | Any URL or `null` | Optional override for the OTLP trace exporter endpoint. Set this when traces should go somewhere other than the default `OTEL_EXPORTER_OTLP_ENDPOINT`. |
+| `telemetry.export_logs` | boolean | `false` | `true` or `false` | Adds an OTLP log export pipeline so application logs can be routed to Loki. |
+| `telemetry.logs_endpoint` | string or `null` | `null` | Any URL or `null` | Optional override for the OTLP log exporter endpoint. Set to Loki's native OTLP logs URL (e.g. `http://loki:3100/otlp/v1/logs`) to send logs directly to Loki while traces continue to use the default `OTEL_EXPORTER_OTLP_ENDPOINT`. |
+| `telemetry.capture_tui` | boolean | `true` | `true` or `false` | When telemetry is enabled, traces the TUI session and background workers. |
+
 ### `borg` Section
 
 | Key | Type | Default | Allowed Values | Notes |
@@ -192,6 +211,12 @@ Use `BORGBOI_` variables to override config file values at runtime.
 | `BORGBOI_LOGGING__LEVEL` | `logging.level` |
 | `BORGBOI_LOGGING__MAX_BYTES` | `logging.max_bytes` |
 | `BORGBOI_LOGGING__BACKUP_COUNT` | `logging.backup_count` |
+| `BORGBOI_TELEMETRY__ENABLED` | `telemetry.enabled` |
+| `BORGBOI_TELEMETRY__SERVICE_NAME` | `telemetry.service_name` |
+| `BORGBOI_TELEMETRY__TRACE_ENDPOINT` | `telemetry.trace_endpoint` |
+| `BORGBOI_TELEMETRY__EXPORT_LOGS` | `telemetry.export_logs` |
+| `BORGBOI_TELEMETRY__LOGS_ENDPOINT` | `telemetry.logs_endpoint` |
+| `BORGBOI_TELEMETRY__CAPTURE_TUI` | `telemetry.capture_tui` |
 | `BORGBOI_AWS__DYNAMODB_REPOS_TABLE` | `aws.dynamodb_repos_table` |
 | `BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE` | `aws.dynamodb_archives_table` |
 | `BORGBOI_AWS__S3_BUCKET` | `aws.s3_bucket` |

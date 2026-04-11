@@ -55,6 +55,14 @@ tflint:
 serve-docs:
     uv run zensical serve
 
+# run docker-otel-lgtm with borgboi OTLP env configured
+lgtm:
+    BORGBOI_TELEMETRY__ENABLED=true \
+    BORGBOI_TELEMETRY__SERVICE_NAME=borgboi \
+    OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+    docker run -p 3000:3000 -p 4317:4317 -p 4318:4318 --rm -ti grafana/otel-lgtm
+
 # generate unreleased changelog with git-cliff
 changelog-unreleased:
     uv run git-cliff --unreleased -c cliff.toml --github-repo fullerzz/borgboi -o PREVIEW_CHANGELOG.md

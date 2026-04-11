@@ -11,6 +11,7 @@ from typing import Any, cast
 import structlog
 
 from borgboi.config import Config
+from borgboi.core.telemetry import get_current_span_context
 
 LOG_FILE_BASENAME = "borgboi"
 _LOG_FILE_GLOB = f"{LOG_FILE_BASENAME}_*.log"
@@ -32,6 +33,7 @@ class _LoggingState:
 def _build_shared_processors() -> list[Any]:
     return [
         structlog.contextvars.merge_contextvars,
+        _add_otel_trace_context,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.ExtraAdder(),
@@ -39,6 +41,17 @@ def _build_shared_processors() -> list[Any]:
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
     ]
+
+
+def _add_otel_trace_context(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
+    span_context = get_current_span_context()
+    if span_context is None:
+        return event_dict
+
+    event_dict["trace_id"] = f"{span_context.trace_id:032x}"
+    event_dict["span_id"] = f"{span_context.span_id:016x}"
+    event_dict["trace_flags"] = f"{int(span_context.trace_flags):02x}"
+    return event_dict
 
 
 def _configure_structlog() -> None:

@@ -7,6 +7,7 @@ from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
+from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags, TraceState, use_span
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 import borgboi.config as config_module
@@ -108,6 +109,30 @@ def test_log_entries_have_no_trace_id_when_contextvars_not_bound() -> None:
     entries = _read_log_entries(log_file)
     event_entry = next(e for e in entries if e["event"] == "no context event")
     assert "trace_id" not in event_entry
+
+
+def test_active_otel_span_adds_trace_and_span_ids_to_logs() -> None:
+    cfg = Config(logging=LoggingConfig(enabled=True))
+    log_file = configure_logging(cfg)
+    assert log_file is not None
+
+    span_context = SpanContext(
+        trace_id=int("1234" * 8, 16),
+        span_id=int("abcd" * 4, 16),
+        is_remote=False,
+        trace_flags=TraceFlags(0x01),
+        trace_state=TraceState(),
+    )
+
+    with use_span(NonRecordingSpan(span_context), end_on_exit=False):
+        get_logger("borgboi.cli.main").info("otel correlated event")
+
+    entries = _read_log_entries(log_file)
+    event_entry = next(e for e in entries if e["event"] == "otel correlated event")
+
+    assert event_entry["trace_id"] == "12341234123412341234123412341234"
+    assert event_entry["span_id"] == "abcdabcdabcdabcd"
+    assert event_entry["trace_flags"] == "01"
 
 
 def test_configure_logging_filters_debug_logs_by_default() -> None:
