@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging as stdlib_logging
 import os
 import socket
+import sys
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_version
@@ -104,19 +105,41 @@ def _ensure_botocore_instrumentation() -> None:
     _TelemetryState.botocore_instrumented = True
 
 
+def _warn(message: str) -> None:
+    sys.stderr.write(f"warning: {message}\n")
+
+
 def configure_telemetry(config: Config) -> TelemetrySession:
-    """Enable OpenTelemetry tracing and optional log export for the process."""
+    """Enable OpenTelemetry tracing and optional log export for the process.
+
+    Any exporter/instrumentation failure degrades to a disabled session rather
+    than crashing the CLI — telemetry must never be the thing that breaks borgboi.
+    """
     if not config.telemetry.enabled:
         return TelemetrySession(enabled=False, logs_export_enabled=False)
 
     resource = _build_resource(config)
-    _ensure_trace_provider(resource, config.telemetry.trace_endpoint)
-    _ensure_botocore_instrumentation()
 
+    try:
+        _ensure_trace_provider(resource, config.telemetry.trace_endpoint)
+    except Exception as exc:
+        _warn(f"telemetry: failed to initialize trace exporter ({exc}); traces disabled for this run")
+        return TelemetrySession(enabled=False, logs_export_enabled=False)
+
+    try:
+        _ensure_botocore_instrumentation()
+    except Exception as exc:
+        _warn(f"telemetry: failed to instrument botocore ({exc}); AWS spans will be missing")
+
+    logs_export_enabled = False
     if config.telemetry.export_logs:
-        _ensure_log_export(resource, config.telemetry.logs_endpoint)
+        try:
+            _ensure_log_export(resource, config.telemetry.logs_endpoint)
+            logs_export_enabled = True
+        except Exception as exc:
+            _warn(f"telemetry: failed to initialize log exporter ({exc}); log export disabled for this run")
 
-    return TelemetrySession(enabled=True, logs_export_enabled=config.telemetry.export_logs)
+    return TelemetrySession(enabled=True, logs_export_enabled=logs_export_enabled)
 
 
 def get_tracer(name: str) -> trace.Tracer:
@@ -177,12 +200,37 @@ def set_span_attributes(span: Span, attributes: Mapping[str, AttributeValue | No
         span.set_attribute(key, value)
 
 
-def force_flush_telemetry() -> None:
-    """Flush telemetry providers without shutting down the process-global state."""
+def force_flush_telemetry() -> bool:
+    """Flush telemetry providers without shutting down the process-global state.
+
+    Returns ``True`` when every active provider flushed cleanly; ``False`` if a
+    provider timed out, raised, or otherwise reported a failure. Warnings are
+    written to stderr for each failure so the CLI can still communicate success
+    honestly in the exit summary.
+    """
+    ok = True
     if _TelemetryState.tracer_provider is not None:
-        _TelemetryState.tracer_provider.force_flush()
+        try:
+            if not _TelemetryState.tracer_provider.force_flush():
+                _warn("telemetry: trace flush timed out; some spans may have been dropped")
+                ok = False
+        except Exception as exc:
+            _warn(f"telemetry: trace flush raised ({exc}); some spans may have been dropped")
+            ok = False
     if _TelemetryState.logger_provider is not None:
-        _TelemetryState.logger_provider.force_flush()
+        try:
+            if not _TelemetryState.logger_provider.force_flush():
+                _warn("telemetry: log flush timed out; some log records may have been dropped")
+                ok = False
+        except Exception as exc:
+            _warn(f"telemetry: log flush raised ({exc}); some log records may have been dropped")
+            ok = False
+    return ok
+
+
+def telemetry_is_active() -> bool:
+    """Return whether this process already has telemetry providers installed."""
+    return _TelemetryState.tracer_provider is not None or _TelemetryState.logger_provider is not None
 
 
 def reset_telemetry_for_tests() -> None:

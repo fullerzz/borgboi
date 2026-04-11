@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import AbstractContextManager, nullcontext
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, cast, override
 
+from opentelemetry.trace import INVALID_SPAN as _NOOP_SPAN
+from opentelemetry.trace import Span
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
@@ -60,6 +63,11 @@ class BorgBoiApp(App[None]):
         self._repos: list[BorgBoiRepo] = []
         self._repos_table: DataTable[str] | None = None
 
+    def _span(self, name: str) -> AbstractContextManager[Span]:
+        if self._config is None or not self._config.telemetry.capture_tui:
+            return cast("AbstractContextManager[Span]", nullcontext(cast("Span", _NOOP_SPAN)))
+        return tracer.start_as_current_span(name)
+
     @property
     def orchestrator(self) -> Orchestrator:
         """Return the shared orchestrator, constructing it lazily if not provided at init."""
@@ -88,7 +96,7 @@ class BorgBoiApp(App[None]):
 
     def on_mount(self) -> None:
         """Initialise the repos table columns and trigger the initial data load."""
-        with tracer.start_as_current_span("tui.app.mount") as span:
+        with self._span("tui.app.mount") as span:
             set_span_attributes(
                 span,
                 {
@@ -121,7 +129,7 @@ class BorgBoiApp(App[None]):
 
     @work(thread=True, exclusive=True)
     def _load_repos(self) -> None:
-        with tracer.start_as_current_span("tui.load_repos") as span:
+        with self._span("tui.load_repos") as span:
             logger.debug("Loading repositories for TUI dashboard")
             try:
                 repos = self.orchestrator.list_repos()
@@ -172,15 +180,14 @@ class BorgBoiApp(App[None]):
 
     @work(thread=True, exclusive=True, group="sparkline")
     def _load_sparkline_data(self) -> None:
-        with tracer.start_as_current_span("tui.load_sparkline") as span:
+        with self._span("tui.load_sparkline") as span:
             logger.debug("Loading sparkline data")
             try:
+                today = datetime.now(UTC).date()
                 with SQLiteDailyBackupProgressHistory(
                     db_path=get_db_path(self._config.borgboi_dir if self._config else None)
                 ) as history:
                     data = history.get_daily_archive_counts(SPARKLINE_DAYS)
-                # Build x-labels from the same "today" snapshot used by the query
-                today = datetime.now(UTC).date()
                 labels = [
                     (today - timedelta(days=SPARKLINE_DAYS - 1 - i)).strftime("%m/%d") for i in range(SPARKLINE_DAYS)
                 ]

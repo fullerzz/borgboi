@@ -27,6 +27,7 @@ from borgboi.core.telemetry import (
     force_flush_telemetry,
     get_current_trace_id,
     get_tracer,
+    telemetry_is_active,
 )
 from borgboi.rich_utils import console
 
@@ -104,13 +105,19 @@ def confirm_action(prompt: str) -> bool:
     return Confirm.ask(prompt, console=console, default=False)
 
 
-def _resolve_trace_endpoint(config: Config) -> str:
+def _resolve_trace_endpoint(config: Config) -> str | None:
     return (
         config.telemetry.trace_endpoint
         or os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
         or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
-        or "default OTLP endpoint"
     )
+
+
+def _format_trace_suffix(config: Config, flush_ok: bool) -> str:
+    endpoint = _resolve_trace_endpoint(config)
+    destination = endpoint or "the configured OTLP endpoint"
+    verb = "sent to" if flush_ok else "queued for"
+    return f" [dim](Traces {verb} {destination})[/dim]"
 
 
 def _print_exit_summary(
@@ -118,11 +125,10 @@ def _print_exit_summary(
     config: Config,
     telemetry: TelemetrySession,
     otel_trace_id: str | None,
+    flush_ok: bool,
 ) -> None:
     active_trace_id = otel_trace_id or ctx.trace_id
-    trace_suffix = ""
-    if telemetry.enabled:
-        trace_suffix = f" [dim](Traces sent to {_resolve_trace_endpoint(config)})[/dim]"
+    trace_suffix = _format_trace_suffix(config, flush_ok) if telemetry.enabled else ""
     if config.logging.enabled:
         console.print(f"Logs for this execution have trace_id {active_trace_id}{trace_suffix}")
     elif telemetry.enabled:
@@ -201,8 +207,8 @@ def _launcher(
         get_logger(__name__).exception("CLI command failed", tokens=safe_tokens)
         raise
     finally:
-        _print_exit_summary(ctx, config, telemetry, otel_trace_id)
-        force_flush_telemetry()
+        flush_ok = force_flush_telemetry() if telemetry.enabled or telemetry_is_active() else True
+        _print_exit_summary(ctx, config, telemetry, otel_trace_id, flush_ok)
         clear_contextvars()
 
 
