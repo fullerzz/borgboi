@@ -39,6 +39,14 @@ def test_configure_telemetry_disabled_returns_inactive_session() -> None:
     assert _TelemetryState.logs_initialized is False
 
 
+def test_reset_telemetry_for_tests_clears_botocore_instrumentation_flag() -> None:
+    _TelemetryState.botocore_instrumented = True
+
+    reset_telemetry_for_tests()
+
+    assert _TelemetryState.botocore_instrumented is False
+
+
 def test_configure_telemetry_log_export_uses_default_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 

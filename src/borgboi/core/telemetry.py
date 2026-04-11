@@ -248,6 +248,7 @@ def reset_telemetry_for_tests() -> None:
 
     _TelemetryState.logs_initialized = False
     _TelemetryState.traces_initialized = False
+    _TelemetryState.botocore_instrumented = False
     _TelemetryState.logger_provider = None
     _TelemetryState.tracer_provider = None
     _TelemetryState.log_handler = None
