@@ -113,8 +113,13 @@ def _resolve_trace_endpoint(config: Config) -> str:
     )
 
 
-def _print_exit_summary(ctx: BorgBoiContext, config: Config, telemetry: TelemetrySession) -> None:
-    active_trace_id = get_current_trace_id() or ctx.trace_id
+def _print_exit_summary(
+    ctx: BorgBoiContext,
+    config: Config,
+    telemetry: TelemetrySession,
+    otel_trace_id: str | None,
+) -> None:
+    active_trace_id = otel_trace_id or ctx.trace_id
     trace_suffix = ""
     if telemetry.enabled:
         trace_suffix = f" [dim](Traces sent to {_resolve_trace_endpoint(config)})[/dim]"
@@ -154,6 +159,8 @@ def _launcher(
     config = ctx.config
     safe_tokens = _redact_sensitive_tokens(tokens)
     telemetry = configure_telemetry(config)
+    logging_enabled = configure_logging(config) is not None
+    otel_trace_id: str | None = None
 
     try:
         command, bound, ignored = app.parse_args(tokens)
@@ -164,7 +171,7 @@ def _launcher(
                 additional_kwargs[parameter_name] = ctx
 
         command_name = getattr(command, "__name__", command.__class__.__name__)
-        span_name = f"cli.{command_name.removeprefix('_').replace('_', '.')}"
+        span_name = f"cli.{command_name.removeprefix('_').replace('_', '-')}"
         with _TRACER.start_as_current_span(span_name) as span:
             span.set_attribute("borgboi.command.name", command_name)
             span.set_attribute("borgboi.command.tokens", safe_tokens)
@@ -173,10 +180,10 @@ def _launcher(
 
             if telemetry.enabled:
                 bind_trace_contextvars()
+                otel_trace_id = get_current_trace_id()
             else:
                 bind_contextvars(trace_id=ctx.trace_id)
 
-            logging_enabled = configure_logging(config) is not None
             logger = get_logger(__name__) if logging_enabled or telemetry.enabled else None
             if logger is not None:
                 logger.info(
@@ -191,12 +198,10 @@ def _launcher(
     except SystemExit:
         raise
     except Exception:
-        logger = get_logger(__name__)
-        if logger is not None:
-            logger.exception("CLI command failed", tokens=safe_tokens)
+        get_logger(__name__).exception("CLI command failed", tokens=safe_tokens)
         raise
     finally:
-        _print_exit_summary(ctx, config, telemetry)
+        _print_exit_summary(ctx, config, telemetry, otel_trace_id)
         force_flush_telemetry()
         clear_contextvars()
 

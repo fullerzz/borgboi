@@ -64,7 +64,6 @@ telemetry:
   export_logs: false
   logs_endpoint: null
   capture_tui: true
-  capture_subprocess_output_attributes: false
 
 offline: false
 debug: false
@@ -157,7 +156,6 @@ sequenceDiagram
 | `telemetry.export_logs` | boolean | `false` | `true` or `false` | Adds an OTLP log export pipeline so application logs can be routed to Loki. |
 | `telemetry.logs_endpoint` | string or `null` | `null` | Any URL or `null` | Optional override for the OTLP log exporter endpoint. Set to Loki's native OTLP logs URL (e.g. `http://loki:3100/otlp/v1/logs`) to send logs directly to Loki while traces continue to use the default `OTEL_EXPORTER_OTLP_ENDPOINT`. |
 | `telemetry.capture_tui` | boolean | `true` | `true` or `false` | When telemetry is enabled, traces the TUI session and background workers. |
-| `telemetry.capture_subprocess_output_attributes` | boolean | `false` | `true` or `false` | Reserved for future opt-in capture of Borg subprocess output metadata. |
 
 ### `borg` Section
 
@@ -219,7 +217,6 @@ Use `BORGBOI_` variables to override config file values at runtime.
 | `BORGBOI_TELEMETRY__EXPORT_LOGS` | `telemetry.export_logs` |
 | `BORGBOI_TELEMETRY__LOGS_ENDPOINT` | `telemetry.logs_endpoint` |
 | `BORGBOI_TELEMETRY__CAPTURE_TUI` | `telemetry.capture_tui` |
-| `BORGBOI_TELEMETRY__CAPTURE_SUBPROCESS_OUTPUT_ATTRIBUTES` | `telemetry.capture_subprocess_output_attributes` |
 | `BORGBOI_AWS__DYNAMODB_REPOS_TABLE` | `aws.dynamodb_repos_table` |
 | `BORGBOI_AWS__DYNAMODB_ARCHIVES_TABLE` | `aws.dynamodb_archives_table` |
 | `BORGBOI_AWS__S3_BUCKET` | `aws.s3_bucket` |

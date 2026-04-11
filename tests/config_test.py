@@ -153,7 +153,6 @@ def test_telemetry_config_defaults() -> None:
     assert telemetry.export_logs is False
     assert telemetry.logs_endpoint is None
     assert telemetry.capture_tui is True
-    assert telemetry.capture_subprocess_output_attributes is False
 
 
 def test_config_defaults() -> None:
@@ -465,7 +464,6 @@ def test_config_env_var_map_completeness() -> None:
         "telemetry.export_logs",
         "telemetry.logs_endpoint",
         "telemetry.capture_tui",
-        "telemetry.capture_subprocess_output_attributes",
         "aws.s3_bucket",
         "aws.region",
         "aws.profile",
