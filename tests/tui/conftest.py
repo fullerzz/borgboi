@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -68,6 +68,75 @@ class FakeStorage:
 
     def save(self, repo: BorgBoiRepo) -> None:
         self.saved_repos.append(repo.name)
+
+
+class FakeSpan:
+    def set_attribute(self, _key: str, _value: object) -> None:
+        pass
+
+
+class FakeSpanContext:
+    def __init__(self, recorder: list[str], name: str) -> None:
+        self._recorder = recorder
+        self._name = name
+
+    def __enter__(self) -> FakeSpan:
+        self._recorder.append(self._name)
+        return FakeSpan()
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        del exc_type, exc, tb
+
+
+class FakeTracer:
+    def __init__(self) -> None:
+        self.started_spans: list[str] = []
+
+    def start_as_current_span(self, name: str) -> FakeSpanContext:
+        return FakeSpanContext(self.started_spans, name)
+
+
+def make_orchestrator(**overrides: Any) -> Any:
+    defaults: dict[str, Any] = {
+        "config": None,
+        "borg": None,
+        "storage": None,
+        "s3": None,
+    }
+    defaults.update(overrides)
+    return cast(Any, SimpleNamespace(**defaults))
+
+
+@pytest.fixture
+def fake_tui_tracer(monkeypatch: pytest.MonkeyPatch) -> FakeTracer:
+    tracer = FakeTracer()
+    monkeypatch.setattr("borgboi.tui.telemetry.tracer", tracer)
+    return tracer
+
+
+@pytest.fixture
+def patch_sparkline_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[..., None]:
+    def patch(data: list[float], captured_db_paths: list[object] | None = None) -> None:
+        class FakeHistory:
+            def __init__(self, db_path: object = None, engine: object = None) -> None:
+                del engine
+                if captured_db_paths is not None:
+                    captured_db_paths.append(db_path)
+
+            def __enter__(self) -> FakeHistory:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+            def get_daily_archive_counts(self, days: int) -> list[float]:
+                return data[:days] if len(data) >= days else [*data, *([0.0] * (days - len(data)))]
+
+        monkeypatch.setattr("borgboi.tui.app.SQLiteDailyBackupProgressHistory", FakeHistory)
+
+    return patch
 
 
 @pytest.fixture
