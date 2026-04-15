@@ -448,6 +448,96 @@ CollapsibleTitle:hover {
     margin-bottom: 1;
 }
 
+#repo-info-archives-actions {
+    height: auto;
+    align: left middle;
+    margin-bottom: 1;
+}
+
+#repo-info-compare-archives-btn {
+    margin-right: 1;
+}
+
+/* Archive compare screen */
+
+#archive-compare-screen {
+    height: 1fr;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#archive-compare-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#archive-compare-status,
+#archive-compare-summary,
+#archive-compare-selection,
+#archive-compare-older-heading,
+#archive-compare-newer-heading,
+#archive-compare-content-only-label {
+    color: #cdd6f4;
+}
+
+#archive-compare-status,
+#archive-compare-summary,
+#archive-compare-selection {
+    margin-bottom: 1;
+}
+
+#archive-compare-older-select,
+#archive-compare-newer-select {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#archive-compare-center-controls {
+    height: auto;
+    align: center middle;
+    margin-bottom: 1;
+}
+
+#archive-compare-content-only-label {
+    padding: 1 1 0 0;
+}
+
+#archive-compare-content-only-switch {
+    margin-right: 1;
+}
+
+#archive-compare-body {
+    height: 1fr;
+}
+
+.archive-compare-pane {
+    width: 1fr;
+    height: 1fr;
+    border: round #45475a;
+    background: #181825;
+    color: #cdd6f4;
+    padding: 1 2;
+    margin-right: 1;
+}
+
+#archive-compare-body .archive-compare-pane:last-child {
+    margin-right: 0;
+}
+
+#archive-compare-details {
+    min-width: 40;
+}
+
+#archive-compare-older-tree,
+#archive-compare-newer-tree {
+    height: 1fr;
+    border: round #313244;
+    background: #11111b;
+    color: #cdd6f4;
+    margin-top: 1;
+}
+
 #daily-backup-log {
     height: 1fr;
     border: round #313244;

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, ClassVar, override
 
+from opentelemetry import trace
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
@@ -12,6 +13,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Sparkline, Static
 
 from borgboi.core.logging import get_logger
+from borgboi.core.telemetry import set_span_attributes
 from borgboi.lib.utils import format_last_backup, format_repo_size
 from borgboi.storage.db import get_db_path
 from borgboi.tui.config_screen import ConfigScreen
@@ -19,6 +21,7 @@ from borgboi.tui.daily_backup_progress import SQLiteDailyBackupProgressHistory
 from borgboi.tui.daily_backup_screen import DailyBackupScreen
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
 from borgboi.tui.repo_info_screen import RepoInfoScreen
+from borgboi.tui.telemetry import capture_span
 
 logger = get_logger(__name__)
 
@@ -84,8 +87,16 @@ class BorgBoiApp(App[None]):
                     yield Static("", classes="sparkline-x-label", id=f"sparkline-x-label-{index}")
         yield Footer()
 
+    @capture_span("tui.app.mount")
     def on_mount(self) -> None:
         """Initialise the repos table columns and trigger the initial data load."""
+        set_span_attributes(
+            trace.get_current_span(),
+            {
+                "borgboi.mode.offline": self._config.offline if self._config else None,
+                "borgboi.ui.theme": self._config.ui.theme if self._config else None,
+            },
+        )
         logger.info("TUI app mounted", offline=self._config.offline if self._config else None)
         self._main_screen = self.screen
 
@@ -110,10 +121,12 @@ class BorgBoiApp(App[None]):
         self._load_sparkline_data()
 
     @work(thread=True, exclusive=True)
+    @capture_span("tui.load_repos")
     def _load_repos(self) -> None:
         logger.debug("Loading repositories for TUI dashboard")
         try:
             repos = self.orchestrator.list_repos()
+            set_span_attributes(trace.get_current_span(), {"borgboi.repo.count": len(repos)})
             logger.info("Repositories loaded", count=len(repos))
             self.call_from_thread(self._populate_table, repos)
         except Exception as e:
@@ -159,16 +172,17 @@ class BorgBoiApp(App[None]):
         return self._repos[row_index]
 
     @work(thread=True, exclusive=True, group="sparkline")
+    @capture_span("tui.load_sparkline")
     def _load_sparkline_data(self) -> None:
         logger.debug("Loading sparkline data")
         try:
+            today = datetime.now(UTC).date()
             with SQLiteDailyBackupProgressHistory(
                 db_path=get_db_path(self._config.borgboi_dir if self._config else None)
             ) as history:
                 data = history.get_daily_archive_counts(SPARKLINE_DAYS)
-            # Build x-labels from the same "today" snapshot used by the query
-            today = datetime.now(UTC).date()
             labels = [(today - timedelta(days=SPARKLINE_DAYS - 1 - i)).strftime("%m/%d") for i in range(SPARKLINE_DAYS)]
+            set_span_attributes(trace.get_current_span(), {"borgboi.sparkline.points": len(data)})
             logger.debug("Sparkline data loaded", data_points=len(data))
             self.call_from_thread(self._update_sparkline, data, labels)
         except Exception:

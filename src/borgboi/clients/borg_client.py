@@ -12,6 +12,9 @@ import subprocess as sp
 from collections.abc import Generator
 from pathlib import Path
 
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind
+
 from borgboi.clients.borg import (
     ArchivedFile,
     ArchiveInfo,
@@ -25,9 +28,11 @@ from borgboi.core.errors import BorgError, BorgExitCode
 from borgboi.core.logging import get_logger
 from borgboi.core.models import BackupOptions, DiffOptions, RestoreOptions, RetentionPolicy
 from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, SilentOutputHandler
+from borgboi.core.telemetry import get_tracer, set_span_attributes
 from borgboi.lib.utils import create_archive_name
 
 logger = get_logger(__name__)
+tracer = get_tracer(__name__)
 
 
 class BorgClient:
@@ -96,7 +101,6 @@ class BorgClient:
         if returncode == BorgExitCode.SUCCESS:
             return
         if returncode == BorgExitCode.WARNING:
-            # Log warning but don't raise
             self.output.on_log("warning", f"Borg completed with warnings: {stderr}")
             return
 
@@ -127,10 +131,21 @@ class BorgClient:
         Raises:
             BorgError: If the command fails
         """
-        env = self._build_env_with_passphrase(passphrase)
-        result = sp.run(cmd, check=False, capture_output=capture_output, text=True, env=env)  # noqa: S603
-        self._handle_exit_code(result.returncode, cmd, result.stdout, result.stderr)
-        return result
+        subcommand = cmd[1] if len(cmd) > 1 else cmd[0]
+        with tracer.start_as_current_span("borg.command", kind=SpanKind.CLIENT) as span:
+            set_span_attributes(
+                span,
+                {
+                    "process.command.name": cmd[0],
+                    "borgboi.borg.subcommand": subcommand,
+                    "borgboi.capture_output": capture_output,
+                },
+            )
+            env = self._build_env_with_passphrase(passphrase)
+            result = sp.run(cmd, check=False, capture_output=capture_output, text=True, env=env)  # noqa: S603
+            span.set_attribute("process.exit_code", result.returncode)
+            self._handle_exit_code(result.returncode, cmd, result.stdout, result.stderr)
+            return result
 
     def _run_streaming_command(
         self,
@@ -149,29 +164,44 @@ class BorgClient:
         Raises:
             BorgError: If the command fails
         """
-        env = self._build_env_with_passphrase(passphrase)
-        proc = sp.Popen(cmd, stdout=sp.DEVNULL, stderr=sp.PIPE, env=env)  # noqa: S603
+        subcommand = cmd[1] if len(cmd) > 1 else cmd[0]
+        span = tracer.start_span("borg.command.stream", kind=SpanKind.CLIENT)
+        set_span_attributes(
+            span,
+            {
+                "process.command.name": cmd[0],
+                "borgboi.borg.subcommand": subcommand,
+                "borgboi.stream_output": True,
+            },
+        )
+        try:
+            with trace.use_span(span, end_on_exit=False):
+                env = self._build_env_with_passphrase(passphrase)
+                proc = sp.Popen(cmd, stdout=sp.DEVNULL, stderr=sp.PIPE, env=env)  # noqa: S603
 
-        # Wrap stderr with TextIOWrapper using universal newlines (default).
-        # Borg progress messages use \r (carriage return) to overwrite the
-        # current terminal line. TextIOWrapper translates \r, \n, and \r\n into
-        # \n, so iterating the stream yields clean line-oriented output for all
-        # line-ending styles.
-        text_stream: io.TextIOWrapper | None = None
-        if proc.stderr:
-            text_stream = io.TextIOWrapper(proc.stderr, encoding="utf-8", errors="replace")
+            # Borg progress messages use \r to overwrite the current terminal line.
+            # TextIOWrapper's universal newlines translate \r, \n, and \r\n into \n,
+            # so iterating yields clean line-oriented output regardless of style.
+            text_stream = io.TextIOWrapper(proc.stderr, encoding="utf-8", errors="replace") if proc.stderr else None
 
-        if text_stream is not None:
-            yield from text_stream
-
-        # Clean up
-        if text_stream:
-            text_stream.close()  # also closes underlying proc.stderr
-        elif proc.stderr:
-            proc.stderr.close()
-
-        returncode = proc.wait()
-        self._handle_exit_code(returncode, cmd)
+            iteration_completed = False
+            try:
+                if text_stream is not None:
+                    yield from text_stream
+                iteration_completed = True
+            finally:
+                if text_stream is not None:
+                    text_stream.close()
+                elif proc.stderr:
+                    proc.stderr.close()
+                if proc.poll() is None:
+                    proc.terminate()
+                returncode = proc.wait()
+                span.set_attribute("process.exit_code", returncode)
+                if iteration_completed:
+                    self._handle_exit_code(returncode, cmd)
+        finally:
+            span.end()
 
     # Core Operations
 
@@ -209,7 +239,6 @@ class BorgClient:
 
         self._run_command(cmd, passphrase=passphrase)
 
-        # Set additional_free_space if specified
         free_space = additional_free_space or self.config.additional_free_space
         if free_space:
             logger.debug("Setting additional free space", repo_path=repo_path, free_space=free_space)

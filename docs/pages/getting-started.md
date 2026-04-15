@@ -85,6 +85,14 @@ logging:
   max_bytes: 10485760
   backup_count: 5
 
+telemetry:
+  enabled: false
+  service_name: borgboi
+  trace_endpoint: null
+  export_logs: false
+  logs_endpoint: null
+  capture_tui: true
+
 offline: false
 ```
 
@@ -100,11 +108,61 @@ Configuration can be overridden using environment variables with the `BORGBOI_` 
 | `BORGBOI_LOGGING__LEVEL` | `logging.level` | Set the minimum log level for file logging |
 | `BORGBOI_LOGGING__MAX_BYTES` | `logging.max_bytes` | Set the file size threshold before rotating the active timestamped log file |
 | `BORGBOI_LOGGING__BACKUP_COUNT` | `logging.backup_count` | Set how many older timestamped log sessions to retain alongside the active log file |
+| `BORGBOI_TELEMETRY__ENABLED` | `telemetry.enabled` | Enable OpenTelemetry tracing for CLI and TUI workflows |
+| `BORGBOI_TELEMETRY__SERVICE_NAME` | `telemetry.service_name` | Override the default OpenTelemetry service name |
+| `BORGBOI_TELEMETRY__TRACE_ENDPOINT` | `telemetry.trace_endpoint` | Optional OTLP trace exporter endpoint override |
+| `BORGBOI_TELEMETRY__EXPORT_LOGS` | `telemetry.export_logs` | Export application logs over OTLP so they can land in Loki |
+| `BORGBOI_TELEMETRY__LOGS_ENDPOINT` | `telemetry.logs_endpoint` | Optional OTLP log exporter endpoint override (e.g. Loki's native `/otlp/v1/logs` URL) |
+| `BORGBOI_TELEMETRY__CAPTURE_TUI` | `telemetry.capture_tui` | Capture TUI session and worker spans when telemetry is enabled |
 | `BORGBOI_AWS__S3_BUCKET` | `aws.s3_bucket` | S3 bucket for backup storage |
 | `BORGBOI_AWS__DYNAMODB_REPOS_TABLE` | `aws.dynamodb_repos_table` | DynamoDB table for repo metadata |
 | `BORGBOI_AWS__REGION` | `aws.region` | AWS region |
 | `BORGBOI_BORG__BORG_PASSPHRASE` | `borg.borg_passphrase` | Default passphrase for existing repos |
 | `BORGBOI_BORG__BORG_NEW_PASSPHRASE` | `borg.borg_new_passphrase` | Passphrase for new repos |
+
+### OpenTelemetry With `docker-otel-lgtm`
+
+For local tracing with Tempo and optional log export to Loki, start `docker-otel-lgtm` and set the default OTLP environment variables:
+
+```sh
+export BORGBOI_TELEMETRY__ENABLED=true
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+If you also want BorgBoi logs to be exported through the OpenTelemetry collector to Loki:
+
+```sh
+export BORGBOI_TELEMETRY__EXPORT_LOGS=true
+```
+
+`docker-otel-lgtm` serves Grafana at `http://localhost:3000` with the default credentials `admin` / `admin`.
+
+### Sending Traces Directly to Another OTLP Endpoint
+
+Set `telemetry.trace_endpoint` when traces should bypass the default `OTEL_EXPORTER_OTLP_ENDPOINT` value:
+
+```sh
+export BORGBOI_TELEMETRY__ENABLED=true
+export BORGBOI_TELEMETRY__TRACE_ENDPOINT=http://tempo:4318/v1/traces
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+```
+
+### Sending Logs Directly to Loki
+
+Loki 3.x exposes a native OTLP logs endpoint at `/otlp/v1/logs`, so you can bypass the OpenTelemetry collector and push BorgBoi logs straight into Loki while keeping traces pointed at Tempo (or any other OTLP trace backend).
+
+Set `telemetry.logs_endpoint` to Loki's OTLP logs URL and leave `OTEL_EXPORTER_OTLP_ENDPOINT` pointed at the trace backend:
+
+```sh
+export BORGBOI_TELEMETRY__ENABLED=true
+export BORGBOI_TELEMETRY__EXPORT_LOGS=true
+export BORGBOI_TELEMETRY__LOGS_ENDPOINT=http://loki:3100/otlp/v1/logs
+export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+```
+
+The resolved log records still carry the active `trace_id` and `span_id`, so Grafana's trace-to-logs correlation keeps working when you query Loki directly. Authentication headers for Loki (for example, Grafana Cloud multi-tenancy) can be supplied through the standard `OTEL_EXPORTER_OTLP_LOGS_HEADERS` environment variable, which the OTLP HTTP exporter reads automatically.
 
 !!! info "Passphrase Handling"
     BorgBoi uses a hierarchical passphrase resolution:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from importlib.metadata import version as get_version
 from typing import TYPE_CHECKING, Annotated, Any, NoReturn
@@ -19,6 +20,16 @@ from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from borgboi.config import Config, get_config
 from borgboi.core.logging import configure_logging, get_logger
+from borgboi.core.telemetry import (
+    TelemetrySession,
+    bind_trace_contextvars,
+    configure_telemetry,
+    force_flush_telemetry,
+    get_current_trace_id,
+    get_tracer,
+    set_span_attributes,
+    telemetry_is_active,
+)
 from borgboi.rich_utils import console
 
 install(suppress=[cyclopts])
@@ -59,6 +70,7 @@ ContextArg = Annotated[BorgBoiContext, Parameter(parse=False)]
 MetaTokens = Annotated[str, Parameter(show=False, allow_leading_hyphen=True)]  # pyright: ignore[reportCallIssue]
 _REDACTED = "[REDACTED]"
 _SENSITIVE_FLAGS = {"--passphrase"}
+_TRACER = get_tracer(__name__)
 
 
 def _redact_sensitive_tokens(tokens: Iterable[str]) -> list[str]:
@@ -94,6 +106,36 @@ def confirm_action(prompt: str) -> bool:
     return Confirm.ask(prompt, console=console, default=False)
 
 
+def _resolve_trace_endpoint(config: Config) -> str | None:
+    return (
+        config.telemetry.trace_endpoint
+        or os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+        or os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    )
+
+
+def _format_trace_suffix(config: Config, flush_ok: bool) -> str:
+    endpoint = _resolve_trace_endpoint(config)
+    destination = endpoint or "the configured OTLP endpoint"
+    verb = "sent to" if flush_ok else "queued for"
+    return f" [dim](Traces {verb} {destination})[/dim]"
+
+
+def _print_exit_summary(
+    ctx: BorgBoiContext,
+    config: Config,
+    telemetry: TelemetrySession,
+    otel_trace_id: str | None,
+    flush_ok: bool,
+) -> None:
+    active_trace_id = otel_trace_id or ctx.trace_id
+    trace_suffix = _format_trace_suffix(config, flush_ok) if telemetry.enabled else ""
+    if config.logging.enabled:
+        console.print(f"Logs for this execution have trace_id {active_trace_id}{trace_suffix}")
+    elif telemetry.enabled:
+        console.print(f"Trace for this execution has trace_id {active_trace_id}{trace_suffix}")
+
+
 _VERSION = get_version("borgboi")
 
 app = App(
@@ -121,11 +163,11 @@ def _launcher(
 ) -> Any:
     ctx = BorgBoiContext(offline=offline, debug=debug)
     clear_contextvars()
-    bind_contextvars(trace_id=ctx.trace_id)
     config = ctx.config
-    logging_enabled = configure_logging(config) is not None
-    logger = get_logger(__name__) if logging_enabled else None
     safe_tokens = _redact_sensitive_tokens(tokens)
+    telemetry = configure_telemetry(config)
+    logging_enabled = configure_logging(config) is not None
+    otel_trace_id: str | None = None
 
     try:
         command, bound, ignored = app.parse_args(tokens)
@@ -136,6 +178,35 @@ def _launcher(
                 additional_kwargs[parameter_name] = ctx
 
         command_name = getattr(command, "__name__", command.__class__.__name__)
+        logger = get_logger(__name__) if logging_enabled or telemetry.enabled else None
+
+        if telemetry.enabled:
+            span_name = f"cli.{command_name.removeprefix('_').replace('_', '-')}"
+            with _TRACER.start_as_current_span(span_name) as span:
+                set_span_attributes(
+                    span,
+                    {
+                        "borgboi.command.name": command_name,
+                        "borgboi.command.tokens": safe_tokens,
+                        "borgboi.mode.offline": config.offline,
+                        "borgboi.mode.debug": config.debug,
+                    },
+                )
+                bind_trace_contextvars()
+                otel_trace_id = get_current_trace_id()
+
+                if logger is not None:
+                    logger.info(
+                        "Running CLI command",
+                        command=command_name,
+                        tokens=safe_tokens,
+                        offline=config.offline,
+                        debug=config.debug,
+                    )
+
+                return command(*bound.args, **bound.kwargs, **additional_kwargs)
+
+        bind_contextvars(trace_id=ctx.trace_id)
         if logger is not None:
             logger.info(
                 "Running CLI command",
@@ -149,12 +220,12 @@ def _launcher(
     except SystemExit:
         raise
     except Exception:
-        if logger is not None:
-            logger.exception("CLI command failed", tokens=safe_tokens)
+        get_logger(__name__).exception("CLI command failed", tokens=safe_tokens)
         raise
     finally:
-        if logging_enabled:
-            console.print(f"Logs for this execution have trace_id {ctx.trace_id}")
+        flush_ok = force_flush_telemetry() if telemetry.enabled or telemetry_is_active() else True
+        _print_exit_summary(ctx, config, telemetry, otel_trace_id, flush_ok)
+        clear_contextvars()
 
 
 @app.command(name="version")
@@ -176,6 +247,19 @@ def tui(*, ctx: ContextArg) -> None:
     from borgboi.tui import BorgBoiApp
 
     tui_app = BorgBoiApp(config=ctx.config)
+    if ctx.config.telemetry.enabled and ctx.config.telemetry.capture_tui:
+        with _TRACER.start_as_current_span("tui.session") as span:
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.mode.offline": ctx.config.offline,
+                    "borgboi.ui.theme": ctx.config.ui.theme,
+                },
+            )
+            bind_trace_contextvars()
+            tui_app.run()
+            return
+
     tui_app.run()
 
 

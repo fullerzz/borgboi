@@ -29,3 +29,4 @@ output.txt
 .claude/settings.local.json
 borgopher/
 .claude
+.opencode

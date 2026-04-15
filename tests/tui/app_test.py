@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
+import pytest
 from textual.widgets import DataTable, Static
 
-from borgboi.config import Config
+from borgboi.config import Config, TelemetryConfig
 from borgboi.models import BorgBoiRepo
 from borgboi.storage.db import get_db_path
 from borgboi.tui.app import BorgBoiApp
@@ -15,7 +16,7 @@ from borgboi.tui.daily_backup_screen import DailyBackupScreen
 from borgboi.tui.excludes_screen import DefaultExcludesScreen
 from borgboi.tui.repo_info_screen import RepoInfoScreen
 
-from .conftest import build_repo
+from .conftest import FakeTracer, build_repo, make_orchestrator
 
 
 async def test_app_composes_with_data_table_and_sections(tui_app: BorgBoiApp) -> None:
@@ -27,12 +28,16 @@ async def test_app_composes_with_data_table_and_sections(tui_app: BorgBoiApp) ->
 
 async def test_app_loads_and_populates_repos_table(tui_config: Config) -> None:
     repos = [build_repo("alpha"), build_repo("beta")]
-    orchestrator = cast(Any, SimpleNamespace(list_repos=lambda: repos))
+    orchestrator = make_orchestrator(list_repos=lambda: repos)
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for repos to load via worker
         table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count == 2:
+                break
         assert table.row_count == 2
 
 
@@ -57,16 +62,7 @@ async def test_action_show_config_ignored_on_non_main_screen(tui_app: BorgBoiApp
 
 
 async def test_action_daily_backup_pushes_screen(tui_config: Config) -> None:
-    orchestrator = cast(
-        Any,
-        SimpleNamespace(
-            config=tui_config,
-            borg=None,
-            storage=None,
-            s3=None,
-            list_repos=lambda: [build_repo("alpha")],
-        ),
-    )
+    orchestrator = make_orchestrator(config=tui_config, list_repos=lambda: [build_repo("alpha")])
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
@@ -76,22 +72,21 @@ async def test_action_daily_backup_pushes_screen(tui_config: Config) -> None:
 
 
 async def test_action_show_repo_info_pushes_screen(tui_config: Config, repo_with_live_metadata: BorgBoiRepo) -> None:
-    orchestrator = cast(
-        Any,
-        SimpleNamespace(
-            config=tui_config,
-            borg=None,
-            storage=None,
-            s3=None,
-            list_repos=lambda: [repo_with_live_metadata],
-            get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
-            list_archives=lambda _repo: [],
-        ),
+    orchestrator = make_orchestrator(
+        config=tui_config,
+        list_repos=lambda: [repo_with_live_metadata],
+        get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
+        list_archives=lambda _repo: [],
     )
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for repos to load and table to be populated
+        table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count > 0:
+                break
         await pilot.press("i")
         await pilot.pause()
         assert isinstance(app.screen, RepoInfoScreen)
@@ -100,38 +95,30 @@ async def test_action_show_repo_info_pushes_screen(tui_config: Config, repo_with
 async def test_repo_table_row_selected_opens_repo_info_screen(
     tui_config: Config, repo_with_live_metadata: BorgBoiRepo
 ) -> None:
-    orchestrator = cast(
-        Any,
-        SimpleNamespace(
-            config=tui_config,
-            borg=None,
-            storage=None,
-            s3=None,
-            list_repos=lambda: [repo_with_live_metadata],
-            get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
-            list_archives=lambda _repo: [],
-        ),
+    orchestrator = make_orchestrator(
+        config=tui_config,
+        list_repos=lambda: [repo_with_live_metadata],
+        get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
+        list_archives=lambda _repo: [],
     )
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for repos to load and table to be populated
+        table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if table.row_count > 0:
+                break
         await pilot.press("enter")
         await pilot.pause()
         assert isinstance(app.screen, RepoInfoScreen)
 
 
-async def test_returning_from_successful_backup_refreshes_dashboard(tui_config: Config, monkeypatch: Any) -> None:
-    orchestrator = cast(
-        Any,
-        SimpleNamespace(
-            config=tui_config,
-            borg=None,
-            storage=None,
-            s3=None,
-            list_repos=lambda: [build_repo("alpha")],
-        ),
-    )
+async def test_returning_from_successful_backup_refreshes_dashboard(
+    tui_config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    orchestrator = make_orchestrator(config=tui_config, list_repos=lambda: [build_repo("alpha")])
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     repo_refreshes = 0
@@ -177,17 +164,11 @@ async def test_action_daily_backup_ignored_on_non_main_screen(tui_app: BorgBoiAp
 async def test_action_show_repo_info_ignored_on_non_main_screen(
     tui_config: Config, repo_with_live_metadata: BorgBoiRepo
 ) -> None:
-    orchestrator = cast(
-        Any,
-        SimpleNamespace(
-            config=tui_config,
-            borg=None,
-            storage=None,
-            s3=None,
-            list_repos=lambda: [repo_with_live_metadata],
-            get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
-            list_archives=lambda _repo: [],
-        ),
+    orchestrator = make_orchestrator(
+        config=tui_config,
+        list_repos=lambda: [repo_with_live_metadata],
+        get_repo_info=lambda _repo: repo_with_live_metadata.metadata,
+        list_archives=lambda _repo: [],
     )
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
@@ -207,48 +188,51 @@ async def test_action_refresh_reloads_repos(tui_config: Config) -> None:
         call_count += 1
         return [build_repo("alpha")]
 
-    orchestrator = cast(Any, SimpleNamespace(list_repos=counting_list_repos))
+    orchestrator = make_orchestrator(list_repos=counting_list_repos)
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()  # initial load
+        # Wait for initial load
+        table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if not table.loading:
+                break
         initial_count = call_count
 
         await pilot.press("r")
-        await pilot.pause()
+        # Wait for refresh to increase call count
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if call_count > initial_count:
+                break
         assert call_count > initial_count
 
 
 async def test_app_loads_sparkline_history_from_configured_db(
-    tui_config: Config, monkeypatch: Any, tmp_path_factory: Any
+    tui_config: Config,
+    monkeypatch: pytest.MonkeyPatch,
+    patch_sparkline_history: Callable[..., None],
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     captured_db_paths: list[object] = []
     alternate_home = tmp_path_factory.mktemp("alt-home")
 
-    class FakeHistory:
-        def __init__(self, db_path: object = None, engine: object = None) -> None:
-            del engine
-            captured_db_paths.append(db_path)
-
-        def __enter__(self) -> FakeHistory:
-            return self
-
-        def __exit__(self, *exc: object) -> None:
-            return None
-
-        def get_daily_archive_counts(self, days: int) -> list[float]:
-            return [0.0] * days
-
-    orchestrator = cast(Any, SimpleNamespace(list_repos=lambda: [build_repo("alpha")]))
+    orchestrator = make_orchestrator(list_repos=lambda: [build_repo("alpha")])
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
     monkeypatch.setenv("BORGBOI_HOME", alternate_home.as_posix())
-    monkeypatch.setattr("borgboi.tui.app.SQLiteDailyBackupProgressHistory", FakeHistory)
+    patch_sparkline_history([0.0] * 14, captured_db_paths)
 
     today = datetime.now(UTC).date()
     expected_labels = [(today - timedelta(days=13 - index)).strftime("%m/%d") for index in range(14)]
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for sparkline labels to be populated
+        for _ in range(50):
+            await pilot.pause(0.05)
+            label = app.query_one("#sparkline-x-label-0", Static)
+            if label.content:
+                break
         actual_labels = [app.query_one(f"#sparkline-x-label-{index}", Static).content for index in range(14)]
         assert actual_labels == expected_labels
 
@@ -259,11 +243,63 @@ async def test_load_repos_error_shows_notification(tui_config: Config) -> None:
     def failing_list_repos() -> list[BorgBoiRepo]:
         raise RuntimeError("db down")
 
-    orchestrator = cast(Any, SimpleNamespace(list_repos=failing_list_repos))
+    orchestrator = make_orchestrator(list_repos=failing_list_repos)
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
 
     async with app.run_test() as pilot:
-        await pilot.pause()
+        # Wait for loading to complete (even with error)
         table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            if not table.loading:
+                break
         assert table.loading is False
         assert table.row_count == 0
+
+
+async def test_app_captures_expected_tui_spans(
+    fake_tui_tracer: FakeTracer,
+    patch_sparkline_history: Callable[..., None],
+    tui_config: Config,
+) -> None:
+    tui_config.telemetry.enabled = True
+    orchestrator = make_orchestrator(list_repos=lambda: [build_repo("alpha")])
+    app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
+    patch_sparkline_history([1.0] * 14)
+
+    async with app.run_test() as pilot:
+        table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            label = app.query_one("#sparkline-x-label-0", Static)
+            if not table.loading and label.content:
+                break
+
+    assert fake_tui_tracer.started_spans[0] == "tui.app.mount"
+    assert set(fake_tui_tracer.started_spans[1:]) == {"tui.load_repos", "tui.load_sparkline"}
+
+
+async def test_app_skips_tui_spans_when_capture_disabled(
+    fake_tui_tracer: FakeTracer,
+    monkeypatch: pytest.MonkeyPatch,
+    patch_sparkline_history: Callable[..., None],
+    tmp_path: Any,
+) -> None:
+    monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
+
+    config = Config(offline=True, telemetry=TelemetryConfig(capture_tui=False))
+    config.borgboi_dir.mkdir(parents=True, exist_ok=True)
+
+    orchestrator = make_orchestrator(list_repos=lambda: [build_repo("alpha")])
+    app = BorgBoiApp(config=config, orchestrator=orchestrator)
+    patch_sparkline_history([1.0] * 14)
+
+    async with app.run_test() as pilot:
+        table = app.query_one("#repos-table", DataTable)
+        for _ in range(50):
+            await pilot.pause(0.05)
+            label = app.query_one("#sparkline-x-label-0", Static)
+            if not table.loading and label.content:
+                break
+
+    assert fake_tui_tracer.started_spans == []

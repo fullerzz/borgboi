@@ -78,6 +78,17 @@ class LoggingConfig(BaseModel):
         return value
 
 
+class TelemetryConfig(BaseModel):
+    """OpenTelemetry configuration for tracing and log export."""
+
+    enabled: bool = False
+    service_name: str = "borgboi"
+    trace_endpoint: str | None = None
+    export_logs: bool = False
+    logs_endpoint: str | None = None
+    capture_tui: bool = True
+
+
 class Config(BaseSettings):
     """Main configuration container."""
 
@@ -91,6 +102,7 @@ class Config(BaseSettings):
     borg: BorgConfig = Field(default_factory=BorgConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     offline: bool = False
     debug: bool = False
 
@@ -353,6 +365,13 @@ CONFIG_ENV_VAR_MAP: dict[str, str] = {
     "logging.level": "BORGBOI_LOGGING__LEVEL",
     "logging.max_bytes": "BORGBOI_LOGGING__MAX_BYTES",
     "logging.backup_count": "BORGBOI_LOGGING__BACKUP_COUNT",
+    # Telemetry
+    "telemetry.enabled": "BORGBOI_TELEMETRY__ENABLED",
+    "telemetry.service_name": "BORGBOI_TELEMETRY__SERVICE_NAME",
+    "telemetry.trace_endpoint": "BORGBOI_TELEMETRY__TRACE_ENDPOINT",
+    "telemetry.export_logs": "BORGBOI_TELEMETRY__EXPORT_LOGS",
+    "telemetry.logs_endpoint": "BORGBOI_TELEMETRY__LOGS_ENDPOINT",
+    "telemetry.capture_tui": "BORGBOI_TELEMETRY__CAPTURE_TUI",
 }
 
 

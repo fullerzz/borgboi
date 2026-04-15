@@ -28,6 +28,7 @@ from borgboi.core.models import (
     RetentionPolicy,
 )
 from borgboi.core.output import BaseOutputHandler, DefaultOutputHandler, render_command_with_fallback
+from borgboi.core.telemetry import get_tracer, set_span_attributes
 from borgboi.core.validator import Validator
 from borgboi.lib.passphrase import (
     generate_secure_passphrase,
@@ -40,6 +41,7 @@ from borgboi.models import BorgBoiRepo
 from borgboi.storage.base import RepositoryStorage
 
 logger = get_logger(__name__)
+tracer = get_tracer(__name__)
 
 
 class Orchestrator:
@@ -166,73 +168,76 @@ class Orchestrator:
             ValidationError: If parameters are invalid
             StorageError: If saving the repository fails
         """
-        # Resolve or generate passphrase
-        logger.info("Creating new Borg repository", repo_name=name, repo_path=path, backup_target=backup_target)
-        resolved_passphrase = resolve_passphrase(
-            repo_name=name,
-            cli_passphrase=passphrase,
-            allow_env_fallback=True,
-            env_var_name="BORG_NEW_PASSPHRASE",
-        )
+        with tracer.start_as_current_span("orchestrator.create_repo") as span:
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.repo.name": name,
+                    "borgboi.repo.path": path,
+                    "borgboi.repo.backup_target": backup_target,
+                    "borgboi.mode.offline": self.config.offline,
+                    "borgboi.storage.backend": type(self.storage).__name__,
+                },
+            )
 
-        if resolved_passphrase is None:
-            resolved_passphrase = generate_secure_passphrase()
-            logger.info("Generated passphrase for repo", repo_name=name)
-            self.output.on_log("warning", f"Generated passphrase for repo '{name}'")
-            self.output.on_log("info", f"Passphrase: {resolved_passphrase}")
-            self.output.on_log("warning", "SAVE THIS PASSPHRASE SECURELY!")
+            logger.info("Creating new Borg repository", repo_name=name, repo_path=path, backup_target=backup_target)
+            resolved_passphrase = resolve_passphrase(
+                repo_name=name,
+                cli_passphrase=passphrase,
+                allow_env_fallback=True,
+                env_var_name="BORG_NEW_PASSPHRASE",
+            )
 
-        # Save passphrase to file
-        passphrase_file_path = save_passphrase_to_file(name, resolved_passphrase)
-        logger.info("Passphrase saved to file", repo_name=name, passphrase_file=str(passphrase_file_path))
-        self.output.on_log("info", f"Passphrase saved to: {passphrase_file_path}")
+            if resolved_passphrase is None:
+                resolved_passphrase = generate_secure_passphrase()
+                logger.info("Generated passphrase for repo", repo_name=name)
+                self.output.on_log("warning", f"Generated passphrase for repo '{name}'")
+                self.output.on_log("info", f"Passphrase: {resolved_passphrase}")
+                self.output.on_log("warning", "SAVE THIS PASSPHRASE SECURELY!")
 
-        # Create repo directory if needed
-        repo_path = Path(path)
-        if repo_path.is_file():
-            logger.error("Repository path is a file, not a directory", repo_path=str(repo_path))
-            raise ValidationError(f"Path {repo_path} is a file, not a directory", field="path")
-        if not repo_path.exists():
-            repo_path.mkdir(parents=True)
-            logger.debug("Created repository directory", repo_path=str(repo_path))
+            passphrase_file_path = save_passphrase_to_file(name, resolved_passphrase)
+            logger.info("Passphrase saved to file", repo_name=name, passphrase_file=str(passphrase_file_path))
+            self.output.on_log("info", f"Passphrase saved to: {passphrase_file_path}")
 
-        # Determine if additional free space config should be applied
-        # (skip for tmp/private directories)
-        config_free_space = not self._should_skip_additional_free_space(repo_path)
-        if not config_free_space:
-            logger.debug("Skipping additional_free_space config for tmp/private directory", repo_path=str(repo_path))
+            repo_path = Path(path)
+            if repo_path.is_file():
+                logger.error("Repository path is a file, not a directory", repo_path=str(repo_path))
+                raise ValidationError(f"Path {repo_path} is a file, not a directory", field="path")
+            if not repo_path.exists():
+                repo_path.mkdir(parents=True)
+                logger.debug("Created repository directory", repo_path=str(repo_path))
 
-        # Initialize Borg repository
-        logger.debug("Initializing Borg repository", repo_path=str(repo_path), config_free_space=config_free_space)
-        self.borg.init(
-            repo_path.as_posix(),
-            passphrase=resolved_passphrase,
-            additional_free_space=self.config.borg.additional_free_space if config_free_space else None,
-        )
+            config_free_space = not self._should_skip_additional_free_space(repo_path)
+            if not config_free_space:
+                logger.debug(
+                    "Skipping additional_free_space config for tmp/private directory", repo_path=str(repo_path)
+                )
 
-        # Get repository info
-        repo_info = self.borg.info(repo_path.as_posix(), passphrase=resolved_passphrase)
+            logger.debug("Initializing Borg repository", repo_path=str(repo_path), config_free_space=config_free_space)
+            self.borg.init(
+                repo_path.as_posix(),
+                passphrase=resolved_passphrase,
+                additional_free_space=self.config.borg.additional_free_space if config_free_space else None,
+            )
 
-        # Create repository model
-        repo = BorgBoiRepo(
-            path=repo_path.as_posix(),
-            backup_target=backup_target,
-            name=name,
-            hostname=socket.gethostname(),
-            os_platform=system(),
-            metadata=repo_info,
-            passphrase=None,  # Don't store in DB
-            passphrase_file_path=passphrase_file_path.as_posix(),
-            passphrase_migrated=True,
-        )
+            repo_info = self.borg.info(repo_path.as_posix(), passphrase=resolved_passphrase)
+            repo = BorgBoiRepo(
+                path=repo_path.as_posix(),
+                backup_target=backup_target,
+                name=name,
+                hostname=socket.gethostname(),
+                os_platform=system(),
+                metadata=repo_info,
+                passphrase=None,
+                passphrase_file_path=passphrase_file_path.as_posix(),
+                passphrase_migrated=True,
+            )
 
-        # Save to storage
-        logger.debug("Saving repository to storage", repo_name=name)
-        self.storage.save(repo)
-        logger.info("Repository created successfully", repo_name=name, repo_path=repo.path)
-        self.output.on_log("info", f"Created new Borg repo at {repo.path}")
-
-        return repo
+            logger.debug("Saving repository to storage", repo_name=name)
+            self.storage.save(repo)
+            logger.info("Repository created successfully", repo_name=name, repo_path=repo.path)
+            self.output.on_log("info", f"Created new Borg repo at {repo.path}")
+            return repo
 
     def import_repo(
         self,
@@ -256,121 +261,138 @@ class Orchestrator:
             ValidationError: If parameters are invalid or the repo cannot be accessed
             StorageError: If passphrase or repository metadata cannot be saved
         """
-        normalized_name = name.strip()
-        logger.info(
-            "Importing existing Borg repository",
-            repo_name=normalized_name,
-            repo_path=path,
-            backup_target=backup_target,
-        )
-        Validator.validate_repo_name(normalized_name)
-
-        normalized_repo_path = self._normalize_existing_directory_path(path, field="path", label="Repository path")
-        normalized_backup_target = self._normalize_existing_directory_path(
-            backup_target,
-            field="backup_target",
-            label="Backup target path",
-        )
-        logger.debug("Validated paths", repo_path=normalized_repo_path, backup_target=normalized_backup_target)
-
-        self._ensure_repo_name_available(normalized_name)
-        self._ensure_repo_path_available(normalized_repo_path)
-        logger.debug(
-            "Validated repo name and path are available", repo_name=normalized_name, repo_path=normalized_repo_path
-        )
-
-        resolved_passphrase = resolve_passphrase(
-            repo_name=normalized_name,
-            cli_passphrase=passphrase,
-            allow_env_fallback=True,
-        )
-
-        try:
-            repo_info = self.borg.info(normalized_repo_path, passphrase=resolved_passphrase)
-            logger.debug("Retrieved repository info from Borg", repo_path=normalized_repo_path)
-        except Exception as error:
-            logger.exception(
-                "Failed to access Borg repository",
-                repo_path=normalized_repo_path,
-                error=str(error),
+        with tracer.start_as_current_span("orchestrator.import_repo") as span:
+            normalized_name = name.strip()
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.repo.name": normalized_name,
+                    "borgboi.repo.path": path,
+                    "borgboi.repo.backup_target": backup_target,
+                    "borgboi.mode.offline": self.config.offline,
+                    "borgboi.storage.backend": type(self.storage).__name__,
+                },
             )
-            raise ValidationError(
-                f"Unable to access Borg repository at {normalized_repo_path}: {error}",
-                field="path",
-                value=normalized_repo_path,
-            ) from error
+            logger.info(
+                "Importing existing Borg repository",
+                repo_name=normalized_name,
+                repo_path=path,
+                backup_target=backup_target,
+            )
+            Validator.validate_repo_name(normalized_name)
 
-        is_encrypted = repo_info is not None and repo_info.encryption.mode != "none"
-        logger.debug("Repository encryption status", repo_path=normalized_repo_path, is_encrypted=is_encrypted)
-        if is_encrypted:
-            logger.debug("Verifying repokey accessibility", repo_path=normalized_repo_path)
-            self._verify_repokey_accessible(normalized_repo_path, resolved_passphrase)
+            normalized_repo_path = self._normalize_existing_directory_path(path, field="path", label="Repository path")
+            normalized_backup_target = self._normalize_existing_directory_path(
+                backup_target,
+                field="backup_target",
+                label="Backup target path",
+            )
+            logger.debug("Validated paths", repo_path=normalized_repo_path, backup_target=normalized_backup_target)
 
-        passphrase_file_path: Path | None = None
-        previous_passphrase: str | None = None
-        if resolved_passphrase is not None and is_encrypted:
+            self._ensure_repo_name_available(normalized_name)
+            self._ensure_repo_path_available(normalized_repo_path)
+            logger.debug(
+                "Validated repo name and path are available",
+                repo_name=normalized_name,
+                repo_path=normalized_repo_path,
+            )
+
+            resolved_passphrase = resolve_passphrase(
+                repo_name=normalized_name,
+                cli_passphrase=passphrase,
+                allow_env_fallback=True,
+            )
+
             try:
-                from borgboi.lib.passphrase import get_passphrase_file_path
-
-                existing_path = get_passphrase_file_path(normalized_name)
-                if existing_path.exists():
-                    previous_passphrase = existing_path.read_text(encoding="utf-8")
-                    logger.debug("Found existing passphrase file", repo_name=normalized_name, path=str(existing_path))
-                passphrase_file_path = save_passphrase_to_file(normalized_name, resolved_passphrase)
-                logger.info(
-                    "Passphrase saved to file", repo_name=normalized_name, passphrase_file=str(passphrase_file_path)
-                )
-            except OSError as error:
+                repo_info = self.borg.info(normalized_repo_path, passphrase=resolved_passphrase)
+                logger.debug("Retrieved repository info from Borg", repo_path=normalized_repo_path)
+            except Exception as error:
                 logger.exception(
-                    "Failed to save passphrase for repository",
+                    "Failed to access Borg repository",
+                    repo_path=normalized_repo_path,
+                    error=str(error),
+                )
+                raise ValidationError(
+                    f"Unable to access Borg repository at {normalized_repo_path}: {error}",
+                    field="path",
+                    value=normalized_repo_path,
+                ) from error
+
+            is_encrypted = repo_info is not None and repo_info.encryption.mode != "none"
+            logger.debug("Repository encryption status", repo_path=normalized_repo_path, is_encrypted=is_encrypted)
+            if is_encrypted:
+                logger.debug("Verifying repokey accessibility", repo_path=normalized_repo_path)
+                self._verify_repokey_accessible(normalized_repo_path, resolved_passphrase)
+
+            passphrase_file_path: Path | None = None
+            previous_passphrase: str | None = None
+            if resolved_passphrase is not None and is_encrypted:
+                try:
+                    from borgboi.lib.passphrase import get_passphrase_file_path
+
+                    existing_path = get_passphrase_file_path(normalized_name)
+                    if existing_path.exists():
+                        previous_passphrase = existing_path.read_text(encoding="utf-8")
+                        logger.debug(
+                            "Found existing passphrase file", repo_name=normalized_name, path=str(existing_path)
+                        )
+                    passphrase_file_path = save_passphrase_to_file(normalized_name, resolved_passphrase)
+                    logger.info(
+                        "Passphrase saved to file",
+                        repo_name=normalized_name,
+                        passphrase_file=str(passphrase_file_path),
+                    )
+                except OSError as error:
+                    logger.exception(
+                        "Failed to save passphrase for repository",
+                        repo_name=normalized_name,
+                        error=str(error),
+                    )
+                    raise StorageError(
+                        f"Failed to save passphrase for repository {normalized_name}: {error}",
+                        operation="save_passphrase",
+                        cause=error,
+                    ) from error
+                self.output.on_log("info", f"Passphrase saved to: {passphrase_file_path}")
+
+            repo = BorgBoiRepo(
+                path=normalized_repo_path,
+                backup_target=normalized_backup_target,
+                name=normalized_name,
+                hostname=socket.gethostname(),
+                os_platform=system(),
+                metadata=repo_info,
+                passphrase=None,
+                passphrase_file_path=passphrase_file_path.as_posix() if passphrase_file_path else None,
+                passphrase_migrated=True,
+            )
+
+            try:
+                logger.debug("Saving imported repository to storage", repo_name=normalized_name)
+                self.storage.save(repo)
+            except Exception as error:
+                logger.exception(
+                    "Failed to save imported repository",
                     repo_name=normalized_name,
                     error=str(error),
                 )
+                self._cleanup_import_passphrase_file(passphrase_file_path, normalized_name, previous_passphrase)
+                if isinstance(error, StorageError):
+                    raise
                 raise StorageError(
-                    f"Failed to save passphrase for repository {normalized_name}: {error}",
-                    operation="save_passphrase",
+                    f"Failed to save repository {normalized_name}: {error}",
+                    operation="save",
                     cause=error,
                 ) from error
-            self.output.on_log("info", f"Passphrase saved to: {passphrase_file_path}")
 
-        repo = BorgBoiRepo(
-            path=normalized_repo_path,
-            backup_target=normalized_backup_target,
-            name=normalized_name,
-            hostname=socket.gethostname(),
-            os_platform=system(),
-            metadata=repo_info,
-            passphrase=None,
-            passphrase_file_path=passphrase_file_path.as_posix() if passphrase_file_path else None,
-            passphrase_migrated=True,
-        )
-
-        try:
-            logger.debug("Saving imported repository to storage", repo_name=normalized_name)
-            self.storage.save(repo)
-        except Exception as error:
-            logger.exception(
-                "Failed to save imported repository",
+            logger.info(
+                "Repository imported successfully",
                 repo_name=normalized_name,
-                error=str(error),
+                repo_path=repo.path,
+                is_encrypted=is_encrypted,
             )
-            self._cleanup_import_passphrase_file(passphrase_file_path, normalized_name, previous_passphrase)
-            if isinstance(error, StorageError):
-                raise
-            raise StorageError(
-                f"Failed to save repository {normalized_name}: {error}",
-                operation="save",
-                cause=error,
-            ) from error
-
-        logger.info(
-            "Repository imported successfully",
-            repo_name=normalized_name,
-            repo_path=repo.path,
-            is_encrypted=is_encrypted,
-        )
-        self.output.on_log("info", f"Imported existing Borg repo at {repo.path}")
-        return repo
+            self.output.on_log("info", f"Imported existing Borg repo at {repo.path}")
+            return repo
 
     def delete_repo(
         self,
@@ -393,39 +415,47 @@ class Orchestrator:
             RepositoryNotFoundError: If repository not found
             ValidationError: If repository is not local
         """
-        repo = self.get_repo(name=name, path=path)
-        logger.info(
-            "Deleting repository",
-            repo_name=repo.name,
-            repo_path=repo.path,
-            dry_run=dry_run,
-            delete_from_s3=delete_from_s3,
-        )
+        with tracer.start_as_current_span("orchestrator.delete_repo") as span:
+            repo = self.get_repo(name=name, path=path)
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.repo.name": repo.name,
+                    "borgboi.repo.path": repo.path,
+                    "borgboi.delete.dry_run": dry_run,
+                    "borgboi.delete.from_s3": delete_from_s3,
+                },
+            )
+            logger.info(
+                "Deleting repository",
+                repo_name=repo.name,
+                repo_path=repo.path,
+                dry_run=dry_run,
+                delete_from_s3=delete_from_s3,
+            )
 
-        if not self._is_local(repo):
-            logger.error("Cannot delete remote repository", repo_name=repo.name, hostname=repo.hostname)
-            raise ValidationError("Repository must be local to delete", field="repository")
+            if not self._is_local(repo):
+                logger.error("Cannot delete remote repository", repo_name=repo.name, hostname=repo.hostname)
+                raise ValidationError("Repository must be local to delete", field="repository")
 
-        resolved_passphrase = self.resolve_passphrase(repo, passphrase)
+            resolved_passphrase = self.resolve_passphrase(repo, passphrase)
+            logger.debug("Executing Borg delete", repo_name=repo.name, repo_path=repo.path, dry_run=dry_run)
+            for line in self.borg.delete(repo.path, dry_run=dry_run, passphrase=resolved_passphrase):
+                self.output.on_stderr(line)
 
-        # Delete using Borg client
-        logger.debug("Executing Borg delete", repo_name=repo.name, repo_path=repo.path, dry_run=dry_run)
-        for line in self.borg.delete(repo.path, dry_run=dry_run, passphrase=resolved_passphrase):
-            self.output.on_stderr(line)
+            if not dry_run:
+                logger.debug("Deleting repository from storage", repo_name=repo.name)
+                self.storage.delete(repo.name)
+                self._delete_excludes_file(repo.name)
+            else:
+                logger.debug("Dry run mode: skipping storage deletion", repo_name=repo.name)
 
-        if not dry_run:
-            logger.debug("Deleting repository from storage", repo_name=repo.name)
-            self.storage.delete(repo.name)
-            self._delete_excludes_file(repo.name)
-        else:
-            logger.debug("Dry run mode: skipping storage deletion", repo_name=repo.name)
+            if delete_from_s3:
+                self.delete_from_s3(repo, dry_run=dry_run)
 
-        if delete_from_s3:
-            self.delete_from_s3(repo, dry_run=dry_run)
-
-        if not dry_run:
-            logger.info("Repository deleted successfully", repo_name=repo.name, repo_path=repo.path)
-            self.output.on_log("info", f"Deleted repository {repo.name}")
+            if not dry_run:
+                logger.info("Repository deleted successfully", repo_name=repo.name, repo_path=repo.path)
+                self.output.on_log("info", f"Deleted repository {repo.name}")
 
     def get_repo(
         self,
@@ -447,12 +477,26 @@ class Orchestrator:
             RepositoryNotFoundError: If not found
             ValueError: If neither name nor path provided
         """
-        repo = self.storage.get_by_name_or_path(name=name, path=path, hostname=hostname)
+        with tracer.start_as_current_span("orchestrator.get_repo") as span:
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.repo.name": name,
+                    "borgboi.repo.path": path,
+                    "borgboi.repo.hostname": hostname,
+                },
+            )
+            repo = self.storage.get_by_name_or_path(name=name, path=path, hostname=hostname)
+            repo = self._auto_migrate_passphrase(repo)
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.repo.name": repo.name,
+                    "borgboi.repo.path": repo.path,
+                },
+            )
 
-        # Auto-migrate passphrase if needed
-        repo = self._auto_migrate_passphrase(repo)
-
-        return repo
+            return repo
 
     def list_repos(self) -> list[BorgBoiRepo]:
         """List all repositories.
@@ -460,7 +504,17 @@ class Orchestrator:
         Returns:
             List of all repositories
         """
-        return self.storage.list_all()
+        with tracer.start_as_current_span("orchestrator.list_repos") as span:
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.mode.offline": self.config.offline,
+                    "borgboi.storage.backend": type(self.storage).__name__,
+                },
+            )
+            repos = self.storage.list_all()
+            span.set_attribute("borgboi.repo.count", len(repos))
+            return repos
 
     def update_repo_storage_quota(
         self,
@@ -611,7 +665,6 @@ class Orchestrator:
                 field="retention_policy",
             )
 
-        # Validate and update retention policy if provided
         if retention_policy is not None:
             Validator.validate_retention_policy(retention_policy)
             repo.retention_policy = retention_policy
@@ -634,7 +687,6 @@ class Orchestrator:
             logger.info("Repository retention policy cleared", repo_name=repo.name)
             self.output.on_log("info", f"Cleared retention policy override for repo '{repo.name}'")
 
-        # Update storage quota if provided
         updated_quota: str | None = None
         if storage_quota is not None:
             if storage_quota == "":
@@ -650,14 +702,12 @@ class Orchestrator:
                 self.output.on_log("info", f"Cleared storage quota override for repo '{repo.name}'")
                 updated_quota = None
             else:
-                # Reuse existing quota update logic
                 updated_quota = self.update_repo_storage_quota(
                     storage_quota,
                     name=repo.name,
                     passphrase=passphrase,
                 )
 
-        # Save repository with updated retention (if no quota update, or quota succeeded)
         if retention_policy is not None or clear_retention_policy:
             self.storage.save(repo)
 
@@ -681,36 +731,50 @@ class Orchestrator:
         Returns:
             Name of the created archive
         """
-        resolved_repo = self._resolve_repo(repo)
-        resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        with tracer.start_as_current_span("orchestrator.backup") as span:
+            resolved_repo = self._resolve_repo(repo)
+            resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
 
-        excludes_path = self._resolve_excludes_path_for_backup(resolved_repo.name)
-        logger.debug(
-            "Resolved excludes path for backup",
-            repo_name=resolved_repo.name,
-            excludes_path=str(excludes_path),
-        )
-        archive_name = create_archive_name()
-        logger.info(
-            "Creating backup archive",
-            repo_name=resolved_repo.name,
-            archive_name=archive_name,
-            backup_target=resolved_repo.backup_target,
-        )
+            excludes_path = self._resolve_excludes_path_for_backup(resolved_repo.name)
+            logger.debug(
+                "Resolved excludes path for backup",
+                repo_name=resolved_repo.name,
+                excludes_path=str(excludes_path),
+            )
+            archive_name = create_archive_name()
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.repo.name": resolved_repo.name,
+                    "borgboi.repo.path": resolved_repo.path,
+                    "borgboi.repo.backup_target": resolved_repo.backup_target,
+                    "borgboi.archive.name": archive_name,
+                },
+            )
+            logger.info(
+                "Creating backup archive",
+                repo_name=resolved_repo.name,
+                archive_name=archive_name,
+                backup_target=resolved_repo.backup_target,
+            )
 
-        log_stream = self.borg.create(
-            resolved_repo.path,
-            resolved_repo.backup_target,
-            archive_name=archive_name,
-            options=options,
-            exclude_file=excludes_path.as_posix(),
-            passphrase=resolved_passphrase,
-        )
-        render_command_with_fallback(self.output, "Creating new archive", "Archive created successfully", log_stream)
+            log_stream = self.borg.create(
+                resolved_repo.path,
+                resolved_repo.backup_target,
+                archive_name=archive_name,
+                options=options,
+                exclude_file=excludes_path.as_posix(),
+                passphrase=resolved_passphrase,
+            )
+            render_command_with_fallback(
+                self.output, "Creating new archive", "Archive created successfully", log_stream
+            )
 
-        logger.info("Backup archive created successfully", repo_name=resolved_repo.name, archive_name=archive_name)
-        self.output.on_log("info", "Archive created successfully", archive_name=archive_name, repo=resolved_repo.name)
-        return archive_name
+            logger.info("Backup archive created successfully", repo_name=resolved_repo.name, archive_name=archive_name)
+            self.output.on_log(
+                "info", "Archive created successfully", archive_name=archive_name, repo=resolved_repo.name
+            )
+            return archive_name
 
     def daily_backup(
         self,
@@ -725,48 +789,54 @@ class Orchestrator:
             passphrase: Optional passphrase override
             sync_to_s3: Whether to sync to S3 after backup
         """
-        resolved_repo = self._resolve_repo(repo)
-        resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
-        logger.info(
-            "Starting daily backup workflow",
-            repo_name=resolved_repo.name,
-            repo_path=resolved_repo.path,
-            sync_to_s3=sync_to_s3 and not self.config.offline and self.s3 is not None,
-        )
-
-        # Create archive
-        self.output.on_log("info", "Creating new archive...")
-        logger.debug("Creating archive for daily backup", repo_name=resolved_repo.name)
-        self.backup(resolved_repo, passphrase=resolved_passphrase)
-
-        # Prune old archives
-        self.output.on_log("info", "Pruning old backups...")
-        logger.debug("Pruning old archives", repo_name=resolved_repo.name)
-        self.prune(resolved_repo, passphrase=resolved_passphrase)
-
-        # Compact repository
-        self.output.on_log("info", "Compacting repository...")
-        logger.debug("Compacting repository", repo_name=resolved_repo.name)
-        self.compact(resolved_repo, passphrase=resolved_passphrase)
-
-        # Sync to S3 (if not offline and requested)
-        if sync_to_s3 and not self.config.offline and self.s3:
-            self.output.on_log("info", "Syncing to S3...")
-            logger.debug("Syncing repository to S3", repo_name=resolved_repo.name)
-            self.sync_to_s3(resolved_repo)
-        elif sync_to_s3:
-            logger.warning(
-                "S3 sync requested but not available", offline=self.config.offline, s3_configured=self.s3 is not None
+        with tracer.start_as_current_span("orchestrator.daily_backup") as span:
+            resolved_repo = self._resolve_repo(repo)
+            resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.repo.name": resolved_repo.name,
+                    "borgboi.repo.path": resolved_repo.path,
+                    "borgboi.sync.to_s3": sync_to_s3 and not self.config.offline and self.s3 is not None,
+                },
+            )
+            logger.info(
+                "Starting daily backup workflow",
+                repo_name=resolved_repo.name,
+                repo_path=resolved_repo.path,
+                sync_to_s3=sync_to_s3 and not self.config.offline and self.s3 is not None,
             )
 
-        # Refresh metadata
-        logger.debug("Refreshing repository metadata after daily backup", repo_name=resolved_repo.name)
-        repo_info = self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
-        resolved_repo.metadata = repo_info
-        self.storage.save(resolved_repo)
+            self.output.on_log("info", "Creating new archive...")
+            logger.debug("Creating archive for daily backup", repo_name=resolved_repo.name)
+            self.backup(resolved_repo, passphrase=resolved_passphrase)
 
-        logger.info("Daily backup completed successfully", repo_name=resolved_repo.name)
-        self.output.on_log("info", "Daily backup completed successfully")
+            self.output.on_log("info", "Pruning old backups...")
+            logger.debug("Pruning old archives", repo_name=resolved_repo.name)
+            self.prune(resolved_repo, passphrase=resolved_passphrase)
+
+            self.output.on_log("info", "Compacting repository...")
+            logger.debug("Compacting repository", repo_name=resolved_repo.name)
+            self.compact(resolved_repo, passphrase=resolved_passphrase)
+
+            if sync_to_s3 and not self.config.offline and self.s3:
+                self.output.on_log("info", "Syncing to S3...")
+                logger.debug("Syncing repository to S3", repo_name=resolved_repo.name)
+                self.sync_to_s3(resolved_repo)
+            elif sync_to_s3:
+                logger.warning(
+                    "S3 sync requested but not available",
+                    offline=self.config.offline,
+                    s3_configured=self.s3 is not None,
+                )
+
+            logger.debug("Refreshing repository metadata after daily backup", repo_name=resolved_repo.name)
+            repo_info = self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
+            resolved_repo.metadata = repo_info
+            self.storage.save(resolved_repo)
+
+            logger.info("Daily backup completed successfully", repo_name=resolved_repo.name)
+            self.output.on_log("info", "Daily backup completed successfully")
 
     def restore_archive(
         self,
@@ -832,7 +902,6 @@ class Orchestrator:
 
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
 
-        # Delete archive
         logger.debug(
             "Executing Borg delete for archive",
             repo_name=resolved_repo.name,
@@ -848,11 +917,9 @@ class Orchestrator:
             self.output.on_stderr(line)
 
         if not dry_run:
-            # Compact after deletion to reclaim space
             logger.debug("Compacting repository after archive deletion", repo_name=resolved_repo.name)
             self.compact(resolved_repo, passphrase=resolved_passphrase)
 
-            # Refresh metadata
             logger.debug("Refreshing repository metadata after archive deletion", repo_name=resolved_repo.name)
             repo_info = self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
             resolved_repo.metadata = repo_info
@@ -1072,10 +1139,17 @@ class Orchestrator:
         Returns:
             RepoInfo from Borg
         """
-        resolved_repo = self._resolve_repo(repo)
-        resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
-
-        return self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
+        with tracer.start_as_current_span("orchestrator.get_repo_info") as span:
+            resolved_repo = self._resolve_repo(repo)
+            resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.repo.name": resolved_repo.name,
+                    "borgboi.repo.path": resolved_repo.path,
+                },
+            )
+            return self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
 
     def get_two_most_recent_archives(
         self,
@@ -1162,10 +1236,7 @@ class Orchestrator:
             )
             raise ValidationError("Exclude list already created", field="excludes")
 
-        # Ensure directory exists
         excludes_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Copy source file
         shutil.copy(source_file, excludes_path.as_posix())
 
         if not excludes_path.exists():

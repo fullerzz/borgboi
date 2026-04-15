@@ -1,3 +1,4 @@
+import logging
 import os
 import warnings
 from collections.abc import Generator
@@ -11,6 +12,8 @@ from moto import mock_aws
 from mypy_boto3_dynamodb import DynamoDBClient
 from mypy_boto3_s3 import S3Client
 
+from borgboi.core.logging import _HANDLER_NAME, _LOGGER_NAMESPACE, _LoggingState
+from borgboi.core.telemetry import reset_telemetry_for_tests
 from borgboi.models import BorgBoiRepo
 from tests.orchestrator_test import EXCLUDES_SRC
 
@@ -68,6 +71,29 @@ def _common_env_config(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest
     existing_config.aws.dynamodb_repos_table = DYNAMO_TABLE_NAME
     existing_config.aws.dynamodb_archives_table = DYNAMO_ARCHIVES_TABLE_NAME
     existing_config.aws.s3_bucket = "test"
+
+
+@pytest.fixture(autouse=True)
+def _reset_global_logging_and_telemetry() -> Generator[None]:
+    """Reset global logging propagation and telemetry state after each test.
+
+    Tests that invoke the CLI launcher (e.g. via ``invoke_cli``) may enable file
+    logging, which sets ``borgboi`` logger propagation to ``False``. Left
+    unreset, this breaks ``caplog`` in later tests on the same xdist worker
+    because captured warnings never propagate to the pytest log handler.
+    """
+    yield
+    namespace_logger = logging.getLogger(_LOGGER_NAMESPACE)
+    for handler in list(namespace_logger.handlers):
+        if handler.get_name() != _HANDLER_NAME:
+            continue
+        namespace_logger.removeHandler(handler)
+        handler.close()
+
+    _LoggingState.active_log_file = None
+    namespace_logger.setLevel(logging.NOTSET)
+    namespace_logger.propagate = True
+    reset_telemetry_for_tests()
 
 
 @pytest.fixture

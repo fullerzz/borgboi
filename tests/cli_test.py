@@ -1,16 +1,30 @@
 import importlib
 import json
+import re
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
 import borgboi.cli as cli_package
 import borgboi.config as config_module
 import borgboi.core.logging as logging_module
+from borgboi.config import Config, LoggingConfig, TelemetryConfig
+from borgboi.core.telemetry import TelemetrySession, reset_telemetry_for_tests
 from tests.cli_helpers import invoke_cli
 
 cli_main = importlib.import_module("borgboi.cli.main")
+BorgBoiContext = cli_main.BorgBoiContext
+_print_exit_summary = cli_main._print_exit_summary
+_resolve_trace_endpoint = cli_main._resolve_trace_endpoint
+
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    """Strip ANSI SGR escape codes (e.g. from FORCE_COLOR=1 in CI environments)."""
+    return _ANSI_ESCAPE.sub("", text)
 
 
 def _read_active_log_entries() -> list[dict[str, object]]:
@@ -222,3 +236,186 @@ def test_s3_stats_logs_offline_skip_warning(monkeypatch: pytest.MonkeyPatch, tmp
         and entry["level"] == "info"
         for entry in log_entries
     )
+
+
+def test_cli_flushes_process_telemetry_even_when_current_run_is_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    reset_telemetry_for_tests()
+    flush_calls: list[bool] = []
+
+    class _NoOpSpan:
+        def __enter__(self) -> "_NoOpSpan":
+            return self
+
+        def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+            del exc_type, exc, tb
+
+        def set_attribute(self, _key: str, _value: object) -> None:
+            pass
+
+    class _NoOpTracer:
+        def start_as_current_span(self, _name: str) -> _NoOpSpan:
+            return _NoOpSpan()
+
+    monkeypatch.setattr(
+        cli_main, "configure_telemetry", lambda _cfg: TelemetrySession(enabled=False, logs_export_enabled=False)
+    )
+    monkeypatch.setattr(cli_main, "configure_logging", lambda _cfg: None)
+    monkeypatch.setattr(cli_main, "telemetry_is_active", lambda: True)
+
+    def _force_flush_telemetry() -> bool:
+        flush_calls.append(True)
+        return True
+
+    monkeypatch.setattr(cli_main, "force_flush_telemetry", _force_flush_telemetry)
+    monkeypatch.setattr(cli_main, "_TRACER", _NoOpTracer())
+
+    exit_code = invoke_cli(cli_main.cli, ["version"])
+
+    assert exit_code == 0
+    assert flush_calls == [True]
+
+
+def test_cli_skips_root_span_when_telemetry_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _RecordingTracer:
+        def __init__(self) -> None:
+            self.started_spans: list[str] = []
+
+        def start_as_current_span(self, name: str) -> Any:
+            self.started_spans.append(name)
+            raise AssertionError("telemetry-disabled CLI should not start spans")
+
+    monkeypatch.setattr(
+        cli_main, "configure_telemetry", lambda _cfg: TelemetrySession(enabled=False, logs_export_enabled=False)
+    )
+    monkeypatch.setattr(cli_main, "configure_logging", lambda _cfg: None)
+    monkeypatch.setattr(cli_main, "telemetry_is_active", lambda: False)
+    tracer = _RecordingTracer()
+    monkeypatch.setattr(cli_main, "_TRACER", tracer)
+
+    exit_code = invoke_cli(cli_main.cli, ["version"])
+
+    assert exit_code == 0
+    assert tracer.started_spans == []
+
+
+class TestResolveTraceEndpoint:
+    def test_config_wins_over_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://env-traces")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-generic")
+        cfg = Config(telemetry=TelemetryConfig(enabled=True, trace_endpoint="http://cfg"))
+
+        assert _resolve_trace_endpoint(cfg) == "http://cfg"
+
+    def test_traces_env_beats_generic_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://env-traces")
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-generic")
+        cfg = Config(telemetry=TelemetryConfig(enabled=True))
+
+        assert _resolve_trace_endpoint(cfg) == "http://env-traces"
+
+    def test_generic_env_used_when_traces_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env-generic")
+        cfg = Config(telemetry=TelemetryConfig(enabled=True))
+
+        assert _resolve_trace_endpoint(cfg) == "http://env-generic"
+
+    def test_returns_none_when_nothing_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+        cfg = Config(telemetry=TelemetryConfig(enabled=True))
+
+        assert _resolve_trace_endpoint(cfg) is None
+
+
+class TestPrintExitSummary:
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+
+    def _ctx(self) -> Any:
+        ctx = BorgBoiContext()
+        ctx.trace_id = "fallback-trace"
+        return ctx
+
+    def test_silent_when_nothing_enabled(self, capsys: pytest.CaptureFixture[str]) -> None:
+        cfg = Config(
+            logging=LoggingConfig(enabled=False),
+            telemetry=TelemetryConfig(enabled=False),
+        )
+        _print_exit_summary(
+            self._ctx(),
+            cfg,
+            TelemetrySession(enabled=False, logs_export_enabled=False),
+            otel_trace_id=None,
+            flush_ok=True,
+        )
+        assert capsys.readouterr().out == ""
+
+    def test_logging_only_uses_ctx_trace_id_no_suffix(self, capsys: pytest.CaptureFixture[str]) -> None:
+        cfg = Config(
+            logging=LoggingConfig(enabled=True),
+            telemetry=TelemetryConfig(enabled=False),
+        )
+        _print_exit_summary(
+            self._ctx(),
+            cfg,
+            TelemetrySession(enabled=False, logs_export_enabled=False),
+            otel_trace_id=None,
+            flush_ok=True,
+        )
+        out = capsys.readouterr().out
+        assert "fallback-trace" in out
+        assert "Traces" not in out
+
+    def test_telemetry_only_prefers_otel_trace_id(self, capsys: pytest.CaptureFixture[str]) -> None:
+        cfg = Config(
+            logging=LoggingConfig(enabled=False),
+            telemetry=TelemetryConfig(enabled=True, trace_endpoint="http://tempo"),
+        )
+        _print_exit_summary(
+            self._ctx(),
+            cfg,
+            TelemetrySession(enabled=True, logs_export_enabled=False),
+            otel_trace_id="otel-xyz",
+            flush_ok=True,
+        )
+        out = _strip_ansi(capsys.readouterr().out)
+        assert "otel-xyz" in out
+        assert "fallback-trace" not in out
+        assert "Traces sent to http://tempo" in out
+
+    def test_flush_failure_says_queued(self, capsys: pytest.CaptureFixture[str]) -> None:
+        cfg = Config(
+            logging=LoggingConfig(enabled=True),
+            telemetry=TelemetryConfig(enabled=True, trace_endpoint="http://tempo"),
+        )
+        _print_exit_summary(
+            self._ctx(),
+            cfg,
+            TelemetrySession(enabled=True, logs_export_enabled=False),
+            otel_trace_id="otel-xyz",
+            flush_ok=False,
+        )
+        out = _strip_ansi(capsys.readouterr().out)
+        assert "Traces queued for http://tempo" in out
+        assert "Traces sent to" not in out
+
+    def test_default_endpoint_message_when_unresolved(self, capsys: pytest.CaptureFixture[str]) -> None:
+        cfg = Config(
+            logging=LoggingConfig(enabled=True),
+            telemetry=TelemetryConfig(enabled=True),
+        )
+        _print_exit_summary(
+            self._ctx(),
+            cfg,
+            TelemetrySession(enabled=True, logs_export_enabled=False),
+            otel_trace_id="otel-xyz",
+            flush_ok=True,
+        )
+        normalized = " ".join(_strip_ansi(capsys.readouterr().out).split())
+        assert "the configured OTLP endpoint" in normalized
+        assert "Traces sent to the configured OTLP endpoint" in normalized
