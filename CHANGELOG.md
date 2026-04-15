@@ -1,3 +1,50 @@
+## v1.27.0 (2026-04-15)
+
+### 🚀 Features
+
+- **tui**: Add TUI Screen for Comparing Archive Contents ([#238](https://github.com/fullerzz/borgboi/issues/238)) ([c8daa2d](https://github.com/fullerzz/borgboi/commit/c8daa2dfe7445be3f79ba0af0fc91f625a86e7ea))
+
+- **telemetry**: Add configurable OTLP exporter endpoints ([#239](https://github.com/fullerzz/borgboi/issues/239)) ([61606b8](https://github.com/fullerzz/borgboi/commit/61606b8f20230f95a756d2ed65a75ed6fefee1ab))
+
+- **tui**: Add decorator-based span capture ([#242](https://github.com/fullerzz/borgboi/issues/242)) ([35f4b7f](https://github.com/fullerzz/borgboi/commit/35f4b7fcac4394ee07fe74ad1bbdf17cab75509f))
+
+
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Update dependency pytest to v9.0.3 [security] ([#241](https://github.com/fullerzz/borgboi/issues/241)) ([c354152](https://github.com/fullerzz/borgboi/commit/c35415268516c4e736c2d3461d2628e7a2b67ed2))
+
+- Honor telemetry disable flags and clear stale compare state ([58a9de8](https://github.com/fullerzz/borgboi/commit/58a9de86bc4071bc20fa3f2913c827e7b2c15c0e))
+
+
+
+### 💼 Other
+
+- Merge pull request [#244](https://github.com/fullerzz/borgboi/issues/244) from fullerzz/dev
+
+Enhance TUI archive comparison and add OpenTelemetry support ([9c78955](https://github.com/fullerzz/borgboi/commit/9c78955ef02572af0cd1ccef8e97a6b74ef0073b))
+
+
+
+### 🚜 Refactor
+
+- Simplify archive compare screen and telemetry helpers ([72dfe59](https://github.com/fullerzz/borgboi/commit/72dfe5920177b0b25c34e5e0711916d617c9f752))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Update tflint plugin terraform-linters/tflint-ruleset-aws to v0.47.0 ([#236](https://github.com/fullerzz/borgboi/issues/236)) ([f207568](https://github.com/fullerzz/borgboi/commit/f207568b7bac4043e9f697ba41f2a4a4084d95ce))
+
+- **git-cliff**: Add changelog postprocessor to link to github issues ([8cd8ec5](https://github.com/fullerzz/borgboi/commit/8cd8ec5bf0627097af93bc4aae779e8204a97693))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies ([#237](https://github.com/fullerzz/borgboi/issues/237)) ([5aa1d30](https://github.com/fullerzz/borgboi/commit/5aa1d3010ea8b1fdd2e25d8260baa3be78b7b8d4))
+
+
 ## v1.26.1 (2026-04-05)
 
 ### 🐛 Bug Fixes

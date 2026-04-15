@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-04-12T22:48:07.553850862Z"
+exclude-newer = "2026-04-14T01:22:04.611068414Z"
 exclude-newer-span = "PT24H"
 
 [[package]]
@@ -176,7 +176,7 @@ wheels = [
 
 [[package]]
 name = "borgboi"
-version = "1.26.1"
+version = "1.27.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
