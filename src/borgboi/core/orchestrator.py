@@ -487,8 +487,6 @@ class Orchestrator:
                 },
             )
             repo = self.storage.get_by_name_or_path(name=name, path=path, hostname=hostname)
-
-            # Auto-migrate passphrase if needed
             repo = self._auto_migrate_passphrase(repo)
             set_span_attributes(
                 span,
@@ -667,7 +665,6 @@ class Orchestrator:
                 field="retention_policy",
             )
 
-        # Validate and update retention policy if provided
         if retention_policy is not None:
             Validator.validate_retention_policy(retention_policy)
             repo.retention_policy = retention_policy
@@ -690,7 +687,6 @@ class Orchestrator:
             logger.info("Repository retention policy cleared", repo_name=repo.name)
             self.output.on_log("info", f"Cleared retention policy override for repo '{repo.name}'")
 
-        # Update storage quota if provided
         updated_quota: str | None = None
         if storage_quota is not None:
             if storage_quota == "":
@@ -706,14 +702,12 @@ class Orchestrator:
                 self.output.on_log("info", f"Cleared storage quota override for repo '{repo.name}'")
                 updated_quota = None
             else:
-                # Reuse existing quota update logic
                 updated_quota = self.update_repo_storage_quota(
                     storage_quota,
                     name=repo.name,
                     passphrase=passphrase,
                 )
 
-        # Save repository with updated retention (if no quota update, or quota succeeded)
         if retention_policy is not None or clear_retention_policy:
             self.storage.save(repo)
 
@@ -908,7 +902,6 @@ class Orchestrator:
 
         resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
 
-        # Delete archive
         logger.debug(
             "Executing Borg delete for archive",
             repo_name=resolved_repo.name,
@@ -924,11 +917,9 @@ class Orchestrator:
             self.output.on_stderr(line)
 
         if not dry_run:
-            # Compact after deletion to reclaim space
             logger.debug("Compacting repository after archive deletion", repo_name=resolved_repo.name)
             self.compact(resolved_repo, passphrase=resolved_passphrase)
 
-            # Refresh metadata
             logger.debug("Refreshing repository metadata after archive deletion", repo_name=resolved_repo.name)
             repo_info = self.borg.info(resolved_repo.path, passphrase=resolved_passphrase)
             resolved_repo.metadata = repo_info
@@ -1245,10 +1236,7 @@ class Orchestrator:
             )
             raise ValidationError("Exclude list already created", field="excludes")
 
-        # Ensure directory exists
         excludes_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Copy source file
         shutil.copy(source_file, excludes_path.as_posix())
 
         if not excludes_path.exists():

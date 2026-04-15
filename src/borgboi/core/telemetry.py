@@ -147,12 +147,16 @@ def get_tracer(name: str) -> trace.Tracer:
     return trace.get_tracer(name, _get_service_version())
 
 
-def _format_trace_id(trace_id: int) -> str:
+def format_trace_id(trace_id: int) -> str:
     return f"{trace_id:032x}"
 
 
-def _format_span_id(span_id: int) -> str:
+def format_span_id(span_id: int) -> str:
     return f"{span_id:016x}"
+
+
+def format_trace_flags(trace_flags: int) -> str:
+    return f"{int(trace_flags):02x}"
 
 
 def get_current_span_context() -> SpanContext | None:
@@ -168,7 +172,7 @@ def get_current_trace_id() -> str | None:
     span_context = get_current_span_context()
     if span_context is None:
         return None
-    return _format_trace_id(span_context.trace_id)
+    return format_trace_id(span_context.trace_id)
 
 
 def get_current_span_id() -> str | None:
@@ -176,7 +180,7 @@ def get_current_span_id() -> str | None:
     span_context = get_current_span_context()
     if span_context is None:
         return None
-    return _format_span_id(span_context.span_id)
+    return format_span_id(span_context.span_id)
 
 
 def bind_trace_contextvars() -> None:
@@ -186,9 +190,9 @@ def bind_trace_contextvars() -> None:
         return
 
     bind_contextvars(
-        trace_id=_format_trace_id(span_context.trace_id),
-        span_id=_format_span_id(span_context.span_id),
-        trace_flags=f"{int(span_context.trace_flags):02x}",
+        trace_id=format_trace_id(span_context.trace_id),
+        span_id=format_span_id(span_context.span_id),
+        trace_flags=format_trace_flags(span_context.trace_flags),
     )
 
 
@@ -200,18 +204,22 @@ def set_span_attributes(span: Span, attributes: Mapping[str, AttributeValue | No
         span.set_attribute(key, value)
 
 
-def force_flush_telemetry() -> bool:
+_DEFAULT_FLUSH_TIMEOUT_MILLIS = 2000
+
+
+def force_flush_telemetry(timeout_millis: int = _DEFAULT_FLUSH_TIMEOUT_MILLIS) -> bool:
     """Flush telemetry providers without shutting down the process-global state.
 
     Returns ``True`` when every active provider flushed cleanly; ``False`` if a
     provider timed out, raised, or otherwise reported a failure. Warnings are
     written to stderr for each failure so the CLI can still communicate success
-    honestly in the exit summary.
+    honestly in the exit summary. ``timeout_millis`` caps the total flush delay
+    per provider so an unreachable OTLP collector cannot hang the CLI.
     """
     ok = True
     if _TelemetryState.tracer_provider is not None:
         try:
-            if not _TelemetryState.tracer_provider.force_flush():
+            if not _TelemetryState.tracer_provider.force_flush(timeout_millis):
                 _warn("telemetry: trace flush timed out; some spans may have been dropped")
                 ok = False
         except Exception as exc:
@@ -219,7 +227,7 @@ def force_flush_telemetry() -> bool:
             ok = False
     if _TelemetryState.logger_provider is not None:
         try:
-            if not _TelemetryState.logger_provider.force_flush():
+            if not _TelemetryState.logger_provider.force_flush(timeout_millis):
                 _warn("telemetry: log flush timed out; some log records may have been dropped")
                 ok = False
         except Exception as exc:

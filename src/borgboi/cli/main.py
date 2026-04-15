@@ -27,6 +27,7 @@ from borgboi.core.telemetry import (
     force_flush_telemetry,
     get_current_trace_id,
     get_tracer,
+    set_span_attributes,
     telemetry_is_active,
 )
 from borgboi.rich_utils import console
@@ -179,10 +180,15 @@ def _launcher(
         command_name = getattr(command, "__name__", command.__class__.__name__)
         span_name = f"cli.{command_name.removeprefix('_').replace('_', '-')}"
         with _TRACER.start_as_current_span(span_name) as span:
-            span.set_attribute("borgboi.command.name", command_name)
-            span.set_attribute("borgboi.command.tokens", safe_tokens)
-            span.set_attribute("borgboi.mode.offline", config.offline)
-            span.set_attribute("borgboi.mode.debug", config.debug)
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.command.name": command_name,
+                    "borgboi.command.tokens": safe_tokens,
+                    "borgboi.mode.offline": config.offline,
+                    "borgboi.mode.debug": config.debug,
+                },
+            )
 
             if telemetry.enabled:
                 bind_trace_contextvars()
@@ -233,8 +239,13 @@ def tui(*, ctx: ContextArg) -> None:
     tui_app = BorgBoiApp(config=ctx.config)
     if ctx.config.telemetry.enabled and ctx.config.telemetry.capture_tui:
         with _TRACER.start_as_current_span("tui.session") as span:
-            span.set_attribute("borgboi.mode.offline", ctx.config.offline)
-            span.set_attribute("borgboi.ui.theme", ctx.config.ui.theme)
+            set_span_attributes(
+                span,
+                {
+                    "borgboi.mode.offline": ctx.config.offline,
+                    "borgboi.ui.theme": ctx.config.ui.theme,
+                },
+            )
             bind_trace_contextvars()
             tui_app.run()
             return

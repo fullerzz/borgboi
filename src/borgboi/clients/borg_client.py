@@ -101,7 +101,6 @@ class BorgClient:
         if returncode == BorgExitCode.SUCCESS:
             return
         if returncode == BorgExitCode.WARNING:
-            # Log warning but don't raise
             self.output.on_log("warning", f"Borg completed with warnings: {stderr}")
             return
 
@@ -240,7 +239,6 @@ class BorgClient:
 
         self._run_command(cmd, passphrase=passphrase)
 
-        # Set additional_free_space if specified
         free_space = additional_free_space or self.config.additional_free_space
         if free_space:
             logger.debug("Setting additional free space", repo_path=repo_path, free_space=free_space)

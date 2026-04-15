@@ -23,6 +23,7 @@ from textual.widgets.directory_tree import DirEntry
 from textual.widgets.tree import TreeNode
 
 from borgboi.clients.borg import DiffChange, DiffResult, RepoArchive
+from borgboi.core.errors import ValidationError
 from borgboi.core.logging import get_logger
 from borgboi.core.models import DiffOptions
 from borgboi.lib.diff import format_diff_change, summarize_diff_changes
@@ -287,19 +288,17 @@ class CompareDirectoryTree(DirectoryTree):
 
         return current_node
 
-    def set_row_highlights(self, highlights: dict[Path, CompareRowHighlight]) -> None:
-        """Replace the row highlight map for this tree."""
+    def set_compare_overlays(
+        self,
+        *,
+        highlights: dict[Path, CompareRowHighlight],
+        modified_paths: set[Path],
+        modified_parent_paths: set[Path],
+    ) -> None:
+        """Replace all compare overlays in a single refresh pass."""
         self._row_highlights = highlights
-        self.refresh()
-
-    def set_modified_paths(self, modified_paths: set[Path]) -> None:
-        """Replace the direct modified-path marker set for this tree."""
         self._modified_paths = modified_paths
-        self.refresh()
-
-    def set_modified_parent_paths(self, parent_paths: set[Path]) -> None:
-        """Replace the parent-directory indicator set for this tree."""
-        self._modified_parent_paths = parent_paths
+        self._modified_parent_paths = modified_parent_paths
         self.refresh()
 
     @override
@@ -441,9 +440,10 @@ class ArchiveCompareScreen(Screen[None]):
             older_archive = self._initial_older_archive
             newer_archive = self._initial_newer_archive
             if older_archive is None or newer_archive is None:
-                older, newer = self._orchestrator.get_two_most_recent_archives(self._repo)
-                older_archive = older.name
-                newer_archive = newer.name
+                if len(archives) < 2:
+                    raise ValidationError("Repository must contain at least two archives to compare", field="archives")
+                newer_archive = archives[0].name
+                older_archive = archives[1].name
         except Exception as exc:
             logger.exception("Failed to load archive choices", repo_name=self._repo.name, error=str(exc))
             self.app.call_from_thread(self._on_archive_choices_error, exc)
@@ -515,6 +515,7 @@ class ArchiveCompareScreen(Screen[None]):
                 older_archive,
                 newer_archive,
                 options=DiffOptions(content_only=content_only),
+                validated=True,
             )
             path_states = build_compare_path_states(result)
             self._reset_compare_roots()
@@ -582,12 +583,16 @@ class ArchiveCompareScreen(Screen[None]):
         older_highlights, newer_highlights = build_compare_tree_highlights(path_states)
         older_modified_paths, newer_modified_paths = build_compare_tree_modified_paths(path_states)
         older_parent_indicators, newer_parent_indicators = build_compare_tree_parent_indicators(path_states)
-        self._older_tree.set_row_highlights(older_highlights)
-        self._newer_tree.set_row_highlights(newer_highlights)
-        self._older_tree.set_modified_paths(older_modified_paths)
-        self._newer_tree.set_modified_paths(newer_modified_paths)
-        self._older_tree.set_modified_parent_paths(older_parent_indicators)
-        self._newer_tree.set_modified_parent_paths(newer_parent_indicators)
+        self._older_tree.set_compare_overlays(
+            highlights=older_highlights,
+            modified_paths=older_modified_paths,
+            modified_parent_paths=older_parent_indicators,
+        )
+        self._newer_tree.set_compare_overlays(
+            highlights=newer_highlights,
+            modified_paths=newer_modified_paths,
+            modified_parent_paths=newer_parent_indicators,
+        )
 
         _ = self._older_tree.reload()
         _ = self._newer_tree.reload()

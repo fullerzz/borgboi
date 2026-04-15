@@ -11,7 +11,12 @@ from typing import Any, cast
 import structlog
 
 from borgboi.config import Config
-from borgboi.core.telemetry import get_current_span_context
+from borgboi.core.telemetry import (
+    format_span_id,
+    format_trace_flags,
+    format_trace_id,
+    get_current_span_context,
+)
 
 LOG_FILE_BASENAME = "borgboi"
 _LOG_FILE_GLOB = f"{LOG_FILE_BASENAME}_*.log"
@@ -48,9 +53,9 @@ def _add_otel_trace_context(_: Any, __: str, event_dict: dict[str, Any]) -> dict
     if span_context is None:
         return event_dict
 
-    event_dict["trace_id"] = f"{span_context.trace_id:032x}"
-    event_dict["span_id"] = f"{span_context.span_id:016x}"
-    event_dict["trace_flags"] = f"{int(span_context.trace_flags):02x}"
+    event_dict["trace_id"] = format_trace_id(span_context.trace_id)
+    event_dict["span_id"] = format_span_id(span_context.span_id)
+    event_dict["trace_flags"] = format_trace_flags(span_context.trace_flags)
     return event_dict
 
 

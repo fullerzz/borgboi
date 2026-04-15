@@ -126,7 +126,7 @@ class BorgBoiApp(App[None]):
         logger.debug("Loading repositories for TUI dashboard")
         try:
             repos = self.orchestrator.list_repos()
-            trace.get_current_span().set_attribute("borgboi.repo.count", len(repos))
+            set_span_attributes(trace.get_current_span(), {"borgboi.repo.count": len(repos)})
             logger.info("Repositories loaded", count=len(repos))
             self.call_from_thread(self._populate_table, repos)
         except Exception as e:
@@ -182,7 +182,7 @@ class BorgBoiApp(App[None]):
             ) as history:
                 data = history.get_daily_archive_counts(SPARKLINE_DAYS)
             labels = [(today - timedelta(days=SPARKLINE_DAYS - 1 - i)).strftime("%m/%d") for i in range(SPARKLINE_DAYS)]
-            trace.get_current_span().set_attribute("borgboi.sparkline.points", len(data))
+            set_span_attributes(trace.get_current_span(), {"borgboi.sparkline.points": len(data)})
             logger.debug("Sparkline data loaded", data_points=len(data))
             self.call_from_thread(self._update_sparkline, data, labels)
         except Exception:
