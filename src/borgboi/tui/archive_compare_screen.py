@@ -535,7 +535,7 @@ class ArchiveCompareScreen(Screen[None]):
                 newer_archive=newer_archive,
                 error=str(exc),
             )
-            self.app.call_from_thread(self._on_compare_error, exc)
+            self.app.call_from_thread(self._on_compare_error, older_archive, newer_archive, exc)
             return
 
         self.app.call_from_thread(self._apply_compare_result, result, path_states, content_only)
@@ -597,14 +597,28 @@ class ArchiveCompareScreen(Screen[None]):
         _ = self._older_tree.reload()
         _ = self._newer_tree.reload()
 
-    def _on_compare_error(self, error: Exception) -> None:
+    def _clear_compare_view(self, older_archive: str, newer_archive: str) -> None:
+        """Remove any previous compare data from the screen."""
+        self._compare_result = DiffResult(archive1=older_archive, archive2=newer_archive, entries=[])
+        self._path_states = {}
+        self.expanded_paths = frozenset()
+        self._reset_compare_roots()
+        self._older_tree.set_compare_overlays(highlights={}, modified_paths=set(), modified_parent_paths=set())
+        self._newer_tree.set_compare_overlays(highlights={}, modified_paths=set(), modified_parent_paths=set())
+        _ = self._older_tree.reload()
+        _ = self._newer_tree.reload()
+
+    def _on_compare_error(self, older_archive: str, newer_archive: str, error: Exception) -> None:
         """Handle archive compare failures."""
+        self._clear_compare_view(older_archive, newer_archive)
         self._set_compare_controls_enabled(True)
         self.query_one("#archive-compare-status", Label).update(f"Archive comparison failed: {error}")
         self.query_one("#archive-compare-summary", Static).update(
             f"[#f38ba8]Archive comparison failed:[/] {escape(str(error))}"
         )
         self.query_one("#archive-compare-selection", Static).update("No path selected.")
+        self.query_one("#archive-compare-older-heading", Static).update(self._render_archive_heading(older_archive))
+        self.query_one("#archive-compare-newer-heading", Static).update(self._render_archive_heading(newer_archive))
         self.notify(str(error), severity="error", title="Archive Compare")
 
     def _set_compare_controls_enabled(self, enabled: bool) -> None:

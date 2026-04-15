@@ -42,7 +42,7 @@ def _resolve_config(instance: object) -> Config | None:
 
 def _span_context(instance: object, name: str) -> AbstractContextManager[Span]:
     config = _resolve_config(instance)
-    if config is None or not config.telemetry.capture_tui:
+    if config is None or not config.telemetry.enabled or not config.telemetry.capture_tui:
         return cast("AbstractContextManager[Span]", use_span(_NOOP_SPAN, end_on_exit=False))
     return tracer.start_as_current_span(name)
 

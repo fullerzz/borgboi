@@ -431,3 +431,36 @@ async def test_archive_compare_screen_cleans_up_tempdir_on_dismiss(archive_compa
         await pilot.pause()
 
         assert temp_root.exists() is False
+
+
+async def test_archive_compare_screen_clears_previous_diff_after_compare_failure(
+    archive_compare_app: BorgBoiApp,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        assert screen._path_states
+        assert (screen._older_root / "removed.txt").exists() is True
+
+        def _raise_diff_failure(*_args: Any, **_kwargs: Any) -> DiffResult:
+            raise RuntimeError("compare boom")
+
+        monkeypatch.setattr(screen._orchestrator, "diff_archives", _raise_diff_failure)
+        screen.action_run_compare()
+
+        for _ in range(60):
+            await pilot.pause(0.05)
+            if not screen._path_states:
+                break
+
+        summary = screen.query_one("#archive-compare-summary", Static)
+        older_heading = screen.query_one("#archive-compare-older-heading", Static)
+        newer_heading = screen.query_one("#archive-compare-newer-heading", Static)
+
+        assert screen._path_states == {}
+        assert (screen._older_root / "removed.txt").exists() is False
+        assert (screen._newer_root / "added.txt").exists() is False
+        assert "Archive comparison failed" in str(cast(Any, summary).content)
+        assert "2026-03-27_22:00:00" in str(cast(Any, older_heading).content)
+        assert "2026-03-28_22:00:00" in str(cast(Any, newer_heading).content)

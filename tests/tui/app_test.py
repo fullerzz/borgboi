@@ -262,6 +262,7 @@ async def test_app_captures_expected_tui_spans(
     patch_sparkline_history: Callable[..., None],
     tui_config: Config,
 ) -> None:
+    tui_config.telemetry.enabled = True
     orchestrator = make_orchestrator(list_repos=lambda: [build_repo("alpha")])
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
     patch_sparkline_history([1.0] * 14)

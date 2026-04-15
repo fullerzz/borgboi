@@ -9,10 +9,10 @@ import sys
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_version
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from opentelemetry import trace
-from opentelemetry._logs import set_logger_provider
+from opentelemetry._logs import get_logger_provider, set_logger_provider
 from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.botocore import BotocoreInstrumentor
@@ -71,6 +71,12 @@ def _ensure_trace_provider(resource: Resource, trace_endpoint: str | None) -> No
     if _TelemetryState.traces_initialized:
         return
 
+    current_provider = trace.get_tracer_provider()
+    if not _is_proxy_provider(current_provider):
+        _TelemetryState.tracer_provider = cast("TracerProvider", current_provider)
+        _TelemetryState.traces_initialized = True
+        return
+
     tracer_provider = TracerProvider(resource=resource)
     exporter = OTLPSpanExporter(endpoint=trace_endpoint) if trace_endpoint else OTLPSpanExporter()
     tracer_provider.add_span_processor(BatchSpanProcessor(exporter))
@@ -83,14 +89,20 @@ def _ensure_log_export(resource: Resource, logs_endpoint: str | None) -> None:
     if _TelemetryState.logs_initialized:
         return
 
+    current_provider = get_logger_provider()
+    if not _is_proxy_provider(current_provider):
+        logger_provider = cast("LoggerProvider", current_provider)
+        _TelemetryState.logger_provider = logger_provider
+        _TelemetryState.log_handler = _attach_log_handler(logger_provider)
+        _TelemetryState.logs_initialized = True
+        return
+
     exporter = OTLPLogExporter(endpoint=logs_endpoint) if logs_endpoint else OTLPLogExporter()
     logger_provider = LoggerProvider(resource=resource)
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
     set_logger_provider(logger_provider)
 
-    handler = LoggingHandler(level=stdlib_logging.NOTSET, logger_provider=logger_provider)
-    handler.set_name(_OTEL_LOG_HANDLER_NAME)
-    stdlib_logging.getLogger(_LOGGER_NAMESPACE).addHandler(handler)
+    handler = _attach_log_handler(logger_provider)
 
     _TelemetryState.logger_provider = logger_provider
     _TelemetryState.log_handler = handler
@@ -107,6 +119,17 @@ def _ensure_botocore_instrumentation() -> None:
 
 def _warn(message: str) -> None:
     sys.stderr.write(f"warning: {message}\n")
+
+
+def _attach_log_handler(logger_provider: LoggerProvider) -> LoggingHandler:
+    handler = LoggingHandler(level=stdlib_logging.NOTSET, logger_provider=logger_provider)
+    handler.set_name(_OTEL_LOG_HANDLER_NAME)
+    stdlib_logging.getLogger(_LOGGER_NAMESPACE).addHandler(handler)
+    return handler
+
+
+def _is_proxy_provider(provider: Any) -> bool:
+    return type(provider).__name__.startswith("Proxy")
 
 
 def configure_telemetry(config: Config) -> TelemetrySession:

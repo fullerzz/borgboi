@@ -178,35 +178,45 @@ def _launcher(
                 additional_kwargs[parameter_name] = ctx
 
         command_name = getattr(command, "__name__", command.__class__.__name__)
-        span_name = f"cli.{command_name.removeprefix('_').replace('_', '-')}"
-        with _TRACER.start_as_current_span(span_name) as span:
-            set_span_attributes(
-                span,
-                {
-                    "borgboi.command.name": command_name,
-                    "borgboi.command.tokens": safe_tokens,
-                    "borgboi.mode.offline": config.offline,
-                    "borgboi.mode.debug": config.debug,
-                },
-            )
+        logger = get_logger(__name__) if logging_enabled or telemetry.enabled else None
 
-            if telemetry.enabled:
+        if telemetry.enabled:
+            span_name = f"cli.{command_name.removeprefix('_').replace('_', '-')}"
+            with _TRACER.start_as_current_span(span_name) as span:
+                set_span_attributes(
+                    span,
+                    {
+                        "borgboi.command.name": command_name,
+                        "borgboi.command.tokens": safe_tokens,
+                        "borgboi.mode.offline": config.offline,
+                        "borgboi.mode.debug": config.debug,
+                    },
+                )
                 bind_trace_contextvars()
                 otel_trace_id = get_current_trace_id()
-            else:
-                bind_contextvars(trace_id=ctx.trace_id)
 
-            logger = get_logger(__name__) if logging_enabled or telemetry.enabled else None
-            if logger is not None:
-                logger.info(
-                    "Running CLI command",
-                    command=command_name,
-                    tokens=safe_tokens,
-                    offline=config.offline,
-                    debug=config.debug,
-                )
+                if logger is not None:
+                    logger.info(
+                        "Running CLI command",
+                        command=command_name,
+                        tokens=safe_tokens,
+                        offline=config.offline,
+                        debug=config.debug,
+                    )
 
-            return command(*bound.args, **bound.kwargs, **additional_kwargs)
+                return command(*bound.args, **bound.kwargs, **additional_kwargs)
+
+        bind_contextvars(trace_id=ctx.trace_id)
+        if logger is not None:
+            logger.info(
+                "Running CLI command",
+                command=command_name,
+                tokens=safe_tokens,
+                offline=config.offline,
+                debug=config.debug,
+            )
+
+        return command(*bound.args, **bound.kwargs, **additional_kwargs)
     except SystemExit:
         raise
     except Exception:

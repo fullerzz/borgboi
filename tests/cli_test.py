@@ -275,6 +275,29 @@ def test_cli_flushes_process_telemetry_even_when_current_run_is_disabled(monkeyp
     assert flush_calls == [True]
 
 
+def test_cli_skips_root_span_when_telemetry_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _RecordingTracer:
+        def __init__(self) -> None:
+            self.started_spans: list[str] = []
+
+        def start_as_current_span(self, name: str) -> Any:
+            self.started_spans.append(name)
+            raise AssertionError("telemetry-disabled CLI should not start spans")
+
+    monkeypatch.setattr(
+        cli_main, "configure_telemetry", lambda _cfg: TelemetrySession(enabled=False, logs_export_enabled=False)
+    )
+    monkeypatch.setattr(cli_main, "configure_logging", lambda _cfg: None)
+    monkeypatch.setattr(cli_main, "telemetry_is_active", lambda: False)
+    tracer = _RecordingTracer()
+    monkeypatch.setattr(cli_main, "_TRACER", tracer)
+
+    exit_code = invoke_cli(cli_main.cli, ["version"])
+
+    assert exit_code == 0
+    assert tracer.started_spans == []
+
+
 class TestResolveTraceEndpoint:
     def test_config_wins_over_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://env-traces")

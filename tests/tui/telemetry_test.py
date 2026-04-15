@@ -58,7 +58,7 @@ class _AppMethodHost:
 
 
 def test_capture_span_wraps_sync_methods(fake_tui_tracer: FakeTracer) -> None:
-    host = _ConfigMethodHost(Config(telemetry=TelemetryConfig(capture_tui=True)))
+    host = _ConfigMethodHost(Config(telemetry=TelemetryConfig(enabled=True, capture_tui=True)))
 
     assert host.run("alpha") == "ALPHA"
     assert fake_tui_tracer.started_spans == ["tui.test.sync"]
@@ -68,21 +68,21 @@ def test_capture_span_wraps_sync_methods(fake_tui_tracer: FakeTracer) -> None:
 
 @pytest.mark.asyncio
 async def test_capture_span_wraps_async_methods(fake_tui_tracer: FakeTracer) -> None:
-    host = _AsyncConfigMethodHost(Config(telemetry=TelemetryConfig(capture_tui=True)))
+    host = _AsyncConfigMethodHost(Config(telemetry=TelemetryConfig(enabled=True, capture_tui=True)))
 
     assert await host.run("beta") == "BETA"
     assert fake_tui_tracer.started_spans == ["tui.test.async"]
 
 
 def test_capture_span_uses_orchestrator_config(fake_tui_tracer: FakeTracer) -> None:
-    host = _OrchestratorMethodHost(Config(telemetry=TelemetryConfig(capture_tui=True)))
+    host = _OrchestratorMethodHost(Config(telemetry=TelemetryConfig(enabled=True, capture_tui=True)))
 
     assert host.run() == "ok"
     assert fake_tui_tracer.started_spans == ["tui.test.orchestrator"]
 
 
 def test_capture_span_uses_app_config(fake_tui_tracer: FakeTracer) -> None:
-    host = _AppMethodHost(Config(telemetry=TelemetryConfig(capture_tui=True)))
+    host = _AppMethodHost(Config(telemetry=TelemetryConfig(enabled=True, capture_tui=True)))
 
     assert host.run() == "ok"
     assert fake_tui_tracer.started_spans == ["tui.test.app"]
@@ -90,6 +90,13 @@ def test_capture_span_uses_app_config(fake_tui_tracer: FakeTracer) -> None:
 
 def test_capture_span_skips_when_tui_capture_disabled(fake_tui_tracer: FakeTracer) -> None:
     host = _ConfigMethodHost(Config(telemetry=TelemetryConfig(capture_tui=False)))
+
+    assert host.run("gamma") == "GAMMA"
+    assert fake_tui_tracer.started_spans == []
+
+
+def test_capture_span_skips_when_telemetry_disabled(fake_tui_tracer: FakeTracer) -> None:
+    host = _ConfigMethodHost(Config(telemetry=TelemetryConfig(enabled=False, capture_tui=True)))
 
     assert host.run("gamma") == "GAMMA"
     assert fake_tui_tracer.started_spans == []
@@ -103,7 +110,7 @@ def test_capture_span_tolerates_missing_config(fake_tui_tracer: FakeTracer) -> N
 
 
 def test_capture_span_preserves_exceptions(fake_tui_tracer: FakeTracer) -> None:
-    host = _ConfigMethodHost(Config(telemetry=TelemetryConfig(capture_tui=True)))
+    host = _ConfigMethodHost(Config(telemetry=TelemetryConfig(enabled=True, capture_tui=True)))
 
     with pytest.raises(RuntimeError, match="boom"):
         host.explode()

@@ -23,7 +23,29 @@ pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
 
 
 @pytest.fixture(autouse=True)
-def _reset_telemetry_state() -> Generator[None]:
+def _reset_telemetry_state(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
+    current_tracer_provider: object = type("ProxyTracerProvider", (), {})()
+    current_logger_provider: object = type("ProxyLoggerProvider", (), {})()
+
+    def _get_tracer_provider() -> object:
+        return current_tracer_provider
+
+    def _set_tracer_provider(provider: object) -> None:
+        nonlocal current_tracer_provider
+        current_tracer_provider = provider
+
+    def _get_logger_provider() -> object:
+        return current_logger_provider
+
+    def _set_logger_provider(provider: object) -> None:
+        nonlocal current_logger_provider
+        current_logger_provider = provider
+
+    monkeypatch.setattr("opentelemetry.trace.get_tracer_provider", _get_tracer_provider)
+    monkeypatch.setattr("opentelemetry.trace.set_tracer_provider", _set_tracer_provider)
+    monkeypatch.setattr(telemetry, "get_logger_provider", _get_logger_provider)
+    monkeypatch.setattr(telemetry, "set_logger_provider", _set_logger_provider)
+
     reset_telemetry_for_tests()
     yield
     reset_telemetry_for_tests()
@@ -179,6 +201,7 @@ def test_configure_telemetry_mixed_endpoints(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_configure_telemetry_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     span_ctor_count = 0
+    current_provider: object = type("ProxyTracerProvider", (), {})()
 
     class _SpanExporter(_RecordingExporter):
         def __init__(self, **kwargs: object) -> None:
@@ -186,13 +209,46 @@ def test_configure_telemetry_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> N
             nonlocal span_ctor_count
             span_ctor_count += 1
 
+    def _get_tracer_provider() -> object:
+        return current_provider
+
+    def _set_tracer_provider(provider: object) -> None:
+        nonlocal current_provider
+        current_provider = provider
+
     monkeypatch.setattr(telemetry, "OTLPSpanExporter", _SpanExporter)
+    monkeypatch.setattr("opentelemetry.trace.get_tracer_provider", _get_tracer_provider)
+    monkeypatch.setattr("opentelemetry.trace.set_tracer_provider", _set_tracer_provider)
 
     cfg = Config(telemetry=TelemetryConfig(enabled=True))
     configure_telemetry(cfg)
     configure_telemetry(cfg)
 
     assert span_ctor_count == 1
+    assert _TelemetryState.traces_initialized is True
+
+
+def test_configure_telemetry_adopts_existing_global_trace_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _ExternalTracerProvider:
+        def force_flush(self, _timeout_millis: int) -> bool:
+            return True
+
+        def shutdown(self) -> None:
+            pass
+
+    external_provider = _ExternalTracerProvider()
+
+    def _unexpected_exporter(**_kwargs: object) -> None:
+        raise AssertionError("borgboi should not build a second tracer provider")
+
+    monkeypatch.setattr("opentelemetry.trace.get_tracer_provider", lambda: external_provider)
+    monkeypatch.setattr(telemetry, "OTLPSpanExporter", _unexpected_exporter)
+
+    cfg = Config(telemetry=TelemetryConfig(enabled=True))
+    session = configure_telemetry(cfg)
+
+    assert session.enabled is True
+    assert _TelemetryState.tracer_provider is external_provider
     assert _TelemetryState.traces_initialized is True
 
 
@@ -206,9 +262,45 @@ def test_configure_telemetry_attaches_log_handler(monkeypatch: pytest.MonkeyPatc
     assert any(h.get_name() == _OTEL_LOG_HANDLER_NAME for h in handlers)
 
 
+def test_configure_telemetry_adopts_existing_global_logger_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _ExternalLoggerProvider:
+        def force_flush(self, _timeout_millis: int) -> bool:
+            return True
+
+        def shutdown(self) -> None:
+            pass
+
+    external_provider = _ExternalLoggerProvider()
+
+    def _unexpected_exporter(**_kwargs: object) -> None:
+        raise AssertionError("borgboi should not build a second logger provider")
+
+    monkeypatch.setattr(telemetry, "get_logger_provider", lambda: external_provider)
+    monkeypatch.setattr(telemetry, "OTLPLogExporter", _unexpected_exporter)
+
+    cfg = Config(telemetry=TelemetryConfig(enabled=True, export_logs=True))
+    session = configure_telemetry(cfg)
+
+    assert session.enabled is True
+    assert session.logs_export_enabled is True
+    assert _TelemetryState.logger_provider is external_provider
+    assert _TelemetryState.logs_initialized is True
+    assert _TelemetryState.log_handler is not None
+
+    handlers = stdlib_logging.getLogger("borgboi").handlers
+    assert any(h.get_name() == _OTEL_LOG_HANDLER_NAME for h in handlers)
+
+
 def test_configure_telemetry_trace_exporter_failure_degrades(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    proxy_provider = type("ProxyTracerProvider", (), {})()
+
+    def _get_tracer_provider() -> object:
+        return proxy_provider
+
+    monkeypatch.setattr("opentelemetry.trace.get_tracer_provider", _get_tracer_provider)
+
     class _Boom:
         def __init__(self, **_: object) -> None:
             raise RuntimeError("bad endpoint")
