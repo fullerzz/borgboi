@@ -250,6 +250,8 @@ When overrides are read from environment variables:
   - `borg.retention.keep_weekly`
   - `borg.retention.keep_monthly`
   - `borg.retention.keep_yearly`
+  - `logging.max_bytes`
+  - `logging.backup_count`
 - All other values remain strings.
 
 ## Effective-Config Examples
