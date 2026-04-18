@@ -33,7 +33,7 @@ BorgBoi resolves the passphrase in this order during import:
 
 1. `--passphrase`
 2. An existing stored passphrase file for the repo name
-3. `BORG_PASSPHRASE` in the shell environment
+3. `BORGBOI_BORG__BORG_PASSPHRASE` environment variable
 4. `borg.borg_passphrase` in `~/.borgboi/config.yaml`
 
 For encrypted repositories, make sure one of those sources is available before running the import. If BorgBoi resolves a passphrase successfully, it stores it in `~/.borgboi/passphrases/{repo-name}.key` for future commands.

@@ -30,12 +30,39 @@ The header subtitle indicates whether BorgBoi is running in **Online** or **Offl
 | `c` | Open the config viewer screen |
 | `e` | Open the excludes viewer |
 | `b` | Open the daily backup screen |
+| `Enter` / `i` | Open the repository detail screen for the highlighted repository |
 
 ## Config Viewer
 
 Press `c` from the home screen to open a full-screen view of the effective configuration, grouped into `General`, `AWS`, `Borg`, `Retention`, and `UI` sections.
 
 Press `Esc` to return to the home screen.
+
+## Repository Detail Screen
+
+Press `Enter` or `i` from the home screen to open the repository detail screen for the highlighted repository. You can also click any row in the repository table.
+
+The screen is organized into six tabs:
+
+| Tab | Contents |
+| --- | --- |
+| **Overview** | Name, hostname, path, backup target, last archive date, and size summary |
+| **Repo Settings** | Configured retention policy, storage quota, and compression settings with an inline edit action |
+| **Live Borg** | On-demand `borg info` output fetched live from the repository |
+| **Archives** | Scrollable list of all archives with timestamps and sizes; select an archive to view its contents |
+| **Protection** | Encryption mode and key metadata |
+| **Workspace** | Interactive directory tree rooted at the backup target path |
+
+### Repository Detail Keys
+
+| Key | Action |
+| --- | --- |
+| `Esc` | Return to the home screen |
+| `a` | Jump to the Archives tab |
+| `b` | Open the daily backup screen for this repository |
+| `d` | Open the archive compare / diff view |
+| `e` | Open the repo settings editor |
+| `r` | Refresh the screen data |
 
 ## Daily Backup Screen
 

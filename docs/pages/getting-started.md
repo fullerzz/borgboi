@@ -188,14 +188,16 @@ bb tui
 
 The TUI uses the same effective configuration as the CLI, including `--offline`, `--debug`, and `BORGBOI_*` environment variable overrides.
 
-On the main screen, BorgBoi shows a repository table with each repo's name, local path, hostname, last archive, size, and backup target.
+On the main screen, BorgBoi shows a repository table with each repo's name, hostname, last archive, and size.
 
 ### Main TUI Keys
 
 - `q` quits the application
 - `r` refreshes the repository list
-- `c` toggles the configuration sidebar
+- `c` opens the full-screen config viewer
 - `e` opens the excludes viewer and editor
+- `b` opens the daily backup screen
+- `Enter` or `i` opens the repository detail screen for the highlighted repository
 
 ### Excludes Viewer Keys
 

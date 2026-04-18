@@ -178,7 +178,7 @@ See [TUI](tui.md) for the user-facing behavior in the daily backup screen.
 - Tables are created through SQLAlchemy metadata (`create_all`) during initialization.
 - Deleting a repository also deletes its `s3_stats_cache` row in application logic.
 - `backup_stage_timings` is append-only timing history; rows are recorded when daily backup stages complete successfully.
-- Exclusions are not stored in SQLite; they are written to text files under `~/.borgboi/data/exclusions/`.
+- Exclusions are not stored in SQLite; they are written to text files under `~/.borgboi/` (e.g. `~/.borgboi/{repo-name}_excludes.txt` for repo-specific patterns and `~/.borgboi/excludes.txt` for the shared default).
 
 ## Common Introspection Queries
 
