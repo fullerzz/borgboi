@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -18,7 +19,18 @@ from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.widgets import Button, DirectoryTree, Footer, Header, Label, Select, Static, Switch, Tree
+from textual.widgets import (
+    Button,
+    DirectoryTree,
+    Footer,
+    Header,
+    Input,
+    Label,
+    Select,
+    Static,
+    Switch,
+    Tree,
+)
 from textual.widgets.directory_tree import DirEntry
 from textual.widgets.tree import TreeNode
 
@@ -26,8 +38,15 @@ from borgboi.clients.borg import DiffChange, DiffResult, RepoArchive
 from borgboi.core.errors import ValidationError
 from borgboi.core.logging import get_logger
 from borgboi.core.models import DiffOptions
-from borgboi.lib.diff import format_diff_change, summarize_diff_changes
+from borgboi.lib.diff import (
+    ALL_DIFF_KINDS,
+    DiffChangeKind,
+    filter_diff_result,
+    format_diff_change,
+    summarize_diff_changes,
+)
 from borgboi.lib.utils import format_iso_timestamp, format_size_bytes
+from borgboi.tui.diff_modal import ContentDiffScreen
 
 logger = get_logger(__name__)
 
@@ -77,6 +96,19 @@ def _resolve_path_presence(changes: list[DiffChange]) -> tuple[bool, bool]:
 def _archive_sort_key(archive: RepoArchive) -> tuple[str, str]:
     """Sort archives newest-first using the timestamp when available."""
     return (archive.time or archive.start or "", archive.name)
+
+
+def _coerce_diff_change_kind(value: str) -> DiffChangeKind | None:
+    """Narrow an arbitrary string to a DiffChangeKind literal or return None."""
+    if value == "added":
+        return "added"
+    if value == "removed":
+        return "removed"
+    if value == "modified":
+        return "modified"
+    if value == "mode":
+        return "mode"
+    return None
 
 
 def build_compare_tree_highlights(
@@ -249,6 +281,7 @@ class CompareDirectoryTree(DirectoryTree):
         self._row_highlights: dict[Path, CompareRowHighlight] = {}
         self._modified_paths: set[Path] = set()
         self._modified_parent_paths: set[Path] = set()
+        self._visible_paths: set[Path] | None = None
 
     def on_tree_node_expanded(self, event: Tree.NodeExpanded[DirEntry]) -> None:
         """Relay directory expansion through a public custom message."""
@@ -301,6 +334,36 @@ class CompareDirectoryTree(DirectoryTree):
         self._modified_parent_paths = modified_parent_paths
         self.refresh()
 
+    def set_visible_paths(self, visible_paths: set[Path] | None) -> None:
+        """Restrict rendered entries to the given relative paths.
+
+        `None` disables filtering (full materialized mirror shown).
+        """
+        self._visible_paths = visible_paths
+
+    @override
+    def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:
+        """Drop children that are not part of the active visible set."""
+        visible = self._visible_paths
+        if visible is None:
+            return list(paths)
+        kept: list[Path] = []
+        for path in paths:
+            try:
+                relative = path.resolve().relative_to(self._compare_root_resolved)
+            except ValueError:
+                continue
+            if self._is_relative_path_visible(relative, visible):
+                kept.append(path)
+        return kept
+
+    @staticmethod
+    def _is_relative_path_visible(relative: Path, visible: set[Path]) -> bool:
+        """Return True if the relative path is either visible or an ancestor of one."""
+        if relative in visible:
+            return True
+        return any(relative in target.parents for target in visible)
+
     @override
     def render_label(self, node: TreeNode[DirEntry], base_style: Style, style: Style) -> Text:
         """Render a label with compare-specific tinting and parent indicators."""
@@ -344,10 +407,22 @@ class ArchiveCompareScreen(Screen[None]):
     """Screen for visually comparing two archives from the same repository."""
 
     expanded_paths: reactive[frozenset[str]] = reactive(frozenset(), init=False)
+    kind_filters: reactive[frozenset[DiffChangeKind]] = reactive(ALL_DIFF_KINDS, init=False)
+    path_search: reactive[str] = reactive("", init=False)
+    selected_path: reactive[Path | None] = reactive(None, init=False)
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("escape", "back", "Back"),
         Binding("r", "run_compare", "Compare"),
+        Binding("n", "next_change", "Next change"),
+        Binding("shift+n", "prev_change", "Prev change"),
+        Binding("d", "open_content_diff", "File diff"),
+        Binding("slash", "focus_search", "Search"),
+        Binding("ctrl+l", "clear_filters", "Clear filters"),
+        Binding("1", "toggle_kind('added')", "Added"),
+        Binding("2", "toggle_kind('removed')", "Removed"),
+        Binding("3", "toggle_kind('modified')", "Modified"),
+        Binding("4", "toggle_kind('mode')", "Mode"),
     ]
 
     def __init__(
@@ -366,7 +441,12 @@ class ArchiveCompareScreen(Screen[None]):
         self._archives: list[RepoArchive] = []
         self._archive_index: dict[str, RepoArchive] = {}
         self._path_states: dict[Path, ComparePathState] = {}
+        self._raw_path_states: dict[Path, ComparePathState] = {}
         self._compare_result = DiffResult(archive1="", archive2="", entries=[])
+        self._raw_compare_result = DiffResult(archive1="", archive2="", entries=[])
+        self._ordered_change_paths: list[Path] = []
+        self._change_cursor: int = -1
+        self._suppress_selection_sync: bool = False
         self._tempdir = TemporaryDirectory(prefix="borgboi-archive-compare-")
         self._compare_temp_root = Path(self._tempdir.name)
         self._older_root = self._compare_temp_root / "older"
@@ -397,6 +477,15 @@ class ArchiveCompareScreen(Screen[None]):
                         yield Label("Content only", id="archive-compare-content-only-label")
                         yield Switch(value=False, id="archive-compare-content-only-switch")
                         yield Button("Compare", id="archive-compare-run-btn", variant="primary", disabled=True)
+                    yield Static(
+                        self._render_kind_filter_chips(ALL_DIFF_KINDS),
+                        id="archive-compare-kind-filters",
+                        markup=True,
+                    )
+                    yield Input(
+                        placeholder="Filter paths (press / to focus)",
+                        id="archive-compare-search-input",
+                    )
                     yield Static("Loading comparison summary...", id="archive-compare-summary", markup=True)
                     yield Static("No path selected.", id="archive-compare-selection", markup=True)
                 with Vertical(classes="archive-compare-pane"):
@@ -567,46 +656,247 @@ class ArchiveCompareScreen(Screen[None]):
         self, result: DiffResult, path_states: dict[Path, ComparePathState], content_only: bool
     ) -> None:
         """Render the compare result after the background worker finishes."""
-        self._compare_result = result
-        self._path_states = path_states
+        self._raw_compare_result = result
+        self._raw_path_states = path_states
         self._set_compare_controls_enabled(True)
         self.query_one("#archive-compare-status", Label).update(
             self._render_status_line(result.archive1, result.archive2, content_only)
         )
-        self.query_one("#archive-compare-summary", Static).update(self._render_summary(result))
-        self.query_one("#archive-compare-selection", Static).update(
-            "No changed paths to inspect." if not path_states else "No path selected."
-        )
         self.query_one("#archive-compare-older-heading", Static).update(self._render_archive_heading(result.archive1))
         self.query_one("#archive-compare-newer-heading", Static).update(self._render_archive_heading(result.archive2))
         self.expanded_paths = frozenset()
-        older_highlights, newer_highlights = build_compare_tree_highlights(path_states)
-        older_modified_paths, newer_modified_paths = build_compare_tree_modified_paths(path_states)
-        older_parent_indicators, newer_parent_indicators = build_compare_tree_parent_indicators(path_states)
-        self._older_tree.set_compare_overlays(
-            highlights=older_highlights,
-            modified_paths=older_modified_paths,
-            modified_parent_paths=older_parent_indicators,
-        )
-        self._newer_tree.set_compare_overlays(
-            highlights=newer_highlights,
-            modified_paths=newer_modified_paths,
-            modified_parent_paths=newer_parent_indicators,
-        )
-
-        _ = self._older_tree.reload()
-        _ = self._newer_tree.reload()
+        self._change_cursor = -1
+        self.selected_path = None
+        self._apply_filters()
 
     def _clear_compare_view(self, older_archive: str, newer_archive: str) -> None:
         """Remove any previous compare data from the screen."""
-        self._compare_result = DiffResult(archive1=older_archive, archive2=newer_archive, entries=[])
+        empty_result = DiffResult(archive1=older_archive, archive2=newer_archive, entries=[])
+        self._compare_result = empty_result
+        self._raw_compare_result = empty_result
         self._path_states = {}
+        self._raw_path_states = {}
+        self._ordered_change_paths = []
+        self._change_cursor = -1
         self.expanded_paths = frozenset()
+        self.selected_path = None
         self._reset_compare_roots()
+        self._older_tree.set_visible_paths(None)
+        self._newer_tree.set_visible_paths(None)
         self._older_tree.set_compare_overlays(highlights={}, modified_paths=set(), modified_parent_paths=set())
         self._newer_tree.set_compare_overlays(highlights={}, modified_paths=set(), modified_parent_paths=set())
         _ = self._older_tree.reload()
         _ = self._newer_tree.reload()
+
+    def _apply_filters(self) -> None:
+        """Recompute visible states, overlays, and tree visibility from reactives."""
+        raw = self._raw_compare_result
+        kinds = self.kind_filters
+        needle = self.path_search
+
+        filtered_result = filter_diff_result(raw, kinds=kinds, substring=needle)
+        visible_paths = {entry.path for entry in filtered_result.entries}
+        visible_states = {path: state for path, state in self._raw_path_states.items() if path in visible_paths}
+
+        self._compare_result = filtered_result
+        self._path_states = visible_states
+        self._ordered_change_paths = sorted(visible_states.keys(), key=lambda path: (len(path.parts), path.as_posix()))
+        if self._change_cursor >= len(self._ordered_change_paths):
+            self._change_cursor = -1
+
+        older_highlights, newer_highlights = build_compare_tree_highlights(visible_states)
+        older_modified, newer_modified = build_compare_tree_modified_paths(visible_states)
+        older_parents, newer_parents = build_compare_tree_parent_indicators(visible_states)
+
+        self._older_tree.set_compare_overlays(
+            highlights=older_highlights,
+            modified_paths=older_modified,
+            modified_parent_paths=older_parents,
+        )
+        self._newer_tree.set_compare_overlays(
+            highlights=newer_highlights,
+            modified_paths=newer_modified,
+            modified_parent_paths=newer_parents,
+        )
+
+        filter_active = self._filters_are_active()
+        older_visible = {state.relative_path for state in visible_states.values() if state.older_exists}
+        newer_visible = {state.relative_path for state in visible_states.values() if state.newer_exists}
+        self._older_tree.set_visible_paths(older_visible if filter_active else None)
+        self._newer_tree.set_visible_paths(newer_visible if filter_active else None)
+
+        _ = self._older_tree.reload()
+        _ = self._newer_tree.reload()
+
+        if self.selected_path not in visible_states:
+            self.selected_path = None
+            self._change_cursor = -1
+
+        self.query_one("#archive-compare-summary", Static).update(self._render_summary(filtered_result))
+        self.query_one("#archive-compare-selection", Static).update(
+            "No changed paths to inspect." if not visible_states else "No path selected."
+        )
+        self.query_one("#archive-compare-kind-filters", Static).update(self._render_kind_filter_chips(kinds))
+
+    def _filters_are_active(self) -> bool:
+        """Return whether any filter narrows the visible path set."""
+        return self.kind_filters != ALL_DIFF_KINDS or bool(self.path_search.strip())
+
+    def watch_kind_filters(self, _old: frozenset[DiffChangeKind], _new: frozenset[DiffChangeKind]) -> None:
+        """Re-apply filters whenever the active kind set changes."""
+        if hasattr(self, "_older_tree"):
+            self._apply_filters()
+
+    def watch_path_search(self, _old: str, _new: str) -> None:
+        """Re-apply filters whenever the search substring changes."""
+        if hasattr(self, "_older_tree"):
+            self._apply_filters()
+
+    def watch_selected_path(self, _old: Path | None, new_path: Path | None) -> None:
+        """Mirror the selection across both trees without retriggering the watcher."""
+        if not hasattr(self, "_older_tree") or self._suppress_selection_sync or new_path is None:
+            return
+        self._mirror_selection_to_trees(new_path)
+
+    @work(exclusive=True, group="archive-compare-selection-sync")
+    async def _mirror_selection_to_trees(self, relative_path: Path) -> None:
+        """Select the matching node on both trees without re-emitting events."""
+        self._suppress_selection_sync = True
+        try:
+            for tree in (self._older_tree, self._newer_tree):
+                node = await tree.find_node_by_relative_path(relative_path)
+                if node is None:
+                    continue
+                tree.select_node(node)
+                tree.scroll_to_node(node, animate=False)
+        finally:
+            self._suppress_selection_sync = False
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Propagate search-input changes into the reactive filter state."""
+        if event.input.id != "archive-compare-search-input":
+            return
+        self.path_search = event.value
+
+    def action_focus_search(self) -> None:
+        """Focus the path filter input."""
+        self.query_one("#archive-compare-search-input", Input).focus()
+
+    def action_clear_filters(self) -> None:
+        """Reset kind filters and search substring to defaults."""
+        search_input = self.query_one("#archive-compare-search-input", Input)
+        search_input.value = ""
+        self.path_search = ""
+        self.kind_filters = ALL_DIFF_KINDS
+
+    def action_toggle_kind(self, kind: str) -> None:
+        """Flip membership of a change kind in the active filter set."""
+        typed_kind = _coerce_diff_change_kind(kind)
+        if typed_kind is None:
+            return
+        members: set[DiffChangeKind] = set(self.kind_filters)
+        if typed_kind in members:
+            members.discard(typed_kind)
+        else:
+            members.add(typed_kind)
+        self.kind_filters = frozenset(members)
+
+    def action_next_change(self) -> None:
+        """Move the change cursor forward and select the corresponding path."""
+        self._advance_change_cursor(1)
+
+    def action_prev_change(self) -> None:
+        """Move the change cursor backward and select the corresponding path."""
+        self._advance_change_cursor(-1)
+
+    def _advance_change_cursor(self, direction: int) -> None:
+        """Select the next or previous visible changed path, wrapping at edges."""
+        if not self._ordered_change_paths:
+            return
+        total = len(self._ordered_change_paths)
+        if self._change_cursor < 0:
+            next_index = 0 if direction >= 0 else total - 1
+        else:
+            next_index = (self._change_cursor + direction) % total
+        self._change_cursor = next_index
+        relative_path = self._ordered_change_paths[next_index]
+        self.selected_path = relative_path
+        self._render_selection_from_relative_path(relative_path)
+
+    def action_open_content_diff(self) -> None:
+        """Open the content-diff modal for the currently selected path."""
+        relative_path = self.selected_path
+        if relative_path is None:
+            self.notify("Select a modified file first.", severity="warning", title="Archive Compare")
+            return
+        state = self._raw_path_states.get(relative_path)
+        if state is None:
+            self.notify("No change metadata for the selected path.", severity="warning", title="Archive Compare")
+            return
+        if not state.older_exists and not state.newer_exists:
+            self.notify("Nothing to diff — path is absent on both sides.", severity="warning")
+            return
+        _ = self.app.push_screen(
+            ContentDiffScreen(
+                repo=self._repo,
+                orchestrator=self._orchestrator,
+                older_archive=self._raw_compare_result.archive1,
+                newer_archive=self._raw_compare_result.archive2,
+                older_exists=state.older_exists,
+                newer_exists=state.newer_exists,
+                file_path=relative_path.as_posix(),
+            )
+        )
+
+    def _render_selection_from_relative_path(self, relative_path: Path) -> None:
+        """Populate the selection detail panel using a relative path directly."""
+        state = self._path_states.get(relative_path) or self._raw_path_states.get(relative_path)
+        if state is not None:
+            self._render_path_state_details(relative_path, state)
+            return
+
+        descendant_count = sum(
+            1 for path in self._path_states if relative_path == path or relative_path in path.parents
+        )
+        self.query_one("#archive-compare-selection", Static).update(
+            "\n".join(
+                [
+                    f"[bold #f5e0dc]{escape(relative_path.as_posix())}[/]",
+                    f"[#89b4fa]Changed descendants:[/] {descendant_count}",
+                ]
+            )
+        )
+
+    def _render_path_state_details(self, relative_path: Path, state: ComparePathState) -> None:
+        """Render the selection detail panel from a ComparePathState."""
+        changes = ", ".join(format_diff_change(change) for change in state.changes)
+        self.query_one("#archive-compare-selection", Static).update(
+            "\n".join(
+                [
+                    f"[bold #f5e0dc]{escape(relative_path.as_posix())}[/]",
+                    f"[#89b4fa]Older:[/] {'Present' if state.older_exists else 'Missing'}",
+                    f"[#89b4fa]Newer:[/] {'Present' if state.newer_exists else 'Missing'}",
+                    f"[#89b4fa]Changes:[/] {escape(changes)}",
+                ]
+            )
+        )
+
+    def _render_kind_filter_chips(self, active: frozenset[DiffChangeKind]) -> str:
+        """Render the one-line indicator of which kind filters are active."""
+        labels = [
+            ("added", "1 added"),
+            ("removed", "2 removed"),
+            ("modified", "3 modified"),
+            ("mode", "4 mode"),
+        ]
+        parts: list[str] = []
+        for kind, label in labels:
+            if kind in active:
+                parts.append(f"[#a6e3a1]● {label}[/]")
+            else:
+                parts.append(f"[dim]○ {label}[/]")
+        parts.append("[dim]— / search · ctrl+l clear[/]")
+        return "  ".join(parts)
 
     def _on_compare_error(self, older_archive: str, newer_archive: str, error: Exception) -> None:
         """Handle archive compare failures."""
@@ -708,32 +998,20 @@ class ArchiveCompareScreen(Screen[None]):
         if relative_path is None:
             return
 
-        state = self._path_states.get(relative_path)
-        if state is not None:
-            changes = ", ".join(format_diff_change(change) for change in state.changes)
-            self.query_one("#archive-compare-selection", Static).update(
-                "\n".join(
-                    [
-                        f"[bold #f5e0dc]{escape(relative_path.as_posix())}[/]",
-                        f"[#89b4fa]Older:[/] {'Present' if state.older_exists else 'Missing'}",
-                        f"[#89b4fa]Newer:[/] {'Present' if state.newer_exists else 'Missing'}",
-                        f"[#89b4fa]Changes:[/] {escape(changes)}",
-                    ]
-                )
-            )
+        self._render_selection_from_relative_path(relative_path)
+
+        if relative_path.parts and relative_path in self._raw_path_states:
+            if self.selected_path != relative_path:
+                self.selected_path = relative_path
+            if self._ordered_change_paths:
+                try:
+                    self._change_cursor = self._ordered_change_paths.index(relative_path)
+                except ValueError:
+                    self._change_cursor = -1
             return
 
-        descendant_count = sum(
-            1 for path in self._path_states if relative_path == path or relative_path in path.parents
-        )
-        self.query_one("#archive-compare-selection", Static).update(
-            "\n".join(
-                [
-                    f"[bold #f5e0dc]{escape(relative_path.as_posix())}[/]",
-                    f"[#89b4fa]Changed descendants:[/] {descendant_count}",
-                ]
-            )
-        )
+        self.selected_path = None
+        self._change_cursor = -1
 
     def _relative_compare_path(self, absolute_path: Path) -> Path | None:
         """Convert an absolute selected path into a relative compare path."""

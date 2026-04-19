@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import pytest
 from rich.style import Style
-from textual.widgets import DirectoryTree, Select, Static, Switch
+from textual.widgets import DirectoryTree, Input, Select, Static, Switch
 
 from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
 from borgboi.config import Config
@@ -420,6 +420,39 @@ async def test_archive_compare_screen_updates_selected_path_details(archive_comp
         assert "Newer" in str(cast(Any, selection).content)
 
 
+async def test_archive_compare_screen_clears_selected_file_when_directory_selected(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen._show_selected_path(screen._newer_root / "docs" / "file.txt")
+        await pilot.pause()
+        assert screen.selected_path == Path("docs/file.txt")
+
+        screen._show_selected_path(screen._newer_root / "docs")
+        await pilot.pause()
+
+        assert screen.selected_path is None
+
+
+async def test_archive_compare_screen_clears_selected_file_when_filters_hide_it(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen._show_selected_path(screen._newer_root / "docs" / "file.txt")
+        await pilot.pause()
+        assert screen.selected_path == Path("docs/file.txt")
+
+        search_input = screen.query_one("#archive-compare-search-input", Input)
+        search_input.value = "removed"
+        await pilot.pause()
+
+        assert screen.selected_path is None
+
+
 async def test_archive_compare_screen_cleans_up_tempdir_on_dismiss(archive_compare_app: BorgBoiApp) -> None:
     async with archive_compare_app.run_test() as pilot:
         screen = await _open_archive_compare_screen(archive_compare_app, pilot)
@@ -431,6 +464,85 @@ async def test_archive_compare_screen_cleans_up_tempdir_on_dismiss(archive_compa
         await pilot.pause()
 
         assert temp_root.exists() is False
+
+
+async def test_archive_compare_screen_kind_filter_prunes_overlays_and_summary(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen.action_toggle_kind("added")
+        screen.action_toggle_kind("modified")
+        screen.action_toggle_kind("mode")
+        await pilot.pause()
+
+        assert set(screen._path_states) == {Path("removed.txt"), Path("only-older/file.txt")}
+        assert Path("added.txt") not in screen._path_states
+        assert Path("docs/file.txt") not in screen._path_states
+        summary = screen.query_one("#archive-compare-summary", Static)
+        assert "Changed paths:[/] 2" in str(cast(Any, summary).content)
+
+
+async def test_archive_compare_screen_search_filter_matches_paths_case_insensitively(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        search_input = screen.query_one("#archive-compare-search-input", Input)
+        search_input.value = "DOCS"
+        await pilot.pause()
+
+        assert set(screen._path_states) == {Path("docs/file.txt"), Path("docs/mode.txt")}
+
+        screen.action_clear_filters()
+        await pilot.pause()
+
+        assert screen._path_states.keys() == screen._raw_path_states.keys()
+        assert search_input.value == ""
+
+
+async def test_archive_compare_screen_next_prev_change_cycles_and_selects(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen.action_next_change()
+        await pilot.pause()
+        assert screen.selected_path == screen._ordered_change_paths[0]
+
+        screen.action_next_change()
+        await pilot.pause()
+        assert screen.selected_path == screen._ordered_change_paths[1]
+
+        screen.action_prev_change()
+        await pilot.pause()
+        assert screen.selected_path == screen._ordered_change_paths[0]
+
+        screen.action_prev_change()
+        await pilot.pause()
+        assert screen.selected_path == screen._ordered_change_paths[-1]
+
+
+async def test_archive_compare_screen_opens_content_diff_modal_for_selected_path(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen.selected_path = Path("docs/file.txt")
+        screen.action_open_content_diff()
+        await pilot.pause()
+
+        from borgboi.tui.diff_modal import ContentDiffScreen
+
+        assert isinstance(archive_compare_app.screen, ContentDiffScreen)
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(archive_compare_app.screen, ArchiveCompareScreen)
 
 
 async def test_archive_compare_screen_clears_previous_diff_after_compare_failure(
