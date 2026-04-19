@@ -538,6 +538,45 @@ CollapsibleTitle:hover {
     margin-top: 1;
 }
 
+#archive-compare-kind-filters {
+    color: #cdd6f4;
+    margin-bottom: 1;
+}
+
+#archive-compare-search-input {
+    margin-bottom: 1;
+    border: round #45475a;
+    background: #11111b;
+    color: #cdd6f4;
+}
+
+#content-diff-modal {
+    width: 90%;
+    height: 90%;
+    border: round #cba6f7;
+    background: #1e1e2e;
+    padding: 1 2;
+}
+
+#content-diff-title {
+    color: #cba6f7;
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#content-diff-subtitle,
+#content-diff-status {
+    color: #cdd6f4;
+    padding-bottom: 1;
+}
+
+#content-diff-log {
+    height: 1fr;
+    border: round #313244;
+    background: #11111b;
+    color: #cdd6f4;
+}
+
 #daily-backup-log {
     height: 1fr;
     border: round #313244;
