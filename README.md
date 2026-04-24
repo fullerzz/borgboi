@@ -14,7 +14,7 @@ It layers a grouped CLI, a Textual TUI, YAML-based configuration, local metadata
 - Supports offline mode with local SQLite-backed metadata storage and no AWS dependency.
 - Stores repository passphrases in per-repo files under `~/.borgboi/passphrases/`.
 - Exposes a Cyclopts-powered CLI with grouped subcommands for repository, backup, S3, exclusions, and config workflows.
-- Includes a Textual TUI for browsing repositories, toggling a config sidebar, and viewing or editing shared and repo-specific excludes files.
+- Includes a Textual TUI for browsing repositories, opening a full-screen config viewer, and viewing or editing shared and repo-specific excludes files.
 
 ## Prerequisites
 

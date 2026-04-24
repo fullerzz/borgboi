@@ -12,6 +12,7 @@ nav = [
     { "TUI" = "pages/tui.md" },
     { "Importing Existing Repos" = "pages/importing-existing-repos.md" },
     { "User Configuration" = "pages/user-configuration.md" },
+    { "Tracing" = "pages/tracing.md" },
     { "SQLite Database" = "pages/sqlite-database.md" },
 ]
 

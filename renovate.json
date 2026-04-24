@@ -12,8 +12,7 @@
     "fullerzz"
   ],
   "minimumReleaseAge": "1 day",
-  "minimumReleaseAgeBehaviour": "timestamp-required",
-  "prCreation": "not-pending",
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
   "rebaseWhen": "behind-base-branch",
   "pruneStaleBranches": true,
   "osvVulnerabilityAlerts": true,

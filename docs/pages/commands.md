@@ -32,8 +32,9 @@ Home-screen keys:
 - `c`: open the config viewer screen
 - `e`: open the excludes viewer
 - `b`: open the daily backup screen
+- `Enter` / `i`: open the repository detail screen for the highlighted repository
 
-See [TUI](tui.md) for full details on the config viewer, daily backup screen, and excludes viewer.
+See [TUI](tui.md) for full details on the config viewer, repository detail screen, daily backup screen, and excludes viewer.
 
 ### `version`
 
@@ -214,9 +215,6 @@ Delete a repository from S3.
 - Required: `--name/-n`
 - Optional: `--dry-run`
 - Prompts for confirmation unless `--dry-run` is used
-
-!!! warning "Current status"
-    The command is present in the CLI surface, but the Cyclopts migration kept it as a placeholder and it currently prints `S3 delete for '<name>' not yet implemented (dry_run=<bool>)`.
 
 ### `s3 stats`
 
