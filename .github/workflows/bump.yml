@@ -25,7 +25,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
-          version: "0.11.3"
+          version: "0.11.7"
           enable-cache: true
       - name: Sync dependencies
         run: uv sync --frozen
@@ -54,7 +54,7 @@ jobs:
           git push origin "v${{ steps.cz.outputs.next_version }}"
       - name: Release
         if: ${{ steps.cz.outputs.next_version != steps.cz.outputs.previous_version }}
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           body_path: "body.md"
           tag_name: v${{ steps.cz.outputs.next_version }}
