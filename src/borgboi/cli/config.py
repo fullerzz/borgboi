@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal, cast
 
 import yaml
 from cyclopts import App, Parameter
@@ -30,7 +30,7 @@ def _write_stdout(text: str) -> None:
     console.file.flush()
 
 
-def _config_to_dict(cfg: Config) -> dict[str, Any]:
+def _config_to_dict(cfg: Config) -> dict[str, object]:
     config_dict = cfg.model_dump(exclude_none=True, mode="json")
     borg_config = config_dict.get("borg")
     if isinstance(borg_config, dict):
@@ -42,7 +42,7 @@ def _config_to_dict(cfg: Config) -> dict[str, Any]:
     return config_dict
 
 
-def _format_value(value: Any) -> str:
+def _format_value(value: object) -> str:
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, str):
@@ -52,7 +52,7 @@ def _format_value(value: Any) -> str:
 
 def _add_dict_to_tree(
     tree: Tree,
-    data: dict[str, Any],
+    data: dict[str, object],
     env_overrides: dict[str, str],
     path_prefix: str = "",
 ) -> None:
@@ -61,7 +61,7 @@ def _add_dict_to_tree(
 
         if isinstance(value, dict):
             branch = tree.add(f"[bold {COLOR_HEX.blue}]{key}[/]")
-            _add_dict_to_tree(branch, value, env_overrides, f"{full_path}.")
+            _add_dict_to_tree(branch, cast(dict[str, object], value), env_overrides, f"{full_path}.")
             continue
 
         formatted_value = _format_value(value)
@@ -77,13 +77,13 @@ def _add_dict_to_tree(
         tree.add(f"[{COLOR_HEX.text}]{key}:[/] [{COLOR_HEX.green}]{formatted_value}[/]")
 
 
-def _render_config_with_env_highlights(config_dict: dict[str, Any], env_overrides: dict[str, str]) -> Tree:
+def _render_config_with_env_highlights(config_dict: dict[str, object], env_overrides: dict[str, str]) -> Tree:
     tree = Tree(f"[bold {COLOR_HEX.mauve}]BorgBoi Config[/]")
     _add_dict_to_tree(tree, config_dict, env_overrides)
     return tree
 
 
-def _render_tree_panel(config_dict: dict[str, Any], env_overrides: dict[str, str]) -> None:
+def _render_tree_panel(config_dict: dict[str, object], env_overrides: dict[str, str]) -> None:
     tree = _render_config_with_env_highlights(config_dict, env_overrides)
     panel = Panel(tree, border_style=COLOR_HEX.blue, expand=False)
     console.print(panel)
@@ -94,7 +94,7 @@ def _render_tree_panel(config_dict: dict[str, Any], env_overrides: dict[str, str
         )
 
 
-def _render_syntax_panel(config_dict: dict[str, Any], output_format: str) -> None:
+def _render_syntax_panel(config_dict: dict[str, object], output_format: str) -> None:
     if output_format == "json":
         output = json.dumps(config_dict, indent=2)
     else:
@@ -111,7 +111,7 @@ def _render_syntax_panel(config_dict: dict[str, Any], output_format: str) -> Non
     console.print(panel)
 
 
-def _render_plain_text(config_dict: dict[str, Any], output_format: str, env_overrides: dict[str, str]) -> None:
+def _render_plain_text(config_dict: dict[str, object], output_format: str, env_overrides: dict[str, str]) -> None:
     if output_format == "json":
         _write_stdout(json.dumps(config_dict, indent=2) + "\n")
         return

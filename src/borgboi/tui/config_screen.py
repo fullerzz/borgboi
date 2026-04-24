@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -26,7 +26,7 @@ class ConfigScreen(Screen[None]):
         Binding("escape", "back", "Back"),
     ]
 
-    def __init__(self, config: Config | None = None, **kwargs: Any) -> None:
+    def __init__(self, config: Config | None = None, **kwargs: str | None) -> None:
         super().__init__(**kwargs)
         self._config = config
         logger.debug("ConfigScreen initialized", has_config=config is not None)

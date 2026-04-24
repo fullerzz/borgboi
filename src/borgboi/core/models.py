@@ -10,7 +10,6 @@ from decimal import Decimal, InvalidOperation
 from functools import cached_property
 from pathlib import Path
 from platform import system
-from typing import Any
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
@@ -222,7 +221,7 @@ class RepoMetadata(BaseModel):
     encryption: RepoEncryption
     repository: RepoLocation
     security_dir: str
-    archives: list[dict[str, Any]] = Field(default_factory=list)
+    archives: list[dict[str, object]] = Field(default_factory=list)
 
 
 class Repository(BaseModel):
@@ -329,18 +328,18 @@ class RepoStorageQuotaUpdateRequest(BaseModel):
 
     @field_validator("quota", mode="before")
     @classmethod
-    def normalize_quota(cls, value: Any) -> str:
+    def normalize_quota(cls, value: object) -> str:
         return cls.normalize_storage_quota(value)
 
     @field_validator("reserved_free_space", mode="before")
     @classmethod
-    def normalize_reserved_free_space(cls, value: Any) -> str | None:
+    def normalize_reserved_free_space(cls, value: object) -> str | None:
         if value is None:
             return None
         return cls.normalize_storage_quota(value)
 
     @classmethod
-    def normalize_storage_quota(cls, value: Any) -> str:
+    def normalize_storage_quota(cls, value: object) -> str:
         """Normalize a Borg size string and validate its format."""
         if not isinstance(value, str):
             raise ValueError("Storage quota must use Borg size format like 500M, 100G, or 1.5T")
@@ -353,7 +352,7 @@ class RepoStorageQuotaUpdateRequest(BaseModel):
         return normalized_quota
 
     @classmethod
-    def parse_storage_quota_bytes(cls, quota: Any) -> int:
+    def parse_storage_quota_bytes(cls, quota: object) -> int:
         """Convert a Borg-style storage quota string to bytes."""
         normalized_quota = cls.normalize_storage_quota(quota)
         unit = normalized_quota[-1] if normalized_quota[-1].isalpha() else ""

@@ -5,11 +5,12 @@ used when running in cloud mode with AWS connectivity.
 """
 
 import socket
-from typing import Any, override
+from typing import override
 
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.config import Config as BotoConfig
+from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource, Table
 from pydantic import ValidationError
 
 # Import the existing conversion helpers
@@ -48,10 +49,10 @@ class DynamoDBStorage(RepositoryStorage):
         """
         self._config = config or get_config()
         self.table_name = table_name or self._config.aws.dynamodb_repos_table
-        self._dynamodb = boto3.resource("dynamodb", config=boto_config)
+        self._dynamodb: DynamoDBServiceResource = boto3.resource("dynamodb", config=boto_config)
 
     @property
-    def _table(self) -> Any:
+    def _table(self) -> Table:
         """Get the DynamoDB table resource."""
         return self._dynamodb.Table(self.table_name)
 

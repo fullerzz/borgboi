@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, override
+from typing import TYPE_CHECKING, ClassVar, Literal, override
 
 from rich.markup import escape
 from rich.style import Style
@@ -432,7 +432,7 @@ class ArchiveCompareScreen(Screen[None]):
         *,
         initial_older_archive: str | None = None,
         initial_newer_archive: str | None = None,
-        **kwargs: Any,
+        **kwargs: str | None,
     ) -> None:
         self._repo = repo
         self._orchestrator = orchestrator

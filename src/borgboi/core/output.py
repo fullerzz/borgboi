@@ -6,7 +6,7 @@ allowing for flexible output processing (console, logging, silent, etc.).
 
 from collections.abc import Generator, Iterable
 from contextlib import AbstractContextManager, contextmanager, nullcontext
-from typing import Any, Protocol
+from typing import Protocol
 
 from pydantic import ValidationError
 
@@ -27,6 +27,9 @@ _PROGRESS_MSGID_LABELS: dict[str, str] = {
 }
 
 logger = get_logger(__name__)
+
+LogContext = dict[str, object]
+StatsPayload = dict[str, object]
 
 
 def _humanize_msgid(msgid: str | None) -> str:
@@ -56,7 +59,7 @@ class BaseOutputHandler(Protocol):
         """
         ...
 
-    def on_log(self, level: str, message: str, **kwargs: Any) -> None:
+    def on_log(self, level: str, message: str, **kwargs: object) -> None:
         """Handle log messages.
 
         Args:
@@ -91,7 +94,7 @@ class BaseOutputHandler(Protocol):
         """
         ...
 
-    def on_stats(self, stats: dict[str, Any]) -> None:
+    def on_stats(self, stats: StatsPayload) -> None:
         """Handle statistics output from Borg.
 
         Args:
@@ -213,7 +216,7 @@ class DefaultOutputHandler:
             msg += f" - {info}"
         self._console.print(msg, end="\r")
 
-    def on_log(self, level: str, message: str, **kwargs: Any) -> None:
+    def on_log(self, level: str, message: str, **kwargs: object) -> None:
         """Print log message to console with appropriate styling."""
         style_map = {
             "debug": "dim",
@@ -339,7 +342,7 @@ class DefaultOutputHandler:
 
         self.on_log(log_message.levelname.lower(), message, logger=log_message.name, msgid=log_message.msgid)
 
-    def on_stats(self, stats: dict[str, Any]) -> None:
+    def on_stats(self, stats: StatsPayload) -> None:
         """Print statistics to console."""
         from borgboi.lib.colors import COLOR_HEX
 
@@ -395,7 +398,7 @@ class SilentOutputHandler:
     def on_progress(self, current: int, total: int, info: str | None = None) -> None:
         """Discard progress updates."""
 
-    def on_log(self, level: str, message: str, **kwargs: Any) -> None:
+    def on_log(self, level: str, message: str, **kwargs: object) -> None:
         """Discard log messages."""
 
     def on_file_status(self, status: str, path: str) -> None:
@@ -407,7 +410,7 @@ class SilentOutputHandler:
     def on_stderr(self, line: str) -> None:
         """Discard stderr output."""
 
-    def on_stats(self, stats: dict[str, Any]) -> None:
+    def on_stats(self, stats: StatsPayload) -> None:
         """Discard statistics."""
 
     @contextmanager
@@ -438,17 +441,17 @@ class CollectingOutputHandler:
 
     def __init__(self) -> None:
         self.progress_updates: list[tuple[int, int, str | None]] = []
-        self.log_messages: list[tuple[str, str, dict[str, Any]]] = []
+        self.log_messages: list[tuple[str, str, LogContext]] = []
         self.file_statuses: list[tuple[str, str]] = []
         self.stdout_lines: list[str] = []
         self.stderr_lines: list[str] = []
-        self.stats: list[dict[str, Any]] = []
+        self.stats: list[StatsPayload] = []
 
     def on_progress(self, current: int, total: int, info: str | None = None) -> None:
         """Collect progress updates."""
         self.progress_updates.append((current, total, info))
 
-    def on_log(self, level: str, message: str, **kwargs: Any) -> None:
+    def on_log(self, level: str, message: str, **kwargs: object) -> None:
         """Collect log messages."""
         self.log_messages.append((level, message, kwargs))
 
@@ -464,7 +467,7 @@ class CollectingOutputHandler:
         """Collect stderr output."""
         self.stderr_lines.append(line)
 
-    def on_stats(self, stats: dict[str, Any]) -> None:
+    def on_stats(self, stats: StatsPayload) -> None:
         """Collect statistics."""
         self.stats.append(stats)
 

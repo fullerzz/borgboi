@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import difflib
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.markup import escape
 from rich.text import Text
@@ -46,7 +46,7 @@ class ContentDiffScreen(ModalScreen[None]):
         older_exists: bool,
         newer_exists: bool,
         file_path: str,
-        **kwargs: Any,
+        **kwargs: str | None,
     ) -> None:
         self._repo = repo
         self._orchestrator = orchestrator
