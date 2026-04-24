@@ -1,3 +1,30 @@
+## v1.27.1 (2026-04-24)
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Upgrade python deps with uv sync --upgrade ([f65924f](https://github.com/fullerzz/borgboi/commit/f65924f5d48e4b7bf56beed3f9b5459fad64c05e))
+
+
+
+### 💼 Other
+
+- Merge pull request [#245](https://github.com/fullerzz/borgboi/issues/245) from fullerzz/dev
+
+Update documentation and Python dependencies ([25c0124](https://github.com/fullerzz/borgboi/commit/25c0124019dcca8fa01934a20983bb5c82529cc0))
+
+
+
+### 📚 Documentation
+
+- Misc doc updates ([7981bd2](https://github.com/fullerzz/borgboi/commit/7981bd2f2d764353a22f414667c479c0dd48ce2f))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- Update renovate config ([7b11581](https://github.com/fullerzz/borgboi/commit/7b115814fbbb448e8ccb9bcd2786adafd8ca68fa))
+
+
 ## v1.27.0 (2026-04-15)
 
 ### 🚀 Features
