@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# ruff: noqa: T201
+
 """
 Migration script to migrate data from borgboi-repos table to bb-repos table.
 
@@ -16,10 +18,11 @@ Environment Variables:
 """
 
 import os
-from typing import Any
 
 import boto3
 from botocore.config import Config
+from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource
+from mypy_boto3_dynamodb.type_defs import TableAttributeValueTypeDef
 
 boto_config = Config(retries={"mode": "standard"})
 
@@ -27,8 +30,10 @@ OLD_TABLE_NAME = os.environ.get("OLD_TABLE_NAME", "borgboi-repos")
 NEW_TABLE_NAME = os.environ.get("NEW_TABLE_NAME", "bb-repos")
 AWS_REGION = os.environ.get("AWS_REGION", "us-west-2")
 
+type DynamoItem = dict[str, TableAttributeValueTypeDef]
 
-def transform_item(old_item: dict[str, Any]) -> dict[str, Any]:
+
+def transform_item(old_item: DynamoItem) -> DynamoItem:
     """
     Transform an item from the old schema to the new schema.
 
@@ -55,7 +60,7 @@ def transform_item(old_item: dict[str, Any]) -> dict[str, Any]:
         - retention_keep_monthly (optional, new field)
         - retention_keep_yearly (optional, new field)
     """
-    new_item: dict[str, Any] = {
+    new_item: DynamoItem = {
         "repo_path": old_item["repo_path"],
         "hostname": old_item["hostname"],
         "backup_target_path": old_item["backup_target_path"],
@@ -75,10 +80,10 @@ def transform_item(old_item: dict[str, Any]) -> dict[str, Any]:
     return new_item
 
 
-def scan_all_items(table_name: str, dynamodb_resource: Any) -> list[dict[str, Any]]:
+def scan_all_items(table_name: str, dynamodb_resource: DynamoDBServiceResource) -> list[DynamoItem]:
     """Scan all items from a DynamoDB table, handling pagination."""
     table = dynamodb_resource.Table(table_name)
-    items: list[dict[str, Any]] = []
+    items: list[DynamoItem] = []
 
     response = table.scan()
     items.extend(response.get("Items", []))
@@ -90,7 +95,7 @@ def scan_all_items(table_name: str, dynamodb_resource: Any) -> list[dict[str, An
     return items
 
 
-def batch_write_items(table_name: str, items: list[dict[str, Any]], dynamodb_resource: Any) -> int:
+def batch_write_items(table_name: str, items: list[DynamoItem], dynamodb_resource: DynamoDBServiceResource) -> int:
     """Write items to a DynamoDB table using batch_writer."""
     table = dynamodb_resource.Table(table_name)
     written_count = 0

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from importlib.metadata import version as get_version
-from typing import TYPE_CHECKING, Annotated, Any, NoReturn
+from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
 
 import cyclopts
-from cyclopts import App, Parameter
+from cyclopts import App, CycloptsError, Parameter, ResultAction
+from rich.console import Console
 from rich.prompt import Confirm
 from rich.traceback import install
 
@@ -160,7 +161,7 @@ def _launcher(
         bool,
         Parameter(name="--debug", env_var="BORGBOI_DEBUG", negative="", help="Enable debug output"),
     ] = False,
-) -> Any:
+) -> object:
     ctx = BorgBoiContext(offline=offline, debug=debug)
     clear_contextvars()
     config = ctx.config
@@ -171,7 +172,7 @@ def _launcher(
 
     try:
         command, bound, ignored = app.parse_args(tokens)
-        additional_kwargs: dict[str, Any] = {}
+        additional_kwargs: dict[str, object] = {}
 
         for parameter_name, annotation in ignored.items():
             if annotation is BorgBoiContext:
@@ -263,9 +264,34 @@ def tui(*, ctx: ContextArg) -> None:
     tui_app.run()
 
 
-def cli(tokens: Iterable[str] | str | None = None, **kwargs: Any) -> Any:
+def cli(
+    tokens: Iterable[str] | str | None = None,
+    *,
+    console: Console | None = None,
+    error_console: Console | None = None,
+    print_error: bool | None = None,
+    exit_on_error: bool | None = None,
+    help_on_error: bool | None = None,
+    verbose: bool | None = None,
+    end_of_options_delimiter: str | None = None,
+    backend: Literal["asyncio", "trio"] | None = None,
+    result_action: ResultAction | None = None,
+    error_formatter: Callable[[CycloptsError], object] | None = None,
+) -> object:
     """Invoke the BorgBoi CLI."""
-    return app.meta(tokens, **kwargs)
+    return app.meta(
+        tokens,
+        console=console,
+        error_console=error_console,
+        print_error=print_error,
+        exit_on_error=exit_on_error,
+        help_on_error=help_on_error,
+        verbose=verbose,
+        end_of_options_delimiter=end_of_options_delimiter,
+        backend=backend,
+        result_action=result_action,
+        error_formatter=error_formatter,
+    )
 
 
 def main() -> None:

@@ -6,7 +6,7 @@ import threading
 import time
 from collections.abc import Callable, Generator, Iterable
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.text import Text
 from textual import work
@@ -65,7 +65,7 @@ class TuiOutputHandler:
 
     def __init__(
         self,
-        app: App[Any],
+        app: App[object],
         log: RichLog,
         progress_bar: ProgressBar | None = None,
         *,
@@ -310,7 +310,7 @@ class TuiOutputHandler:
             msg += f" - {info}"
         self._write(Text(msg, style="cyan"))
 
-    def on_log(self, level: str, message: str, **_kwargs: Any) -> None:
+    def on_log(self, level: str, message: str, **_kwargs: object) -> None:
         """Write a log message to the log widget, styled by severity level."""
         step_id = self._LOG_STEP_START_IDS.get(message)
         if step_id is not None:
@@ -371,7 +371,7 @@ class TuiOutputHandler:
         else:
             self._render_log_message(event)
 
-    def on_stats(self, stats: dict[str, Any]) -> None:
+    def on_stats(self, stats: dict[str, object]) -> None:
         """Write a statistics block to the log."""
         self._write(Text("--- Statistics ---", style="bold #cba6f7"))
         for key, value in stats.items():

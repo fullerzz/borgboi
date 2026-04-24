@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as get_version
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from opentelemetry import trace
 from opentelemetry._logs import get_logger_provider, set_logger_provider
@@ -128,7 +128,7 @@ def _attach_log_handler(logger_provider: LoggerProvider) -> LoggingHandler:
     return handler
 
 
-def _is_proxy_provider(provider: Any) -> bool:
+def _is_proxy_provider(provider: object) -> bool:
     return type(provider).__name__.startswith("Proxy")
 
 

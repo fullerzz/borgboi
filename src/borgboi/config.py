@@ -5,7 +5,7 @@ import shutil
 from functools import lru_cache
 from pathlib import Path
 from platform import system
-from typing import Any, Literal, override
+from typing import Literal, override
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -71,7 +71,7 @@ class LoggingConfig(BaseModel):
 
     @field_validator("level", mode="before")
     @classmethod
-    def normalize_level(cls, value: Any) -> Any:
+    def normalize_level(cls, value: object) -> object:
         """Accept case-insensitive logging levels from YAML or environment variables."""
         if isinstance(value, str):
             return value.lower()
@@ -89,7 +89,7 @@ class TelemetryConfig(BaseModel):
     capture_tui: bool = True
 
 
-class Config(BaseSettings):
+class Config(BaseSettings):  # type: ignore[explicit-any]
     """Main configuration container."""
 
     model_config = SettingsConfigDict(
@@ -193,9 +193,9 @@ def _write_default_config(config_path: Path) -> None:
         yaml.safe_dump(config_dict, f, default_flow_style=False, sort_keys=False)
 
 
-def _load_and_validate(data: dict[str, Any], validate: bool, print_warnings: bool) -> Config:
+def _load_and_validate(data: dict[str, object], validate: bool, print_warnings: bool) -> Config:
     """Build Config and optionally validate with warnings."""
-    cfg = Config(**data)
+    cfg = Config.model_validate(data)
 
     if validate:
         config_warnings = validate_config(cfg)

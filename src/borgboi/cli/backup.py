@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, cast
 
 from cyclopts import App, Parameter
 
@@ -37,7 +37,7 @@ def _build_archive_stats_tables(repo_path: str, archive_info: ArchiveInfo) -> tu
 
     archive = archive_info.archive
     archive_stats_raw = archive.get("stats", {})
-    archive_stats = archive_stats_raw if isinstance(archive_stats_raw, dict) else {}
+    archive_stats = cast(dict[str, object], archive_stats_raw) if isinstance(archive_stats_raw, dict) else {}
 
     this_original_size = utils.format_size_bytes(utils.coerce_int(archive_stats.get("original_size")))
     this_compressed_size = utils.format_size_bytes(utils.coerce_int(archive_stats.get("compressed_size")))

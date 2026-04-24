@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -169,7 +169,7 @@ class DefaultExcludesScreen(Screen[None]):
         self,
         config: Config | None = None,
         repos: Sequence[BorgBoiRepo] | None = None,
-        **kwargs: Any,
+        **kwargs: str | None,
     ) -> None:
         super().__init__(**kwargs)
         self._config = config

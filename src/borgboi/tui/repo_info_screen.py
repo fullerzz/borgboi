@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.markup import escape
 from textual import work
@@ -172,7 +172,7 @@ class RepoInfoScreen(Screen[None]):
         repo: BorgBoiRepo,
         orchestrator: Orchestrator,
         config: Config | None = None,
-        **kwargs: Any,
+        **kwargs: str | None,
     ) -> None:
         super().__init__(**kwargs)
         self._repo = repo
