@@ -282,9 +282,12 @@ class CompareDirectoryTree(DirectoryTree):
         self._modified_paths: set[Path] = set()
         self._modified_parent_paths: set[Path] = set()
         self._visible_paths: set[Path] | None = None
+        self._mute_directory_messages: bool = False
 
     def on_tree_node_expanded(self, event: Tree.NodeExpanded[DirEntry]) -> None:
         """Relay directory expansion through a public custom message."""
+        if self._mute_directory_messages:
+            return
         dir_entry = event.node.data
         if dir_entry is None or not event.node.allow_expand:
             return
@@ -292,6 +295,8 @@ class CompareDirectoryTree(DirectoryTree):
 
     def on_tree_node_collapsed(self, event: Tree.NodeCollapsed[DirEntry]) -> None:
         """Relay directory collapse through a public custom message."""
+        if self._mute_directory_messages:
+            return
         dir_entry = event.node.data
         if dir_entry is None or not event.node.allow_expand:
             return
@@ -446,7 +451,6 @@ class ArchiveCompareScreen(Screen[None]):
         self._raw_compare_result = DiffResult(archive1="", archive2="", entries=[])
         self._ordered_change_paths: list[Path] = []
         self._change_cursor: int = -1
-        self._suppress_selection_sync: bool = False
         self._tempdir = TemporaryDirectory(prefix="borgboi-archive-compare-")
         self._compare_temp_root = Path(self._tempdir.name)
         self._older_root = self._compare_temp_root / "older"
@@ -754,23 +758,19 @@ class ArchiveCompareScreen(Screen[None]):
 
     def watch_selected_path(self, _old: Path | None, new_path: Path | None) -> None:
         """Mirror the selection across both trees without retriggering the watcher."""
-        if not hasattr(self, "_older_tree") or self._suppress_selection_sync or new_path is None:
+        if not hasattr(self, "_older_tree") or new_path is None:
             return
         self._mirror_selection_to_trees(new_path)
 
     @work(exclusive=True, group="archive-compare-selection-sync")
     async def _mirror_selection_to_trees(self, relative_path: Path) -> None:
-        """Select the matching node on both trees without re-emitting events."""
-        self._suppress_selection_sync = True
-        try:
-            for tree in (self._older_tree, self._newer_tree):
-                node = await tree.find_node_by_relative_path(relative_path)
-                if node is None:
-                    continue
-                tree.select_node(node)
-                tree.scroll_to_node(node, animate=False)
-        finally:
-            self._suppress_selection_sync = False
+        """Move the cursor to the matching node on both trees without re-emitting events."""
+        for tree in (self._older_tree, self._newer_tree):
+            node = await tree.find_node_by_relative_path(relative_path)
+            if node is None:
+                continue
+            tree.move_cursor(node)
+            tree.scroll_to_node(node, animate=False)
 
     def on_input_changed(self, event: Input.Changed) -> None:
         """Propagate search-input changes into the reactive filter state."""
@@ -965,11 +965,17 @@ class ArchiveCompareScreen(Screen[None]):
         paths_to_expand = sorted(new_paths - old_paths, key=lambda item: (len(Path(item).parts), item))
         paths_to_collapse = sorted(old_paths - new_paths, key=lambda item: (len(Path(item).parts), item), reverse=True)
 
-        for tree in (self._older_tree, self._newer_tree):
-            for relative_path in paths_to_expand:
-                await self._set_tree_path_state(tree, Path(relative_path), operation="expand")
-            for relative_path in paths_to_collapse:
-                await self._set_tree_path_state(tree, Path(relative_path), operation="collapse")
+        self._older_tree._mute_directory_messages = True
+        self._newer_tree._mute_directory_messages = True
+        try:
+            for tree in (self._older_tree, self._newer_tree):
+                for relative_path in paths_to_expand:
+                    await self._set_tree_path_state(tree, Path(relative_path), operation="expand")
+                for relative_path in paths_to_collapse:
+                    await self._set_tree_path_state(tree, Path(relative_path), operation="collapse")
+        finally:
+            self._older_tree._mute_directory_messages = False
+            self._newer_tree._mute_directory_messages = False
 
     async def _set_tree_path_state(
         self, tree: CompareDirectoryTree, relative_path: Path, *, operation: Literal["expand", "collapse"]
