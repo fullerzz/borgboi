@@ -9,6 +9,7 @@ import io
 import json
 import os
 import subprocess as sp
+import threading
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
@@ -562,6 +563,23 @@ class BorgClient:
             proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
             assert proc.stdout is not None
 
+            stderr_limit = 65536
+            stderr_chunks: list[bytes] = []
+            stderr_bytes_read = 0
+
+            def drain_stderr() -> None:
+                nonlocal stderr_bytes_read
+                if proc.stderr is None:
+                    return
+                while chunk := proc.stderr.read(4096):
+                    remaining = stderr_limit - stderr_bytes_read
+                    if remaining > 0:
+                        stderr_chunks.append(chunk[:remaining])
+                        stderr_bytes_read += min(len(chunk), remaining)
+
+            stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+            stderr_thread.start()
+
             limit = max_bytes + 1
             chunks: list[bytes] = []
             bytes_read = 0
@@ -574,18 +592,23 @@ class BorgClient:
 
             if bytes_read > max_bytes:
                 proc.kill()
-                _stdout, stderr = proc.communicate()
-                span.set_attribute("process.exit_code", proc.returncode or -1)
+                proc.stdout.close()
+                returncode = proc.wait()
+                stderr_thread.join()
+                stderr = b"".join(stderr_chunks)
+                span.set_attribute("process.exit_code", returncode)
                 if stderr:
                     span.set_attribute("borgboi.truncated.stderr", stderr.decode("utf-8", errors="replace"))
                 return ExtractedFileContent(payload=b"".join(chunks)[:max_bytes], truncated=True)
 
-            stdout_tail, stderr = proc.communicate()
-            span.set_attribute("process.exit_code", proc.returncode)
-            stdout = b"".join(chunks) + (stdout_tail or b"")
+            returncode = proc.wait()
+            stderr_thread.join()
+            stderr = b"".join(stderr_chunks)
+            span.set_attribute("process.exit_code", returncode)
+            stdout = b"".join(chunks)
             stdout_text = stdout.decode("utf-8", errors="replace") if stdout else ""
             stderr_text = stderr.decode("utf-8", errors="replace") if stderr else ""
-            self._handle_exit_code(proc.returncode, cmd, stdout_text, stderr_text)
+            self._handle_exit_code(returncode, cmd, stdout_text, stderr_text)
             return ExtractedFileContent(payload=stdout, truncated=False)
 
     def delete(

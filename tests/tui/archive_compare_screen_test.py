@@ -528,6 +528,28 @@ async def test_archive_compare_screen_next_prev_change_cycles_and_selects(
         assert screen.selected_path == screen._ordered_change_paths[-1]
 
 
+async def test_archive_compare_screen_re_derives_cursor_after_filter_reorders_list(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen.action_next_change()
+        await pilot.pause()
+        screen.action_next_change()
+        await pilot.pause()
+        screen.action_next_change()
+        await pilot.pause()
+        assert screen.selected_path == Path("docs/file.txt")
+        assert screen._change_cursor == 2
+
+        screen.action_toggle_kind("removed")
+        await pilot.pause()
+
+        assert screen.selected_path == Path("docs/file.txt")
+        assert screen._change_cursor == 1
+
+
 async def test_archive_compare_screen_opens_content_diff_modal_for_selected_path(
     archive_compare_app: BorgBoiApp,
 ) -> None:

@@ -705,7 +705,9 @@ class ArchiveCompareScreen(Screen[None]):
         self._compare_result = filtered_result
         self._path_states = visible_states
         self._ordered_change_paths = sorted(visible_states.keys(), key=lambda path: (len(path.parts), path.as_posix()))
-        if self._change_cursor >= len(self._ordered_change_paths):
+        if self.selected_path is not None and self.selected_path in visible_states:
+            self._change_cursor = self._ordered_change_paths.index(self.selected_path)
+        elif self._change_cursor >= len(self._ordered_change_paths):
             self._change_cursor = -1
 
         older_highlights, newer_highlights = build_compare_tree_highlights(visible_states)

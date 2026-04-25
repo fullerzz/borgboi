@@ -1,4 +1,5 @@
 import io
+import subprocess as sp
 import sys
 from collections.abc import Generator
 from pathlib import Path
@@ -8,6 +9,7 @@ import pytest
 
 from borgboi.clients.borg_client import BorgClient
 from borgboi.config import BorgConfig
+from borgboi.core.errors import BorgError
 from borgboi.core.models import DiffOptions
 from borgboi.core.output import SilentOutputHandler
 
@@ -201,10 +203,11 @@ def test_extract_file_to_stdout_capped_returns_full_payload_when_under_cap(monke
     class FakeProcess:
         def __init__(self) -> None:
             self.stdout = io.BytesIO(b"hello world\n")
+            self.stderr = io.BytesIO()
             self.returncode = 0
 
-        def communicate(self) -> tuple[bytes, bytes]:
-            return b"", b""
+        def wait(self) -> int:
+            return self.returncode
 
         def kill(self) -> None:
             raise AssertionError("kill should not be called when payload is under cap")
@@ -234,21 +237,48 @@ def test_extract_file_to_stdout_capped_returns_full_payload_when_under_cap(monke
     ]
     assert payload.payload == b"hello world\n"
     assert payload.truncated is False
+    assert captured["stderr"] == sp.PIPE
+
+
+def test_extract_file_to_stdout_capped_preserves_stderr_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    process = SimpleNamespace(stdout=io.BytesIO(), stderr=io.BytesIO(b"Repository not found\n"), returncode=2)
+
+    def fake_wait() -> int:
+        return 2
+
+    process.wait = fake_wait
+
+    def fake_popen(
+        cmd: list[str],
+        stdout: int | None = None,
+        stderr: int | None = None,
+        env: dict[str, str] | None = None,
+    ) -> SimpleNamespace:
+        _ = (cmd, stdout, stderr, env)
+        return process
+
+    monkeypatch.setattr("borgboi.clients.borg_client.sp.Popen", fake_popen)
+
+    with pytest.raises(BorgError) as error_info:
+        client.extract_file_to_stdout_capped("/repo", "archive-old", "docs/file.txt", max_bytes=32)
+
+    assert error_info.value.stderr == "Repository not found\n"
 
 
 def test_extract_file_to_stdout_capped_truncates_large_payload(monkeypatch: pytest.MonkeyPatch) -> None:
     client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
-    process = SimpleNamespace(stdout=io.BytesIO(b"abcdef"), returncode=0, killed=False)
+    process = SimpleNamespace(stdout=io.BytesIO(b"abcdef"), stderr=io.BytesIO(), returncode=0, killed=False)
 
     def fake_kill() -> None:
         process.killed = True
         process.returncode = -9
 
-    def fake_communicate() -> tuple[bytes, bytes]:
-        return b"", b""
+    def fake_wait() -> int:
+        return int(process.returncode)
 
     process.kill = fake_kill
-    process.communicate = fake_communicate
+    process.wait = fake_wait
 
     def fake_popen(
         cmd: list[str],
