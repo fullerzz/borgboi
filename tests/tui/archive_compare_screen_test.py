@@ -12,7 +12,7 @@ from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import Repository
 from borgboi.tui.app import BorgBoiApp
-from borgboi.tui.archive_compare_screen import (
+from borgboi.tui.features.archive_compare import (
     ArchiveCompareScreen,
     CompareDirectoryTree,
     build_compare_path_states,
@@ -20,7 +20,7 @@ from borgboi.tui.archive_compare_screen import (
     build_compare_tree_modified_paths,
     build_compare_tree_parent_indicators,
 )
-from borgboi.tui.repo_info_screen import RepoInfoScreen
+from borgboi.tui.features.repo_detail import RepoInfoScreen
 
 
 @pytest.fixture
@@ -52,7 +52,9 @@ def archive_compare_app(
     repo_archives: list[RepoArchive],
     archive_compare_result: DiffResult,
 ) -> BorgBoiApp:
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
     repo_detail_repo.path = tui_config_with_excludes.borgboi_dir.as_posix()
 
     return BorgBoiApp(
@@ -536,7 +538,7 @@ async def test_archive_compare_screen_opens_content_diff_modal_for_selected_path
         screen.action_open_content_diff()
         await pilot.pause()
 
-        from borgboi.tui.diff_modal import ContentDiffScreen
+        from borgboi.tui.features.archive_compare import ContentDiffScreen
 
         assert isinstance(archive_compare_app.screen, ContentDiffScreen)
 

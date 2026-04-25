@@ -11,7 +11,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header
 
 from borgboi.core.logging import get_logger
-from borgboi.tui.config_panel import ConfigPanel
+from borgboi.tui.widgets import ConfigPanel
 
 logger = get_logger(__name__)
 

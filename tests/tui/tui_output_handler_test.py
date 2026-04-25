@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, call
 import pytest
 from rich.text import Text
 
-from borgboi.tui.daily_backup_screen import TuiOutputHandler
+from borgboi.tui.features.daily_backup import TuiOutputHandler
 
 
 class _StaticProgressHistory:

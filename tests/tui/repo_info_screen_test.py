@@ -11,9 +11,8 @@ from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import Repository, RetentionPolicy
 from borgboi.tui.app import BorgBoiApp
-from borgboi.tui.archive_compare_screen import ArchiveCompareScreen
-from borgboi.tui.repo_config_screen import RepoConfigScreen
-from borgboi.tui.repo_info_screen import RepoInfoScreen, load_repo_excludes_state
+from borgboi.tui.features.archive_compare import ArchiveCompareScreen
+from borgboi.tui.features.repo_detail import RepoConfigScreen, RepoInfoScreen, load_repo_excludes_state
 
 
 @pytest.fixture
@@ -101,7 +100,9 @@ async def test_repo_info_screen_renders_requested_sections(
     tmp_path: Any,
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     repo_specific_path = (
         tui_config_with_excludes.borgboi_dir / f"{repo_detail_repo.name}_{tui_config_with_excludes.excludes_filename}"
@@ -261,7 +262,9 @@ async def test_repo_info_screen_clears_stale_quota_after_refresh_failure(
     tmp_path: Any,
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     quota_calls = 0
 
@@ -336,7 +339,9 @@ async def test_repo_info_screen_shows_workspace_tree_for_local_repo(
     (tmp_path / "nested").mkdir()
     (tmp_path / "README.md").write_text("hello\n", encoding="utf-8")
     repo_detail_repo.path = tmp_path.as_posix()
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     async with repo_info_app.run_test() as pilot:
         await pilot.pause()
@@ -359,7 +364,7 @@ async def test_repo_info_screen_hides_workspace_tree_for_remote_repo(
     monkeypatch: pytest.MonkeyPatch,
     repo_info_app: BorgBoiApp,
 ) -> None:
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: "other-host")
+    monkeypatch.setattr("borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: "other-host")
 
     async with repo_info_app.run_test() as pilot:
         await pilot.pause()
@@ -395,7 +400,9 @@ async def test_repo_info_screen_opens_archive_compare_screen(
     tmp_path: Any,
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     async with repo_info_app.run_test() as pilot:
         await pilot.pause()
@@ -438,7 +445,9 @@ async def test_repo_info_screen_opens_repo_config_screen(
     tmp_path: Any,
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     async with repo_info_app.run_test() as pilot:
         await pilot.pause()
@@ -467,7 +476,9 @@ async def test_repo_info_screen_preserves_loaded_quota_after_retention_only_save
     tmp_path: Any,
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     seen_storage_quotas: list[str | None] = []
 
@@ -538,7 +549,9 @@ async def test_repo_info_screen_preserves_default_retention_source_after_quota_o
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
     repo_detail_repo.retention_policy = None
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     def update_repo_config(**kwargs: Any) -> tuple[str | None, RetentionPolicy | None]:
         return "250G", None
@@ -605,7 +618,9 @@ async def test_repo_info_screen_shows_default_retention_source_after_clearing_ov
 ) -> None:
     repo_detail_repo.path = tmp_path.as_posix()
     repo_detail_repo.retention_policy = RetentionPolicy(keep_daily=30, keep_weekly=8, keep_monthly=12, keep_yearly=2)
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     def update_repo_config(**kwargs: Any) -> tuple[str | None, RetentionPolicy | None]:
         return None, None
@@ -663,7 +678,9 @@ async def test_repo_info_screen_reports_missing_local_workspace_path(
     tmp_path: Any,
 ) -> None:
     repo_detail_repo.path = (tmp_path / "missing-repo").as_posix()
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
 
     async with repo_info_app.run_test() as pilot:
         await pilot.pause()

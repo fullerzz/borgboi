@@ -46,7 +46,7 @@ from borgboi.lib.diff import (
     summarize_diff_changes,
 )
 from borgboi.lib.utils import format_iso_timestamp, format_size_bytes
-from borgboi.tui.diff_modal import ContentDiffScreen
+from borgboi.tui.features.archive_compare.content_diff_modal import ContentDiffScreen
 
 logger = get_logger(__name__)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from borgboi.tui.daily_backup_progress import DEFAULT_STAGE_DURATION_MS, SQLiteDailyBackupProgressHistory
+from borgboi.tui.features.daily_backup import DEFAULT_STAGE_DURATION_MS, SQLiteDailyBackupProgressHistory
 
 
 def _make_history(tmp_path: Path) -> SQLiteDailyBackupProgressHistory:
