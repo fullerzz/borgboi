@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, ClassVar, override
 from rich.markup import escape
 from rich.text import Text
 from textual import work
+from textual._context import NoActiveAppError
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Vertical
@@ -80,6 +81,17 @@ class ContentDiffScreen(ModalScreen[None]):
     def action_close(self) -> None:
         _ = self.dismiss(None)
 
+    def _can_schedule_render(self) -> bool:
+        return self.is_mounted and self.is_attached
+
+    def _can_render(self) -> bool:
+        if not self._can_schedule_render():
+            return False
+        try:
+            return self.app.is_running and self.app.screen is self
+        except NoActiveAppError:
+            return False
+
     @work(thread=True, exclusive=True, group="content-diff")
     def _load_contents(self) -> None:
         try:
@@ -110,18 +122,22 @@ class ContentDiffScreen(ModalScreen[None]):
                 file_path=self._file_path,
                 error=str(exc),
             )
-            self.app.call_from_thread(self._render_error, exc)
+            if self._can_schedule_render():
+                self.app.call_from_thread(self._render_error, exc)
             return
 
-        self.app.call_from_thread(
-            self._render_contents,
-            older_content.payload if older_content is not None else b"",
-            newer_content.payload if newer_content is not None else b"",
-            older_content.truncated if older_content is not None else False,
-            newer_content.truncated if newer_content is not None else False,
-        )
+        if self._can_schedule_render():
+            self.app.call_from_thread(
+                self._render_contents,
+                older_content.payload if older_content is not None else b"",
+                newer_content.payload if newer_content is not None else b"",
+                older_content.truncated if older_content is not None else False,
+                newer_content.truncated if newer_content is not None else False,
+            )
 
     def _render_error(self, error: Exception) -> None:
+        if not self._can_render():
+            return
         self.query_one("#content-diff-status", Static).update(
             f"[#f38ba8]Failed to load file contents:[/] {escape(str(error))}"
         )
@@ -133,6 +149,8 @@ class ContentDiffScreen(ModalScreen[None]):
         older_truncated: bool,
         newer_truncated: bool,
     ) -> None:
+        if not self._can_render():
+            return
         log = self.query_one("#content-diff-log", RichLog)
         status = self.query_one("#content-diff-status", Static)
 
