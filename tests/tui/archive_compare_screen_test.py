@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -566,6 +567,57 @@ async def test_archive_compare_screen_opens_content_diff_modal_for_selected_path
 
         await pilot.press("escape")
         await pilot.pause()
+        assert isinstance(archive_compare_app.screen, ArchiveCompareScreen)
+
+
+async def test_content_diff_modal_ignores_worker_result_after_dismissal(
+    archive_compare_app: BorgBoiApp,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    extract_started = threading.Event()
+    allow_extract = threading.Event()
+
+    def _slow_extract(*_args: Any, archive_name: str, **_kwargs: Any) -> SimpleNamespace:
+        extract_started.set()
+        allow_extract.wait(timeout=5)
+        payload = b"before\n" if archive_name == "2026-03-27_22:00:00" else b"after\n"
+        return SimpleNamespace(payload=payload, truncated=False)
+
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+        monkeypatch.setattr(
+            screen._orchestrator,
+            "extract_archived_file_capped",
+            lambda repo, archive_name, file_path, *, max_bytes: _slow_extract(
+                repo,
+                archive_name=archive_name,
+                file_path=file_path,
+                max_bytes=max_bytes,
+            ),
+            raising=False,
+        )
+
+        screen.selected_path = Path("docs/file.txt")
+        screen.action_open_content_diff()
+
+        from borgboi.tui.features.archive_compare import ContentDiffScreen
+
+        for _ in range(60):
+            await pilot.pause(0.05)
+            if isinstance(archive_compare_app.screen, ContentDiffScreen) and extract_started.is_set():
+                break
+
+        assert isinstance(archive_compare_app.screen, ContentDiffScreen)
+        assert extract_started.is_set() is True
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(archive_compare_app.screen, ArchiveCompareScreen)
+
+        allow_extract.set()
+        for _ in range(60):
+            await pilot.pause(0.05)
+
         assert isinstance(archive_compare_app.screen, ArchiveCompareScreen)
 
 
