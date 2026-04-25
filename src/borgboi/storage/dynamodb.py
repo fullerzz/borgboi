@@ -4,14 +4,18 @@ This module provides AWS DynamoDB-backed storage for repository metadata,
 used when running in cloud mode with AWS connectivity.
 """
 
+from __future__ import annotations
+
 import socket
-from typing import override
+from typing import TYPE_CHECKING, override
 
 import boto3
 from boto3.dynamodb.conditions import Key
 from botocore.config import Config as BotoConfig
-from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource, Table
 from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from mypy_boto3_dynamodb.service_resource import DynamoDBServiceResource, Table
 
 # Import the existing conversion helpers
 from borgboi.clients.dynamodb import (

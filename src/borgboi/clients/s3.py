@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import csv
 import gzip
 import io
@@ -6,12 +8,14 @@ import subprocess as sp
 from collections.abc import Generator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Protocol, cast
+from typing import IO, TYPE_CHECKING, Protocol, cast
 
 import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
-from mypy_boto3_s3.client import S3Client
+
+if TYPE_CHECKING:
+    from mypy_boto3_s3.client import S3Client
 
 from borgboi.config import Config, get_config
 from borgboi.core.errors import StorageError
@@ -49,7 +53,7 @@ class S3BucketStats:
     total_object_count: int
     storage_breakdown: list[S3StorageClassBreakdown]
     metrics_timestamp: datetime | None = None
-    intelligent_tiering_forecast: "S3IntelligentTieringForecast | None" = None
+    intelligent_tiering_forecast: S3IntelligentTieringForecast | None = None
 
 
 @dataclass(frozen=True)
@@ -394,11 +398,7 @@ def _iter_inventory_rows(
                     yield mapped
             return
 
-        body_bytes = body.read()
-        if not isinstance(body_bytes, bytes):
-            return
-
-        with io.StringIO(body_bytes.decode("utf-8"), newline="") as text_stream:
+        with io.TextIOWrapper(cast("IO[bytes]", body), encoding="utf-8", newline="") as text_stream:
             reader = csv.reader(text_stream)
 
             for row in reader:
