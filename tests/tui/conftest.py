@@ -110,7 +110,7 @@ def make_orchestrator(**overrides: Any) -> Any:
 @pytest.fixture
 def fake_tui_tracer(monkeypatch: pytest.MonkeyPatch) -> FakeTracer:
     tracer = FakeTracer()
-    monkeypatch.setattr("borgboi.tui.telemetry.tracer", tracer)
+    monkeypatch.setattr("borgboi.tui.support.telemetry.tracer", tracer)
     return tracer
 
 

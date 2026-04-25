@@ -12,8 +12,11 @@ from borgboi.clients.s3_client import MockS3Client
 from borgboi.config import Config
 from borgboi.models import BorgBoiRepo
 from borgboi.tui.app import BorgBoiApp
-from borgboi.tui.daily_backup_progress import DEFAULT_STAGE_DURATION_MS, SQLiteDailyBackupProgressHistory
-from borgboi.tui.daily_backup_screen import DailyBackupScreen
+from borgboi.tui.features.daily_backup import (
+    DEFAULT_STAGE_DURATION_MS,
+    DailyBackupScreen,
+    SQLiteDailyBackupProgressHistory,
+)
 
 from .conftest import FakeBorg, FakeStorage, build_repo
 

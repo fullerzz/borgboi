@@ -6,8 +6,8 @@ from typing import Any, cast
 from textual.widgets import Collapsible, Static
 
 from borgboi.tui.app import BorgBoiApp
-from borgboi.tui.config_panel import ConfigPanel, _aws_profile_display, _render_section
-from borgboi.tui.config_screen import ConfigScreen
+from borgboi.tui.screens import ConfigScreen
+from borgboi.tui.widgets.config_panel import ConfigPanel, _aws_profile_display, _render_section
 
 # -- Pure unit tests ----------------------------------------------------------
 

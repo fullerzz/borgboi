@@ -4,11 +4,12 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from textual.pilot import Pilot
 from textual.widgets import Link, Static, Tabs, TextArea
 
 from borgboi.config import Config
 from borgboi.tui.app import BorgBoiApp
-from borgboi.tui.excludes_screen import (
+from borgboi.tui.screens.excludes import (
     _EDITING_STATUS,
     _EXCLUDES_HELP_URL,
     DefaultExcludesScreen,
@@ -28,6 +29,16 @@ def _build_excludes_app(cfg: Config) -> BorgBoiApp:
             SimpleNamespace(list_repos=lambda: [build_repo("alpha")]),
         ),
     )
+
+
+async def _wait_for_excludes_tabs_focus(pilot: Pilot[None], screen: DefaultExcludesScreen) -> Tabs:
+    """Wait until screen mount focuses the tabs before sending tab navigation keys."""
+    tabs = screen.query_one("#default-excludes-tabs", Tabs)
+    for _ in range(20):
+        if screen.app.focused is tabs:
+            return tabs
+        await pilot.pause(0.01)
+    raise AssertionError("default excludes tabs did not receive focus")
 
 
 # -- Pure unit tests (no async, no pilot) ------------------------------------
@@ -83,7 +94,7 @@ async def test_tui_can_open_switch_and_close_excludes_screen(tui_config: Config)
 
         assert isinstance(app.screen, DefaultExcludesScreen)
 
-        tabs = app.screen.query_one("#default-excludes-tabs", Tabs)
+        tabs = await _wait_for_excludes_tabs_focus(pilot, app.screen)
         help_link = app.screen.query_one("#default-excludes-help-link", Link)
         viewer = app.screen.query_one("#default-excludes-viewer", TextArea)
         status = app.screen.query_one("#default-excludes-status", Static)
@@ -188,7 +199,7 @@ async def test_tui_edit_creates_nonexistent_file(tui_config: Config) -> None:
         await pilot.press("e")
         assert isinstance(app.screen, DefaultExcludesScreen)
 
-        tabs = app.screen.query_one("#default-excludes-tabs", Tabs)
+        tabs = await _wait_for_excludes_tabs_focus(pilot, app.screen)
         await pilot.press("right")
         assert tabs.active_tab is not None
         assert tabs.active_tab.id == "repo-1"

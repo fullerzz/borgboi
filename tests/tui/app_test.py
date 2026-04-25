@@ -11,10 +11,9 @@ from borgboi.config import Config, TelemetryConfig
 from borgboi.models import BorgBoiRepo
 from borgboi.storage.db import get_db_path
 from borgboi.tui.app import BorgBoiApp
-from borgboi.tui.config_screen import ConfigScreen
-from borgboi.tui.daily_backup_screen import DailyBackupScreen
-from borgboi.tui.excludes_screen import DefaultExcludesScreen
-from borgboi.tui.repo_info_screen import RepoInfoScreen
+from borgboi.tui.features.daily_backup import DailyBackupScreen
+from borgboi.tui.features.repo_detail import RepoInfoScreen
+from borgboi.tui.screens import ConfigScreen, DefaultExcludesScreen
 
 from .conftest import FakeTracer, build_repo, make_orchestrator
 
