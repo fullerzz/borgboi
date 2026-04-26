@@ -458,8 +458,10 @@ def backup_diff(
             archive2 = selected_archive2.name
             archives_validated = True
 
-        assert archive1 is not None
-        assert archive2 is not None
+        if archive1 is None or archive2 is None:
+            print_error_and_exit(
+                "Provide both --archive1 and --archive2, or omit both to compare the two most recent archives."
+            )
 
         result = ctx.orchestrator.diff_archives(
             repo_info,

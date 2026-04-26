@@ -542,8 +542,12 @@ class ArchiveCompareScreen(Screen[None]):
             self.app.call_from_thread(self._on_archive_choices_error, exc)
             return
 
-        assert older_archive is not None
-        assert newer_archive is not None
+        if older_archive is None or newer_archive is None:
+            self.app.call_from_thread(
+                self._on_archive_choices_error,
+                ValidationError("Repository must contain at least two archives to compare", field="archives"),
+            )
+            return
         self.app.call_from_thread(self._apply_archive_choices, archives, older_archive, newer_archive)
 
     def _apply_archive_choices(self, archives: list[RepoArchive], older_archive: str, newer_archive: str) -> None:

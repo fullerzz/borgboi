@@ -1,7 +1,7 @@
 import io
 import subprocess as sp
 import sys
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -212,6 +212,8 @@ def test_extract_file_to_stdout_capped_returns_full_payload_when_under_cap(monke
         def kill(self) -> None:
             raise AssertionError("kill should not be called when payload is under cap")
 
+    process = FakeProcess()
+
     def fake_popen(
         cmd: list[str],
         stdout: int | None = None,
@@ -222,7 +224,7 @@ def test_extract_file_to_stdout_capped_returns_full_payload_when_under_cap(monke
         captured["stdout"] = stdout
         captured["stderr"] = stderr
         captured["env"] = env
-        return FakeProcess()
+        return process
 
     monkeypatch.setattr("borgboi.clients.borg_client.sp.Popen", fake_popen)
 
@@ -238,6 +240,7 @@ def test_extract_file_to_stdout_capped_returns_full_payload_when_under_cap(monke
     assert payload.payload == b"hello world\n"
     assert payload.truncated is False
     assert captured["stderr"] == sp.PIPE
+    assert process.stdout.closed is True
 
 
 def test_extract_file_to_stdout_capped_preserves_stderr_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -264,6 +267,7 @@ def test_extract_file_to_stdout_capped_preserves_stderr_on_failure(monkeypatch: 
         client.extract_file_to_stdout_capped("/repo", "archive-old", "docs/file.txt", max_bytes=32)
 
     assert error_info.value.stderr == "Repository not found\n"
+    assert process.stdout.closed is True
 
 
 def test_extract_file_to_stdout_capped_truncates_large_payload(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -296,6 +300,47 @@ def test_extract_file_to_stdout_capped_truncates_large_payload(monkeypatch: pyte
     assert payload.payload == b"abcd"
     assert payload.truncated is True
     assert process.killed is True
+    assert process.stdout.closed is True
+
+
+def test_extract_file_to_stdout_capped_bounds_stderr_thread_join(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    process = SimpleNamespace(stdout=io.BytesIO(b"ok"), stderr=io.BytesIO(), returncode=0)
+    join_timeouts: list[float | None] = []
+
+    class FakeThread:
+        def __init__(self, *, target: Callable[[], None], daemon: bool = False) -> None:
+            _ = daemon
+            self._target = target
+
+        def start(self) -> None:
+            self._target()
+
+        def join(self, timeout: float | None = None) -> None:
+            join_timeouts.append(timeout)
+
+    def fake_wait() -> int:
+        return int(process.returncode)
+
+    process.wait = fake_wait
+
+    def fake_popen(
+        cmd: list[str],
+        stdout: int | None = None,
+        stderr: int | None = None,
+        env: dict[str, str] | None = None,
+    ) -> SimpleNamespace:
+        _ = (cmd, stdout, stderr, env)
+        return process
+
+    monkeypatch.setattr("borgboi.clients.borg_client.sp.Popen", fake_popen)
+    monkeypatch.setattr("borgboi.clients.borg_client.threading.Thread", FakeThread)
+
+    payload = client.extract_file_to_stdout_capped("/repo", "archive-old", "docs/file.txt", max_bytes=32)
+
+    assert payload.payload == b"ok"
+    assert payload.truncated is False
+    assert join_timeouts == [5.0]
 
 
 def test_diff_archives_builds_borg_diff_command(monkeypatch: pytest.MonkeyPatch) -> None:

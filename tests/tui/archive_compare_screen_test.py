@@ -621,6 +621,52 @@ async def test_content_diff_modal_ignores_worker_result_after_dismissal(
         assert isinstance(archive_compare_app.screen, ArchiveCompareScreen)
 
 
+async def test_content_diff_modal_reports_all_skip_reasons(
+    archive_compare_app: BorgBoiApp,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        def _extract_archived_file_capped(
+            _repo: object,
+            archive_name: str,
+            _file_path: str,
+            *,
+            max_bytes: int,
+        ) -> SimpleNamespace:
+            _ = max_bytes
+            if archive_name == "2026-03-27_22:00:00":
+                return SimpleNamespace(payload=b"older\n", truncated=True)
+            return SimpleNamespace(payload=b"newer\x00binary", truncated=False)
+
+        monkeypatch.setattr(
+            screen._orchestrator,
+            "extract_archived_file_capped",
+            _extract_archived_file_capped,
+            raising=False,
+        )
+
+        screen.selected_path = Path("docs/file.txt")
+        screen.action_open_content_diff()
+
+        from borgboi.tui.features.archive_compare import ContentDiffScreen
+
+        for _ in range(60):
+            await pilot.pause(0.05)
+            if isinstance(archive_compare_app.screen, ContentDiffScreen):
+                status = archive_compare_app.screen.query_one("#content-diff-status", Static)
+                status_text = str(cast(Any, status).content)
+                if "older copy exceeds" in status_text and "newer copy looks binary" in status_text:
+                    break
+
+        assert isinstance(archive_compare_app.screen, ContentDiffScreen)
+        status = archive_compare_app.screen.query_one("#content-diff-status", Static)
+        status_text = str(cast(Any, status).content)
+        assert "older copy exceeds" in status_text
+        assert "newer copy looks binary" in status_text
+
+
 async def test_archive_compare_screen_clears_previous_diff_after_compare_failure(
     archive_compare_app: BorgBoiApp,
     monkeypatch: pytest.MonkeyPatch,

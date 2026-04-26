@@ -34,6 +34,7 @@ from borgboi.core.telemetry import get_tracer, set_span_attributes
 from borgboi.lib.utils import create_archive_name
 
 logger = get_logger(__name__)
+_STDERR_DRAIN_JOIN_TIMEOUT_SECONDS = 5.0
 tracer = get_tracer(__name__)
 
 
@@ -561,7 +562,9 @@ class BorgClient:
             )
             env = self._build_env_with_passphrase(passphrase)
             proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
-            assert proc.stdout is not None
+            if proc.stdout is None:
+                msg = "borg extract stdout pipe was not created"
+                raise RuntimeError(msg)
 
             stderr_limit = 65536
             stderr_chunks: list[bytes] = []
@@ -583,18 +586,20 @@ class BorgClient:
             limit = max_bytes + 1
             chunks: list[bytes] = []
             bytes_read = 0
-            while bytes_read < limit:
-                chunk = proc.stdout.read(min(65536, limit - bytes_read))
-                if not chunk:
-                    break
-                chunks.append(chunk)
-                bytes_read += len(chunk)
+            try:
+                while bytes_read < limit:
+                    chunk = proc.stdout.read(min(65536, limit - bytes_read))
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    bytes_read += len(chunk)
+            finally:
+                proc.stdout.close()
 
             if bytes_read > max_bytes:
                 proc.kill()
-                proc.stdout.close()
                 returncode = proc.wait()
-                stderr_thread.join()
+                stderr_thread.join(timeout=_STDERR_DRAIN_JOIN_TIMEOUT_SECONDS)
                 stderr = b"".join(stderr_chunks)
                 span.set_attribute("process.exit_code", returncode)
                 if stderr:
@@ -602,7 +607,7 @@ class BorgClient:
                 return ExtractedFileContent(payload=b"".join(chunks)[:max_bytes], truncated=True)
 
             returncode = proc.wait()
-            stderr_thread.join()
+            stderr_thread.join(timeout=_STDERR_DRAIN_JOIN_TIMEOUT_SECONDS)
             stderr = b"".join(stderr_chunks)
             span.set_attribute("process.exit_code", returncode)
             stdout = b"".join(chunks)

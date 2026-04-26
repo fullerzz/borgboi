@@ -385,33 +385,26 @@ def _iter_inventory_rows(
                 gzip.GzipFile(fileobj=body, mode="rb") as binary_stream,
                 io.TextIOWrapper(binary_stream, encoding="utf-8", newline="") as text_stream,
             ):
-                reader = csv.reader(text_stream)
-
-                for row in reader:
-                    if len(row) < len(schema_columns):
-                        continue
-
-                    if row[: len(schema_columns)] == schema_columns:
-                        continue
-
-                    mapped = {schema_columns[idx]: row[idx] for idx in range(len(schema_columns))}
-                    yield mapped
+                yield from _iter_inventory_csv_rows(text_stream, schema_columns)
             return
 
         with io.TextIOWrapper(cast("IO[bytes]", body), encoding="utf-8", newline="") as text_stream:
-            reader = csv.reader(text_stream)
-
-            for row in reader:
-                if len(row) < len(schema_columns):
-                    continue
-
-                if row[: len(schema_columns)] == schema_columns:
-                    continue
-
-                mapped = {schema_columns[idx]: row[idx] for idx in range(len(schema_columns))}
-                yield mapped
+            yield from _iter_inventory_csv_rows(text_stream, schema_columns)
     finally:
         body.close()
+
+
+def _iter_inventory_csv_rows(text_stream: IO[str], schema_columns: list[str]) -> Generator[dict[str, str]]:
+    reader = csv.reader(text_stream)
+
+    for row in reader:
+        if len(row) < len(schema_columns):
+            continue
+
+        if row[: len(schema_columns)] == schema_columns:
+            continue
+
+        yield {schema_columns[idx]: row[idx] for idx in range(len(schema_columns))}
 
 
 def _extract_inventory_destination_details(configuration: InventoryPayload) -> tuple[str, str] | None:

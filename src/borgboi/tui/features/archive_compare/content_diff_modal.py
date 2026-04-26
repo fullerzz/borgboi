@@ -154,21 +154,19 @@ class ContentDiffScreen(ModalScreen[None]):
         log = self.query_one("#content-diff-log", RichLog)
         status = self.query_one("#content-diff-status", Static)
 
+        skip_reasons: list[str] = []
         for side, truncated, payload in (
             ("older", older_truncated, older_bytes),
             ("newer", newer_truncated, newer_bytes),
         ):
             if truncated:
-                status.update(
-                    f"[#f9e2af]Skipped:[/] {side} copy exceeds "
-                    f"{escape(format_size_bytes(MAX_CONTENT_DIFF_BYTES))}. No diff rendered."
-                )
-                return
-            if _looks_binary(payload):
-                status.update(
-                    f"[#f9e2af]Skipped:[/] {side} copy looks binary (null bytes detected). No text diff rendered."
-                )
-                return
+                skip_reasons.append(f"{side} copy exceeds {escape(format_size_bytes(MAX_CONTENT_DIFF_BYTES))}")
+            elif _looks_binary(payload):
+                skip_reasons.append(f"{side} copy looks binary (null bytes detected)")
+
+        if skip_reasons:
+            status.update(f"[#f9e2af]Skipped:[/] {'; '.join(skip_reasons)}. No text diff rendered.")
+            return
 
         older_lines = _decode_lines(older_bytes)
         newer_lines = _decode_lines(newer_bytes)

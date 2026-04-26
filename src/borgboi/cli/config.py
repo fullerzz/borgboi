@@ -208,7 +208,8 @@ def config_show(
         logger.exception("Config show command failed unexpectedly", config_path=str(config_path), error=str(error))
         print_error_and_exit(f"Unexpected error while loading configuration: {error}", error=error)
 
-    assert cfg is not None
+    if cfg is None:
+        print_error_and_exit("Unable to load configuration.")
 
     config_dict = _config_to_dict(cfg)
     env_overrides = get_env_overrides()
