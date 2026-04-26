@@ -34,7 +34,7 @@ Home-screen keys:
 - `b`: open the daily backup screen
 - `Enter` / `i`: open the repository detail screen for the highlighted repository
 
-See [TUI](tui.md) for full details on the config viewer, repository detail screen, daily backup screen, and excludes viewer.
+See [TUI](tui.md) for full details on the config viewer, repository detail screen, archive compare screen, daily backup screen, and excludes viewer.
 
 ### `version`
 
