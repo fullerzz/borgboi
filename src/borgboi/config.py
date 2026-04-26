@@ -89,7 +89,7 @@ class TelemetryConfig(BaseModel):
     capture_tui: bool = True
 
 
-class Config(BaseSettings):  # type: ignore[explicit-any]
+class Config(BaseSettings):
     """Main configuration container."""
 
     model_config = SettingsConfigDict(
@@ -195,7 +195,7 @@ def _write_default_config(config_path: Path) -> None:
 
 def _load_and_validate(data: dict[str, object], validate: bool, print_warnings: bool) -> Config:
     """Build Config and optionally validate with warnings."""
-    cfg = Config.model_validate(data)
+    cfg = Config(**data)  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
 
     if validate:
         config_warnings = validate_config(cfg)

@@ -308,6 +308,60 @@ def test_load_config_from_path_env_override_handles_non_dict_intermediate(
     assert cfg.aws.s3_bucket == "env-bucket"
 
 
+def test_load_config_from_path_env_vars_override_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that env vars take precedence over explicit YAML values."""
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "\n".join(
+            [
+                "aws:",
+                "  s3_bucket: yaml-bucket",
+                "borg:",
+                "  compression: zstd,6",
+                "offline: false",
+            ]
+        )
+    )
+
+    monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "env-bucket")
+    monkeypatch.setenv("BORGBOI_BORG__COMPRESSION", "lz4")
+    monkeypatch.setenv("BORGBOI_OFFLINE", "true")
+
+    cfg = load_config_from_path(config_file, validate=False)
+
+    assert cfg.aws.s3_bucket == "env-bucket"
+    assert cfg.borg.compression == "lz4"
+    assert cfg.offline is True
+
+
+def test_get_config_env_vars_override_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test that env vars take precedence over default config file YAML values."""
+    config_dir = tmp_path / ".borgboi"
+    config_dir.mkdir()
+    (config_dir / "config.yaml").write_text(
+        "\n".join(
+            [
+                "aws:",
+                "  s3_bucket: yaml-bucket",
+                "borg:",
+                "  compression: zstd,6",
+                "offline: false",
+            ]
+        )
+    )
+
+    monkeypatch.setenv("BORGBOI_AWS__S3_BUCKET", "env-bucket")
+    monkeypatch.setenv("BORGBOI_BORG__COMPRESSION", "lz4")
+    monkeypatch.setenv("BORGBOI_OFFLINE", "true")
+    config_module.get_config.cache_clear()
+
+    cfg = config_module.get_config(validate=False)
+
+    assert cfg.aws.s3_bucket == "env-bucket"
+    assert cfg.borg.compression == "lz4"
+    assert cfg.offline is True
+
+
 def test_coerce_env_value_integer_field_not_treated_as_bool(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that integer env var values like '1' and '0' are coerced to int, not bool."""
     monkeypatch.setenv("BORGBOI_BORG__CHECKPOINT_INTERVAL", "1")
