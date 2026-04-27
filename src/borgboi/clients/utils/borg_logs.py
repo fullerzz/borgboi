@@ -1,6 +1,6 @@
 from collections.abc import Generator, Iterable
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 
@@ -59,7 +59,7 @@ BorgLogEvent = Annotated[
     Field(discriminator="type"),
 ]
 
-_JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, Any])
+_JSON_OBJECT_ADAPTER = TypeAdapter(dict[str, object])
 _TYPED_EVENT_ADAPTER: TypeAdapter[ArchiveProgress | ProgressMessage | ProgressPercent | LogMessage | FileStatus] = (
     TypeAdapter(BorgLogEvent)
 )
@@ -70,13 +70,13 @@ def _is_unknown_union_tag_error(exc: ValidationError) -> bool:
     return any(error.get("type") == "union_tag_invalid" for error in exc.errors())
 
 
-def _normalize_payload_type(payload: dict[str, Any]) -> None:
+def _normalize_payload_type(payload: dict[str, object]) -> None:
     """Borg sends type=progress_message for payloads that are semantically ProgressPercent."""
     if payload.get("type") == "progress_message" and ("current" in payload or "total" in payload):
         payload["type"] = "progress_percent"
 
 
-def _parse_by_shape(payload: dict[str, Any]) -> BorgLogEvent:
+def _parse_by_shape(payload: dict[str, object]) -> BorgLogEvent:
     try:
         return ArchiveProgress.model_validate(payload)
     except ValidationError:

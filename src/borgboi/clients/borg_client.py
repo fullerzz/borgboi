@@ -9,7 +9,9 @@ import io
 import json
 import os
 import subprocess as sp
+import threading
 from collections.abc import Generator
+from dataclasses import dataclass
 from pathlib import Path
 
 from opentelemetry import trace
@@ -32,7 +34,16 @@ from borgboi.core.telemetry import get_tracer, set_span_attributes
 from borgboi.lib.utils import create_archive_name
 
 logger = get_logger(__name__)
+_STDERR_DRAIN_JOIN_TIMEOUT_SECONDS = 5.0
 tracer = get_tracer(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractedFileContent:
+    """Archived file bytes plus whether extraction stopped at a size cap."""
+
+    payload: bytes
+    truncated: bool
 
 
 class BorgClient:
@@ -145,6 +156,35 @@ class BorgClient:
             result = sp.run(cmd, check=False, capture_output=capture_output, text=True, env=env)  # noqa: S603
             span.set_attribute("process.exit_code", result.returncode)
             self._handle_exit_code(result.returncode, cmd, result.stdout, result.stderr)
+            return result
+
+    def _run_command_bytes(
+        self,
+        cmd: list[str],
+        passphrase: str | None = None,
+    ) -> sp.CompletedProcess[bytes]:
+        """Run a Borg command and capture stdout/stderr as bytes.
+
+        Used for subcommands whose output is not guaranteed to be UTF-8 text
+        (e.g. `borg extract --stdout` for arbitrary archived files).
+        """
+        subcommand = cmd[1] if len(cmd) > 1 else cmd[0]
+        with tracer.start_as_current_span("borg.command", kind=SpanKind.CLIENT) as span:
+            set_span_attributes(
+                span,
+                {
+                    "process.command.name": cmd[0],
+                    "borgboi.borg.subcommand": subcommand,
+                    "borgboi.capture_output": True,
+                    "borgboi.binary_output": True,
+                },
+            )
+            env = self._build_env_with_passphrase(passphrase)
+            result = sp.run(cmd, check=False, capture_output=True, env=env)  # noqa: S603
+            span.set_attribute("process.exit_code", result.returncode)
+            stdout_text = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+            stderr_text = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+            self._handle_exit_code(result.returncode, cmd, stdout_text, stderr_text)
             return result
 
     def _run_streaming_command(
@@ -455,6 +495,126 @@ class BorgClient:
         ]
 
         yield from self._run_streaming_command(cmd, passphrase=passphrase)
+
+    def extract_file_to_stdout(
+        self,
+        repo_path: str,
+        archive_name: str,
+        file_path: str,
+        passphrase: str | None = None,
+    ) -> bytes:
+        """Extract a single archived file to stdout and return its raw bytes.
+
+        Intended for TUI content-diff rendering; callers are responsible for
+        enforcing size caps and detecting binary payloads before display.
+        """
+        logger.debug(
+            "Extracting archived file to stdout via client",
+            repo_path=repo_path,
+            archive_name=archive_name,
+            file_path=file_path,
+        )
+        cmd = [
+            self.executable_path,
+            "extract",
+            "--stdout",
+            f"{repo_path}::{archive_name}",
+            file_path,
+        ]
+        result = self._run_command_bytes(cmd, passphrase=passphrase)
+        return result.stdout or b""
+
+    def extract_file_to_stdout_capped(
+        self,
+        repo_path: str,
+        archive_name: str,
+        file_path: str,
+        *,
+        max_bytes: int,
+        passphrase: str | None = None,
+    ) -> ExtractedFileContent:
+        """Extract a single archived file, stopping once `max_bytes` is exceeded."""
+        logger.debug(
+            "Extracting archived file to stdout via client with size cap",
+            repo_path=repo_path,
+            archive_name=archive_name,
+            file_path=file_path,
+            max_bytes=max_bytes,
+        )
+        cmd = [
+            self.executable_path,
+            "extract",
+            "--stdout",
+            f"{repo_path}::{archive_name}",
+            file_path,
+        ]
+        subcommand = cmd[1] if len(cmd) > 1 else cmd[0]
+        with tracer.start_as_current_span("borg.command", kind=SpanKind.CLIENT) as span:
+            set_span_attributes(
+                span,
+                {
+                    "process.command.name": cmd[0],
+                    "borgboi.borg.subcommand": subcommand,
+                    "borgboi.capture_output": True,
+                    "borgboi.binary_output": True,
+                    "borgboi.max_bytes": max_bytes,
+                },
+            )
+            env = self._build_env_with_passphrase(passphrase)
+            proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE, env=env)  # noqa: S603
+            if proc.stdout is None:
+                msg = "borg extract stdout pipe was not created"
+                raise RuntimeError(msg)
+
+            stderr_limit = 65536
+            stderr_chunks: list[bytes] = []
+            stderr_bytes_read = 0
+
+            def drain_stderr() -> None:
+                nonlocal stderr_bytes_read
+                if proc.stderr is None:
+                    return
+                while chunk := proc.stderr.read(4096):
+                    remaining = stderr_limit - stderr_bytes_read
+                    if remaining > 0:
+                        stderr_chunks.append(chunk[:remaining])
+                        stderr_bytes_read += min(len(chunk), remaining)
+
+            stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+            stderr_thread.start()
+
+            limit = max_bytes + 1
+            chunks: list[bytes] = []
+            bytes_read = 0
+            try:
+                while bytes_read < limit:
+                    chunk = proc.stdout.read(min(65536, limit - bytes_read))
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    bytes_read += len(chunk)
+            finally:
+                proc.stdout.close()
+
+            if bytes_read > max_bytes:
+                proc.kill()
+                returncode = proc.wait()
+                stderr_thread.join(timeout=_STDERR_DRAIN_JOIN_TIMEOUT_SECONDS)
+                stderr = b"".join(stderr_chunks)
+                span.set_attribute("process.exit_code", returncode)
+                if stderr:
+                    span.set_attribute("borgboi.truncated.stderr", stderr.decode("utf-8", errors="replace"))
+                return ExtractedFileContent(payload=b"".join(chunks)[:max_bytes], truncated=True)
+
+            returncode = proc.wait()
+            stderr_thread.join(timeout=_STDERR_DRAIN_JOIN_TIMEOUT_SECONDS)
+            stderr = b"".join(stderr_chunks)
+            span.set_attribute("process.exit_code", returncode)
+            stdout = b"".join(chunks)
+            stdout_text = stdout.decode("utf-8", errors="replace") if stdout else ""
+            stderr_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+            self._handle_exit_code(returncode, cmd, stdout_text, stderr_text)
+            return ExtractedFileContent(payload=stdout, truncated=False)
 
     def delete(
         self,

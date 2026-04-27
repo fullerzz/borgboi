@@ -8,7 +8,7 @@ from opentelemetry import trace
 from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags, TraceState, use_span
 
 from borgboi.config import Config, TelemetryConfig
-from borgboi.tui.telemetry import capture_span
+from borgboi.tui.support.telemetry import capture_span
 
 from .conftest import FakeTracer
 

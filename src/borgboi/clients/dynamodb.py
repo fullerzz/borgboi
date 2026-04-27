@@ -1,5 +1,6 @@
 import socket
 from datetime import datetime
+from typing import cast
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -399,6 +400,14 @@ def build_archive_table_item(
     logger.debug("Building archive table item", repo_name=repo.name, repo_path=repo.path, archive_name=archive_name)
     archive_info = borg.archive_info(repo.path, archive_name, passphrase)
     archive_data = archive_info.archive
+    archive_id = archive_data.get("id")
+    hostname = archive_data.get("hostname")
+    stats = archive_data.get("stats")
+    stats_mapping = cast(dict[str, object], stats) if isinstance(stats, dict) else {}
+
+    def _int_stat(name: str) -> int:
+        value = stats_mapping.get(name)
+        return int(value) if isinstance(value, int | float | str) else 0
 
     # Parse the timestamp from archive_name (format: YYYY-MM-DD_HH:MM:SS)
     # Convert to ISO format for the sort key
@@ -407,13 +416,13 @@ def build_archive_table_item(
     archive_item = BorgBoiArchiveTableItem(
         repo_name=repo.name,
         iso_timestamp=iso_timestamp,
-        archive_id=archive_data.get("id", ""),
+        archive_id=str(archive_id) if archive_id is not None else "",
         archive_name=archive_name,
         archive_path=f"{repo.path}::{archive_name}",
-        hostname=archive_data.get("hostname", socket.gethostname()),
-        original_size=archive_data.get("stats", {}).get("original_size", 0),
-        compressed_size=archive_data.get("stats", {}).get("compressed_size", 0),
-        deduped_size=archive_data.get("stats", {}).get("deduplicated_size", 0),
+        hostname=str(hostname) if hostname is not None else socket.gethostname(),
+        original_size=_int_stat("original_size"),
+        compressed_size=_int_stat("compressed_size"),
+        deduped_size=_int_stat("deduplicated_size"),
     )
     logger.debug(
         "Built archive table item", repo_name=repo.name, archive_name=archive_name, archive_id=archive_item.archive_id

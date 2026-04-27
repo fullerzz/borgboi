@@ -1,16 +1,21 @@
+from __future__ import annotations
+
 import csv
 import gzip
 import io
 import json
 import subprocess as sp
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import IO, TYPE_CHECKING, Protocol, cast
 
 import boto3
 from botocore.config import Config as BotoConfig
 from botocore.exceptions import BotoCoreError, ClientError
+
+if TYPE_CHECKING:
+    from mypy_boto3_s3.client import S3Client
 
 from borgboi.config import Config, get_config
 from borgboi.core.errors import StorageError
@@ -27,6 +32,7 @@ _INVENTORY_REQUIRED_FIELDS = {
     "IntelligentTieringAccessTier",
 }
 _INVENTORY_ACCESS_TIME_FIELDS = ("LastAccessDate", "LastModifiedDate")
+InventoryPayload = Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -47,7 +53,7 @@ class S3BucketStats:
     total_object_count: int
     storage_breakdown: list[S3StorageClassBreakdown]
     metrics_timestamp: datetime | None = None
-    intelligent_tiering_forecast: "S3IntelligentTieringForecast | None" = None
+    intelligent_tiering_forecast: S3IntelligentTieringForecast | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +69,10 @@ class S3IntelligentTieringForecast:
     inventory_configuration_id: str | None = None
     estimation_method: str | None = None
     unavailable_reason: str | None = None
+
+
+class CloudWatchClientProtocol(Protocol):
+    def get_metric_statistics(self, **kwargs: object) -> Mapping[str, object]: ...
 
 
 _STORAGE_TYPE_BREAKDOWN: dict[str, tuple[str, str]] = {
@@ -82,17 +92,20 @@ _STORAGE_TYPE_BREAKDOWN: dict[str, tuple[str, str]] = {
 }
 
 
-def _create_cloudwatch_client(cfg: Config) -> Any:
+def _create_cloudwatch_client(cfg: Config) -> CloudWatchClientProtocol:
     """Create a CloudWatch client using configured AWS region/profile."""
     session = boto3.session.Session(profile_name=cfg.aws.profile) if cfg.aws.profile else boto3.session.Session()
-    return session.client(
-        "cloudwatch",
-        region_name=cfg.aws.region,
-        config=BotoConfig(retries={"mode": "standard"}),
+    return cast(
+        CloudWatchClientProtocol,
+        session.client(
+            "cloudwatch",
+            region_name=cfg.aws.region,
+            config=BotoConfig(retries={"mode": "standard"}),
+        ),
     )
 
 
-def _create_s3_client(cfg: Config) -> Any:
+def _create_s3_client(cfg: Config) -> S3Client:
     """Create an S3 client using configured AWS region/profile."""
     session = boto3.session.Session(profile_name=cfg.aws.profile) if cfg.aws.profile else boto3.session.Session()
     return session.client(
@@ -103,7 +116,7 @@ def _create_s3_client(cfg: Config) -> Any:
 
 
 def _get_latest_metric_average(
-    cloudwatch_client: Any,
+    cloudwatch_client: CloudWatchClientProtocol,
     *,
     bucket_name: str,
     metric_name: str,
@@ -130,15 +143,19 @@ def _get_latest_metric_average(
         return 0, None
 
     typed_datapoints = [
-        item for item in datapoints if isinstance(item, dict) and isinstance(item.get("Timestamp"), datetime)
+        cast(dict[str, object], item)
+        for item in datapoints
+        if isinstance(item, dict) and isinstance(cast(dict[str, object], item).get("Timestamp"), datetime)
     ]
     if not typed_datapoints:
         return 0, None
 
-    latest = max(typed_datapoints, key=lambda item: item["Timestamp"])
-    average_value = float(latest.get("Average", 0.0))
+    latest = max(typed_datapoints, key=lambda item: cast(datetime, item["Timestamp"]))
+    average_raw = latest.get("Average", 0.0)
+    average_value = float(average_raw) if isinstance(average_raw, int | float) else 0.0
     rounded_value = round(average_value)
-    return max(rounded_value, 0), latest["Timestamp"]
+    timestamp = latest.get("Timestamp")
+    return max(rounded_value, 0), timestamp if isinstance(timestamp, datetime) else None
 
 
 def _unavailable_intelligent_tiering_forecast(
@@ -216,7 +233,7 @@ def _parse_inventory_int(value: str | None) -> int | None:
         return None
 
 
-def _is_eligible_inventory_configuration(configuration: dict[str, Any]) -> bool:
+def _is_eligible_inventory_configuration(configuration: InventoryPayload) -> bool:
     if not configuration.get("IsEnabled"):
         return False
 
@@ -230,16 +247,17 @@ def _is_eligible_inventory_configuration(configuration: dict[str, Any]) -> bool:
     )
 
 
-def _extract_inventory_configuration(s3_client: Any, bucket_name: str) -> dict[str, Any] | None:
+def _extract_inventory_configuration(s3_client: S3Client, bucket_name: str) -> InventoryPayload | None:
     continuation_token: str | None = None
-    matching: list[dict[str, Any]] = []
+    matching: list[InventoryPayload] = []
 
     while True:
-        kwargs: dict[str, Any] = {"Bucket": bucket_name}
         if continuation_token:
-            kwargs["ContinuationToken"] = continuation_token
-
-        response = s3_client.list_bucket_inventory_configurations(**kwargs)
+            response = s3_client.list_bucket_inventory_configurations(
+                Bucket=bucket_name, ContinuationToken=continuation_token
+            )
+        else:
+            response = s3_client.list_bucket_inventory_configurations(Bucket=bucket_name)
         configurations = response.get("InventoryConfigurationList", [])
 
         if isinstance(configurations, list):
@@ -271,16 +289,17 @@ def _extract_bucket_name_from_arn(bucket_arn_or_name: str) -> str:
     return bucket_arn_or_name
 
 
-def _list_objects_for_prefix(s3_client: Any, *, bucket_name: str, prefix: str) -> list[dict[str, Any]]:
+def _list_objects_for_prefix(s3_client: S3Client, *, bucket_name: str, prefix: str) -> list[InventoryPayload]:
     continuation_token: str | None = None
-    objects: list[dict[str, Any]] = []
+    objects: list[InventoryPayload] = []
 
     while True:
-        kwargs: dict[str, Any] = {"Bucket": bucket_name, "Prefix": prefix}
         if continuation_token:
-            kwargs["ContinuationToken"] = continuation_token
-
-        response = s3_client.list_objects_v2(**kwargs)
+            response = s3_client.list_objects_v2(
+                Bucket=bucket_name, Prefix=prefix, ContinuationToken=continuation_token
+            )
+        else:
+            response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
         contents = response.get("Contents", [])
         if isinstance(contents, list):
             objects.extend(item for item in contents if isinstance(item, dict))
@@ -298,13 +317,13 @@ def _list_objects_for_prefix(s3_client: Any, *, bucket_name: str, prefix: str) -
 
 
 def _get_inventory_manifest(
-    s3_client: Any,
+    s3_client: S3Client,
     *,
     destination_bucket: str,
     destination_prefix: str,
     source_bucket: str,
     inventory_configuration_id: str,
-) -> tuple[dict[str, Any], datetime | None] | None:
+) -> tuple[InventoryPayload, datetime | None] | None:
     prefix_parts = []
     if destination_prefix:
         prefix_parts.append(destination_prefix.rstrip("/"))
@@ -318,7 +337,7 @@ def _get_inventory_manifest(
     if not manifest_candidates:
         return None
 
-    def _manifest_last_modified(item: dict[str, Any]) -> datetime:
+    def _manifest_last_modified(item: InventoryPayload) -> datetime:
         last_modified = item.get("LastModified")
         if isinstance(last_modified, datetime):
             return last_modified
@@ -349,7 +368,7 @@ def _get_inventory_manifest(
 
 
 def _iter_inventory_rows(
-    s3_client: Any,
+    s3_client: S3Client,
     *,
     destination_bucket: str,
     object_key: str,
@@ -360,49 +379,58 @@ def _iter_inventory_rows(
     if body is None:
         return
 
-    binary_stream: Any = gzip.GzipFile(fileobj=body, mode="rb") if object_key.endswith(".gz") else body
-
     try:
-        with io.TextIOWrapper(binary_stream, encoding="utf-8", newline="") as text_stream:
-            reader = csv.reader(text_stream)
+        if object_key.endswith(".gz"):
+            with (
+                gzip.GzipFile(fileobj=body, mode="rb") as binary_stream,
+                io.TextIOWrapper(binary_stream, encoding="utf-8", newline="") as text_stream,
+            ):
+                yield from _iter_inventory_csv_rows(text_stream, schema_columns)
+            return
 
-            for row in reader:
-                if len(row) < len(schema_columns):
-                    continue
-
-                if row[: len(schema_columns)] == schema_columns:
-                    continue
-
-                mapped = {schema_columns[idx]: row[idx] for idx in range(len(schema_columns))}
-                yield mapped
+        with io.TextIOWrapper(cast("IO[bytes]", body), encoding="utf-8", newline="") as text_stream:
+            yield from _iter_inventory_csv_rows(text_stream, schema_columns)
     finally:
-        close = getattr(binary_stream, "close", None)
-        if callable(close):
-            close()
+        body.close()
 
 
-def _extract_inventory_destination_details(configuration: dict[str, Any]) -> tuple[str, str] | None:
+def _iter_inventory_csv_rows(text_stream: IO[str], schema_columns: list[str]) -> Generator[dict[str, str]]:
+    reader = csv.reader(text_stream)
+
+    for row in reader:
+        if len(row) < len(schema_columns):
+            continue
+
+        if row[: len(schema_columns)] == schema_columns:
+            continue
+
+        yield {schema_columns[idx]: row[idx] for idx in range(len(schema_columns))}
+
+
+def _extract_inventory_destination_details(configuration: InventoryPayload) -> tuple[str, str] | None:
     destination = configuration.get("Destination")
     if not isinstance(destination, dict):
         return None
+    destination_mapping = cast(dict[str, object], destination)
 
-    destination_bucket_config = destination.get("S3BucketDestination")
+    destination_bucket_config = destination_mapping.get("S3BucketDestination")
     if not isinstance(destination_bucket_config, dict):
         return None
+    destination_bucket_mapping = cast(dict[str, object], destination_bucket_config)
 
-    destination_bucket_arn_or_name = destination_bucket_config.get("Bucket")
+    destination_bucket_arn_or_name = destination_bucket_mapping.get("Bucket")
     if not isinstance(destination_bucket_arn_or_name, str) or not destination_bucket_arn_or_name:
         return None
 
     destination_bucket_name = _extract_bucket_name_from_arn(destination_bucket_arn_or_name)
-    destination_prefix = destination_bucket_config.get("Prefix", "")
+    destination_prefix = destination_bucket_mapping.get("Prefix", "")
     if not isinstance(destination_prefix, str):
         destination_prefix = ""
 
     return destination_bucket_name, destination_prefix
 
 
-def _extract_inventory_file_keys(manifest: dict[str, Any]) -> list[str]:
+def _extract_inventory_file_keys(manifest: InventoryPayload) -> list[str]:
     files = manifest.get("files")
     if not isinstance(files, list):
         return []
@@ -411,14 +439,14 @@ def _extract_inventory_file_keys(manifest: dict[str, Any]) -> list[str]:
     for file_entry in files:
         if not isinstance(file_entry, dict):
             continue
-        object_key = file_entry.get("key")
+        object_key = cast(dict[str, object], file_entry).get("key")
         if isinstance(object_key, str) and object_key:
             keys.append(object_key)
 
     return keys
 
 
-def _extract_inventory_schema_columns(manifest: dict[str, Any]) -> list[str] | None:
+def _extract_inventory_schema_columns(manifest: InventoryPayload) -> list[str] | None:
     file_format = manifest.get("fileFormat")
     if file_format != "CSV":
         return None
@@ -439,7 +467,7 @@ def _extract_inventory_schema_columns(manifest: dict[str, Any]) -> list[str] | N
 
 
 def _project_intelligent_tiering_transitions(
-    s3_client: Any,
+    s3_client: S3Client,
     *,
     destination_bucket_name: str,
     data_file_keys: list[str],
@@ -478,7 +506,7 @@ def _project_intelligent_tiering_transitions(
     return projected_objects, projected_size_bytes
 
 
-def _build_intelligent_tiering_forecast(s3_client: Any, *, bucket_name: str) -> S3IntelligentTieringForecast:
+def _build_intelligent_tiering_forecast(s3_client: S3Client, *, bucket_name: str) -> S3IntelligentTieringForecast:
     now = datetime.now(UTC)
     window_end = now + timedelta(days=_INTELLIGENT_TIERING_FORECAST_WINDOW_DAYS)
 

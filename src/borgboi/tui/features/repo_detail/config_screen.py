@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.markup import escape
 from textual import work
@@ -15,7 +15,8 @@ from textual.widgets import Button, Footer, Header, Input, Label, Rule, Static
 
 from borgboi.core.logging import get_logger
 from borgboi.core.models import RetentionPolicy
-from borgboi.tui.repo_workspace import load_repo_workspace_state
+from borgboi.tui.features.repo_detail.quota import effective_quota_display
+from borgboi.tui.features.repo_detail.workspace import load_repo_workspace_state
 
 logger = get_logger(__name__)
 
@@ -38,28 +39,6 @@ def _render_value(value: object) -> str:
 def _render_fields(fields: list[tuple[str, object]]) -> str:
     """Format key-value pairs as multiline Rich markup."""
     return "\n".join(f"[#89b4fa]{escape(label)}:[/] {_render_value(value)}" for label, value in fields)
-
-
-def effective_quota_display(
-    *,
-    quota_load_failed: bool,
-    is_local_repo: bool,
-    live_quota: str | None,
-    config_default_quota: str | None,
-) -> tuple[str, str]:
-    """Return (quota_text, source_label) for the current repository quota state.
-
-    Shared logic used by both the info and config screens.
-    """
-    if quota_load_failed and is_local_repo and live_quota is None:
-        return "Unknown", "Unavailable"
-    if live_quota is not None:
-        return live_quota, "Repository"
-    if not is_local_repo:
-        return "Unknown", "Unavailable"
-    if config_default_quota is not None:
-        return config_default_quota, "Default"
-    return "Unknown", "Unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,7 +64,7 @@ class RepoConfigScreen(Screen[RepoConfigResult | None]):
         repo: RepoRecord,
         orchestrator: Orchestrator,
         config: Config | None = None,
-        **kwargs: Any,
+        **kwargs: str | None,
     ) -> None:
         super().__init__(**kwargs)
         self._repo = repo

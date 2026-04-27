@@ -64,6 +64,47 @@ The screen is organized into six tabs:
 | `e` | Open the repo settings editor |
 | `r` | Refresh the screen data |
 
+## Archive Compare Screen
+
+Press `d` from the repository detail screen to compare two archives from the selected repository.
+
+BorgBoi loads the repository's archives newest-first and starts by comparing the two most recent archives. Use the **Older archive** and **Newer archive** selectors to choose a different pair, then press **Compare** or `r` to rerun the comparison.
+
+The screen shows side-by-side directory trees for the older and newer archives. Expanding or selecting a path in one tree keeps the other tree in sync when the path exists on both sides.
+
+### Change Indicators
+
+- Added paths appear on the newer side.
+- Removed paths appear on the older side.
+- Modified paths appear on both sides.
+- Parent directories with changed descendants show a dim change marker so you can follow changes through nested trees.
+
+The center panel summarizes the comparison and shows details for the selected path, including whether the path is present in each archive and the recorded change types.
+
+### Filters and Content Diffs
+
+Use the numbered change-kind filters to show or hide added, removed, modified, or mode-only changes. Use the path search input to narrow the tree to matching changed paths.
+
+Turn on **Content only** before rerunning a comparison to limit results to content changes.
+
+Press `d` on a selected changed file to open a content diff modal. BorgBoi extracts up to 2 MiB from each archive copy and renders a unified text diff. Binary files and files above that limit are skipped instead of being rendered inline.
+
+### Archive Compare Keys
+
+| Key | Action |
+| --- | --- |
+| `Esc` | Return to the repository detail screen |
+| `r` | Run the comparison for the selected archive pair |
+| `n` | Jump to the next visible changed path |
+| `Shift+N` | Jump to the previous visible changed path |
+| `d` | Open a content diff for the selected changed file |
+| `/` | Focus the path search input |
+| `Ctrl+L` | Clear path and change-kind filters |
+| `1` | Toggle added paths |
+| `2` | Toggle removed paths |
+| `3` | Toggle modified paths |
+| `4` | Toggle mode-only paths |
+
 ## Daily Backup Screen
 
 Press `b` from the home screen to open the daily backup screen.

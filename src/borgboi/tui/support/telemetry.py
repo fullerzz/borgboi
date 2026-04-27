@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import AbstractContextManager
 from functools import wraps
 from inspect import iscoroutinefunction
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
+from typing import TYPE_CHECKING, ParamSpec, TypeVar, cast
 
 from opentelemetry.trace import INVALID_SPAN as _NOOP_SPAN
 from opentelemetry.trace import Span, use_span
@@ -57,8 +57,8 @@ def capture_span(name: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
             async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
                 instance = args[0] if args else None
                 with _span_context(instance, name):
-                    result = await cast("Callable[P, Any]", func)(*args, **kwargs)
-                    return cast("R", result)
+                    result = await cast(Callable[P, Awaitable[R]], func)(*args, **kwargs)
+                    return result
 
             return cast("Callable[P, R]", async_wrapper)
 

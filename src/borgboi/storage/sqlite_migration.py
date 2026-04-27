@@ -16,9 +16,9 @@ import shutil
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy import Engine
+from sqlalchemy.orm import Session
 
 from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_session_factory, init_db
 
@@ -197,7 +197,7 @@ def migrate_s3_cache(cache_path: Path, engine: Engine) -> None:
         session.commit()
 
 
-def _insert_repo_from_dict(session_factory: Callable[[], Any], data: dict[str, Any]) -> None:
+def _insert_repo_from_dict(session_factory: Callable[[], Session], data: dict[str, object]) -> None:
     """Insert a repository from a raw JSON dict into the repositories table.
 
     This avoids importing BorgBoiRepo (which triggers circular imports).

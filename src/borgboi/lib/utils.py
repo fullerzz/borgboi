@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from borgboi.clients.borg import RepoInfo
@@ -63,7 +63,7 @@ def calculate_archive_age(archive_time: str) -> str:
         return f"{seconds}s"
 
 
-def coerce_int(value: Any) -> int | None:
+def coerce_int(value: object) -> int | None:
     """Convert an unknown value to int when possible."""
     if isinstance(value, bool):
         return int(value)
@@ -98,7 +98,7 @@ def format_size_bytes(size_bytes: int | None) -> str:
     return f"{value:.2f} {units[unit]}"
 
 
-def format_iso_timestamp(value: Any) -> str:
+def format_iso_timestamp(value: object) -> str:
     """Format timestamps from Borg JSON payloads."""
     if not isinstance(value, str) or not value.strip():
         return "Unknown"
@@ -125,7 +125,7 @@ def format_repo_size(metadata: RepoInfo | None) -> str:
     return f"{metadata.cache.unique_csize_gb} GB"
 
 
-def format_duration_seconds(seconds: Any) -> str:
+def format_duration_seconds(seconds: object) -> str:
     """Format a duration value in seconds for display."""
     if not isinstance(seconds, (int, float)):
         return "Unknown"

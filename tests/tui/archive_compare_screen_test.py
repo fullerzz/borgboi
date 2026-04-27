@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
 from rich.style import Style
-from textual.widgets import DirectoryTree, Select, Static, Switch
+from textual.widgets import DirectoryTree, Input, Select, Static, Switch
 
 from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import Repository
 from borgboi.tui.app import BorgBoiApp
-from borgboi.tui.archive_compare_screen import (
+from borgboi.tui.features.archive_compare import (
     ArchiveCompareScreen,
     CompareDirectoryTree,
     build_compare_path_states,
@@ -20,7 +21,7 @@ from borgboi.tui.archive_compare_screen import (
     build_compare_tree_modified_paths,
     build_compare_tree_parent_indicators,
 )
-from borgboi.tui.repo_info_screen import RepoInfoScreen
+from borgboi.tui.features.repo_detail import RepoInfoScreen
 
 
 @pytest.fixture
@@ -52,7 +53,9 @@ def archive_compare_app(
     repo_archives: list[RepoArchive],
     archive_compare_result: DiffResult,
 ) -> BorgBoiApp:
-    monkeypatch.setattr("borgboi.tui.repo_workspace.socket.gethostname", lambda: repo_detail_repo.hostname)
+    monkeypatch.setattr(
+        "borgboi.tui.features.repo_detail.workspace.socket.gethostname", lambda: repo_detail_repo.hostname
+    )
     repo_detail_repo.path = tui_config_with_excludes.borgboi_dir.as_posix()
 
     return BorgBoiApp(
@@ -420,6 +423,39 @@ async def test_archive_compare_screen_updates_selected_path_details(archive_comp
         assert "Newer" in str(cast(Any, selection).content)
 
 
+async def test_archive_compare_screen_clears_selected_file_when_directory_selected(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen._show_selected_path(screen._newer_root / "docs" / "file.txt")
+        await pilot.pause()
+        assert screen.selected_path == Path("docs/file.txt")
+
+        screen._show_selected_path(screen._newer_root / "docs")
+        await pilot.pause()
+
+        assert screen.selected_path is None
+
+
+async def test_archive_compare_screen_clears_selected_file_when_filters_hide_it(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen._show_selected_path(screen._newer_root / "docs" / "file.txt")
+        await pilot.pause()
+        assert screen.selected_path == Path("docs/file.txt")
+
+        search_input = screen.query_one("#archive-compare-search-input", Input)
+        search_input.value = "removed"
+        await pilot.pause()
+
+        assert screen.selected_path is None
+
+
 async def test_archive_compare_screen_cleans_up_tempdir_on_dismiss(archive_compare_app: BorgBoiApp) -> None:
     async with archive_compare_app.run_test() as pilot:
         screen = await _open_archive_compare_screen(archive_compare_app, pilot)
@@ -431,6 +467,204 @@ async def test_archive_compare_screen_cleans_up_tempdir_on_dismiss(archive_compa
         await pilot.pause()
 
         assert temp_root.exists() is False
+
+
+async def test_archive_compare_screen_kind_filter_prunes_overlays_and_summary(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen.action_toggle_kind("added")
+        screen.action_toggle_kind("modified")
+        screen.action_toggle_kind("mode")
+        await pilot.pause()
+
+        assert set(screen._path_states) == {Path("removed.txt"), Path("only-older/file.txt")}
+        assert Path("added.txt") not in screen._path_states
+        assert Path("docs/file.txt") not in screen._path_states
+        summary = screen.query_one("#archive-compare-summary", Static)
+        assert "Changed paths:[/] 2" in str(cast(Any, summary).content)
+
+
+async def test_archive_compare_screen_search_filter_matches_paths_case_insensitively(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        search_input = screen.query_one("#archive-compare-search-input", Input)
+        search_input.value = "DOCS"
+        await pilot.pause()
+
+        assert set(screen._path_states) == {Path("docs/file.txt"), Path("docs/mode.txt")}
+
+        screen.action_clear_filters()
+        await pilot.pause()
+
+        assert screen._path_states.keys() == screen._raw_path_states.keys()
+        assert search_input.value == ""
+
+
+async def test_archive_compare_screen_next_prev_change_cycles_and_selects(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen.action_next_change()
+        await pilot.pause()
+        assert screen.selected_path == screen._ordered_change_paths[0]
+
+        screen.action_next_change()
+        await pilot.pause()
+        assert screen.selected_path == screen._ordered_change_paths[1]
+
+        screen.action_prev_change()
+        await pilot.pause()
+        assert screen.selected_path == screen._ordered_change_paths[0]
+
+        screen.action_prev_change()
+        await pilot.pause()
+        assert screen.selected_path == screen._ordered_change_paths[-1]
+
+
+async def test_archive_compare_screen_re_derives_cursor_after_filter_reorders_list(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen.action_next_change()
+        await pilot.pause()
+        screen.action_next_change()
+        await pilot.pause()
+        screen.action_next_change()
+        await pilot.pause()
+        assert screen.selected_path == Path("docs/file.txt")
+        assert screen._change_cursor == 2
+
+        screen.action_toggle_kind("removed")
+        await pilot.pause()
+
+        assert screen.selected_path == Path("docs/file.txt")
+        assert screen._change_cursor == 1
+
+
+async def test_archive_compare_screen_opens_content_diff_modal_for_selected_path(
+    archive_compare_app: BorgBoiApp,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        screen.selected_path = Path("docs/file.txt")
+        screen.action_open_content_diff()
+        await pilot.pause()
+
+        from borgboi.tui.features.archive_compare import ContentDiffScreen
+
+        assert isinstance(archive_compare_app.screen, ContentDiffScreen)
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(archive_compare_app.screen, ArchiveCompareScreen)
+
+
+async def test_content_diff_modal_ignores_worker_result_after_dismissal(
+    archive_compare_app: BorgBoiApp,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    extract_started = threading.Event()
+    allow_extract = threading.Event()
+
+    def _slow_extract(*_args: Any, archive_name: str, **_kwargs: Any) -> SimpleNamespace:
+        extract_started.set()
+        allow_extract.wait(timeout=5)
+        payload = b"before\n" if archive_name == "2026-03-27_22:00:00" else b"after\n"
+        return SimpleNamespace(payload=payload, truncated=False)
+
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+        monkeypatch.setattr(
+            screen._orchestrator,
+            "extract_archived_file_capped",
+            lambda repo, archive_name, file_path, *, max_bytes: _slow_extract(
+                repo,
+                archive_name=archive_name,
+                file_path=file_path,
+                max_bytes=max_bytes,
+            ),
+            raising=False,
+        )
+
+        screen.selected_path = Path("docs/file.txt")
+        screen.action_open_content_diff()
+
+        from borgboi.tui.features.archive_compare import ContentDiffScreen
+
+        for _ in range(60):
+            await pilot.pause(0.05)
+            if isinstance(archive_compare_app.screen, ContentDiffScreen) and extract_started.is_set():
+                break
+
+        assert isinstance(archive_compare_app.screen, ContentDiffScreen)
+        assert extract_started.is_set() is True
+
+        await pilot.press("escape")
+        await pilot.pause()
+        assert isinstance(archive_compare_app.screen, ArchiveCompareScreen)
+
+        allow_extract.set()
+        for _ in range(60):
+            await pilot.pause(0.05)
+
+        assert isinstance(archive_compare_app.screen, ArchiveCompareScreen)
+
+
+async def test_content_diff_modal_reports_all_skip_reasons(
+    archive_compare_app: BorgBoiApp,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async with archive_compare_app.run_test() as pilot:
+        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
+
+        def _extract_archived_file_capped(
+            _repo: object,
+            archive_name: str,
+            _file_path: str,
+            *,
+            max_bytes: int,
+        ) -> SimpleNamespace:
+            _ = max_bytes
+            if archive_name == "2026-03-27_22:00:00":
+                return SimpleNamespace(payload=b"older\n", truncated=True)
+            return SimpleNamespace(payload=b"newer\x00binary", truncated=False)
+
+        monkeypatch.setattr(
+            screen._orchestrator,
+            "extract_archived_file_capped",
+            _extract_archived_file_capped,
+            raising=False,
+        )
+
+        screen.selected_path = Path("docs/file.txt")
+        screen.action_open_content_diff()
+
+        from borgboi.tui.features.archive_compare import ContentDiffScreen
+
+        for _ in range(60):
+            await pilot.pause(0.05)
+            if isinstance(archive_compare_app.screen, ContentDiffScreen):
+                status = archive_compare_app.screen.query_one("#content-diff-status", Static)
+                status_text = str(cast(Any, status).content)
+                if "older copy exceeds" in status_text and "newer copy looks binary" in status_text:
+                    break
+
+        assert isinstance(archive_compare_app.screen, ContentDiffScreen)
+        status = archive_compare_app.screen.query_one("#content-diff-status", Static)
+        status_text = str(cast(Any, status).content)
+        assert "older copy exceeds" in status_text
+        assert "newer copy looks binary" in status_text
 
 
 async def test_archive_compare_screen_clears_previous_diff_after_compare_failure(

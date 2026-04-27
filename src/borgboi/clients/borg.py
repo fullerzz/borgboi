@@ -3,7 +3,6 @@ from collections.abc import Generator
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -209,7 +208,7 @@ class RepoInfo(BaseModel):
     encryption: Encryption
     repository: Repository
     security_dir: str
-    archives: list[dict[str, Any]] = []
+    archives: list[dict[str, object]] = []
 
 
 class ArchiveStats(BaseModel):
@@ -220,13 +219,13 @@ class ArchiveStats(BaseModel):
 
 
 class ArchiveInfo(BaseModel):
-    archives: list[dict[str, Any]]
+    archives: list[dict[str, object]]
     cache: RepoCache
     encryption: Encryption
     repository: Repository
 
     @property
-    def archive(self) -> dict[str, Any]:
+    def archive(self) -> dict[str, object]:
         if not self.archives:
             raise ValueError("ArchiveInfo contains no archives.")
         return self.archives[0]

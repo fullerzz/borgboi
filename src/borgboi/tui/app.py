@@ -16,12 +16,10 @@ from borgboi.core.logging import get_logger
 from borgboi.core.telemetry import set_span_attributes
 from borgboi.lib.utils import format_last_backup, format_repo_size
 from borgboi.storage.db import get_db_path
-from borgboi.tui.config_screen import ConfigScreen
-from borgboi.tui.daily_backup_progress import SQLiteDailyBackupProgressHistory
-from borgboi.tui.daily_backup_screen import DailyBackupScreen
-from borgboi.tui.excludes_screen import DefaultExcludesScreen
-from borgboi.tui.repo_info_screen import RepoInfoScreen
-from borgboi.tui.telemetry import capture_span
+from borgboi.tui.features.daily_backup import DailyBackupScreen, SQLiteDailyBackupProgressHistory
+from borgboi.tui.features.repo_detail import RepoInfoScreen
+from borgboi.tui.screens import ConfigScreen, DefaultExcludesScreen
+from borgboi.tui.support import capture_span
 
 logger = get_logger(__name__)
 

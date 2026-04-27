@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, override
+from typing import TYPE_CHECKING, ClassVar, override
 
 from rich.markup import escape
 from textual import work
@@ -32,8 +32,9 @@ from borgboi.clients.borg import RepoArchive, RepoInfo
 from borgboi.core.logging import get_logger
 from borgboi.core.models import RetentionPolicy
 from borgboi.lib.utils import calculate_archive_age, format_iso_timestamp, format_last_backup, format_repo_size
-from borgboi.tui.repo_config_screen import RepoConfigResult, RepoConfigScreen, effective_quota_display
-from borgboi.tui.repo_workspace import load_repo_workspace_state
+from borgboi.tui.features.repo_detail.config_screen import RepoConfigResult, RepoConfigScreen
+from borgboi.tui.features.repo_detail.quota import effective_quota_display
+from borgboi.tui.features.repo_detail.workspace import load_repo_workspace_state
 
 logger = get_logger(__name__)
 
@@ -172,7 +173,7 @@ class RepoInfoScreen(Screen[None]):
         repo: BorgBoiRepo,
         orchestrator: Orchestrator,
         config: Config | None = None,
-        **kwargs: Any,
+        **kwargs: str | None,
     ) -> None:
         super().__init__(**kwargs)
         self._repo = repo
@@ -283,7 +284,7 @@ class RepoInfoScreen(Screen[None]):
 
     def action_daily_backup(self) -> None:
         """Open the daily backup screen with the current repo pre-selected."""
-        from borgboi.tui.daily_backup_screen import DailyBackupScreen
+        from borgboi.tui.features.daily_backup import DailyBackupScreen
 
         _ = self.app.push_screen(
             DailyBackupScreen(
@@ -321,7 +322,7 @@ class RepoInfoScreen(Screen[None]):
             self.notify("This repository needs at least two archives to compare.", severity="warning")
             return
 
-        from borgboi.tui.archive_compare_screen import ArchiveCompareScreen
+        from borgboi.tui.features.archive_compare import ArchiveCompareScreen
 
         older_archive, newer_archive = self._default_compare_archives()
         _ = self.app.push_screen(

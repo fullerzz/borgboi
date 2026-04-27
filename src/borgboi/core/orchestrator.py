@@ -15,7 +15,7 @@ from platform import system
 from pydantic import ValidationError as PydanticValidationError
 
 from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
-from borgboi.clients.borg_client import BorgClient, create_borg_client
+from borgboi.clients.borg_client import BorgClient, ExtractedFileContent, create_borg_client
 from borgboi.clients.s3_client import S3ClientInterface
 from borgboi.config import Config, get_config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
@@ -1208,6 +1208,54 @@ class Orchestrator:
             archive1,
             archive2,
             options=options,
+            passphrase=resolved_passphrase,
+        )
+
+    def extract_archived_file(
+        self,
+        repo: BorgBoiRepo | str,
+        archive_name: str,
+        file_path: str,
+        passphrase: str | None = None,
+    ) -> bytes:
+        """Extract a single archived file to memory for inspection (e.g. content diff).
+
+        Callers must cap file size and detect binary content before rendering.
+        """
+        resolved_repo = self._resolve_repo(repo)
+        if not self._is_local(resolved_repo):
+            logger.error("Cannot extract archived file from remote repository", repo_name=resolved_repo.name)
+            raise ValidationError("Repository must be local to extract archived files", field="repository")
+
+        resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        return self.borg.extract_file_to_stdout(
+            resolved_repo.path,
+            archive_name,
+            file_path,
+            passphrase=resolved_passphrase,
+        )
+
+    def extract_archived_file_capped(
+        self,
+        repo: BorgBoiRepo | str,
+        archive_name: str,
+        file_path: str,
+        *,
+        max_bytes: int,
+        passphrase: str | None = None,
+    ) -> ExtractedFileContent:
+        """Extract a single archived file up to a byte cap for preview-style reads."""
+        resolved_repo = self._resolve_repo(repo)
+        if not self._is_local(resolved_repo):
+            logger.error("Cannot extract archived file from remote repository", repo_name=resolved_repo.name)
+            raise ValidationError("Repository must be local to extract archived files", field="repository")
+
+        resolved_passphrase = self.resolve_passphrase(resolved_repo, passphrase)
+        return self.borg.extract_file_to_stdout_capped(
+            resolved_repo.path,
+            archive_name,
+            file_path,
+            max_bytes=max_bytes,
             passphrase=resolved_passphrase,
         )
 

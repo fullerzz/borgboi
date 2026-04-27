@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
-from borgboi.clients.borg import DiffChange, DiffResult
+from collections.abc import Iterable
+from typing import Literal
+
+from borgboi.clients.borg import DiffChange, DiffEntry, DiffResult
 from borgboi.lib.utils import format_size_bytes
+
+DiffChangeKind = Literal["added", "removed", "modified", "mode"]
+ALL_DIFF_KINDS: frozenset[DiffChangeKind] = frozenset({"added", "removed", "modified", "mode"})
 
 
 def summarize_diff_changes(result: DiffResult) -> dict[str, int]:
@@ -61,3 +67,42 @@ def format_diff_change(change: DiffChange) -> str:
             return f"{change.type} {change.old if change.old is not None else '?'} -> {change.new if change.new is not None else '?'}"
         case _:
             return change.type
+
+
+def resolve_entry_kind(entry: DiffEntry) -> DiffChangeKind:
+    """Classify a diff entry as added, removed, modified, or mode-only."""
+    types = {change.type for change in entry.changes}
+    if types == {"added"}:
+        return "added"
+    if types == {"removed"}:
+        return "removed"
+    if types == {"mode"}:
+        return "mode"
+    return "modified"
+
+
+def filter_diff_result(
+    result: DiffResult,
+    *,
+    kinds: Iterable[DiffChangeKind] | None = None,
+    substring: str = "",
+) -> DiffResult:
+    """Return a DiffResult filtered by change kind and path substring.
+
+    - `kinds`: iterable of kinds to retain (empty iterable → no matches).
+      `None` means retain all kinds.
+    - `substring`: case-insensitive match against the entry path's POSIX form.
+      Empty string matches everything.
+    """
+    allowed: frozenset[DiffChangeKind] | None = frozenset(kinds) if kinds is not None else None
+    needle = substring.strip().lower()
+
+    filtered: list[DiffEntry] = []
+    for entry in result.entries:
+        if allowed is not None and resolve_entry_kind(entry) not in allowed:
+            continue
+        if needle and needle not in entry.path.as_posix().lower():
+            continue
+        filtered.append(entry)
+
+    return DiffResult(archive1=result.archive1, archive2=result.archive2, entries=filtered)

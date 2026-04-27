@@ -1,5 +1,7 @@
+import io
+import subprocess as sp
 import sys
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -7,6 +9,7 @@ import pytest
 
 from borgboi.clients.borg_client import BorgClient
 from borgboi.config import BorgConfig
+from borgboi.core.errors import BorgError
 from borgboi.core.models import DiffOptions
 from borgboi.core.output import SilentOutputHandler
 
@@ -151,6 +154,193 @@ def test_get_storage_quota_treats_zero_as_unset(monkeypatch: pytest.MonkeyPatch)
     assert captured["cmd"] == ["borg", "config", "/repo", "storage_quota"]
     assert captured["passphrase"] is None
     assert captured["capture_output"] is True
+
+
+def test_extract_file_to_stdout_builds_borg_extract_command(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    captured: dict[str, object] = {}
+    test_passphrase = "secret"  # noqa: S105
+
+    def fake_run_command_bytes(
+        cmd: list[str],
+        passphrase: str | None = None,
+    ) -> SimpleNamespace:
+        captured["cmd"] = cmd
+        captured["passphrase"] = passphrase
+        return SimpleNamespace(stdout=b"hello world\n")
+
+    monkeypatch.setattr(client, "_run_command_bytes", fake_run_command_bytes)
+
+    payload = client.extract_file_to_stdout("/repo", "archive-old", "docs/file.txt", passphrase=test_passphrase)
+
+    assert captured["cmd"] == [
+        "borg",
+        "extract",
+        "--stdout",
+        "/repo::archive-old",
+        "docs/file.txt",
+    ]
+    assert captured["passphrase"] == test_passphrase
+    assert payload == b"hello world\n"
+
+
+def test_extract_file_to_stdout_returns_empty_bytes_when_stdout_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+
+    def fake_run_command_bytes(cmd: list[str], passphrase: str | None = None) -> SimpleNamespace:
+        _ = (cmd, passphrase)
+        return SimpleNamespace(stdout=None)
+
+    monkeypatch.setattr(client, "_run_command_bytes", fake_run_command_bytes)
+
+    assert client.extract_file_to_stdout("/repo", "archive", "file.txt") == b""
+
+
+def test_extract_file_to_stdout_capped_returns_full_payload_when_under_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    captured: dict[str, object] = {}
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = io.BytesIO(b"hello world\n")
+            self.stderr = io.BytesIO()
+            self.returncode = 0
+
+        def wait(self) -> int:
+            return self.returncode
+
+        def kill(self) -> None:
+            raise AssertionError("kill should not be called when payload is under cap")
+
+    process = FakeProcess()
+
+    def fake_popen(
+        cmd: list[str],
+        stdout: int | None = None,
+        stderr: int | None = None,
+        env: dict[str, str] | None = None,
+    ) -> FakeProcess:
+        captured["cmd"] = cmd
+        captured["stdout"] = stdout
+        captured["stderr"] = stderr
+        captured["env"] = env
+        return process
+
+    monkeypatch.setattr("borgboi.clients.borg_client.sp.Popen", fake_popen)
+
+    payload = client.extract_file_to_stdout_capped("/repo", "archive-old", "docs/file.txt", max_bytes=32)
+
+    assert captured["cmd"] == [
+        "borg",
+        "extract",
+        "--stdout",
+        "/repo::archive-old",
+        "docs/file.txt",
+    ]
+    assert payload.payload == b"hello world\n"
+    assert payload.truncated is False
+    assert captured["stderr"] == sp.PIPE
+    assert process.stdout.closed is True
+
+
+def test_extract_file_to_stdout_capped_preserves_stderr_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    process = SimpleNamespace(stdout=io.BytesIO(), stderr=io.BytesIO(b"Repository not found\n"), returncode=2)
+
+    def fake_wait() -> int:
+        return 2
+
+    process.wait = fake_wait
+
+    def fake_popen(
+        cmd: list[str],
+        stdout: int | None = None,
+        stderr: int | None = None,
+        env: dict[str, str] | None = None,
+    ) -> SimpleNamespace:
+        _ = (cmd, stdout, stderr, env)
+        return process
+
+    monkeypatch.setattr("borgboi.clients.borg_client.sp.Popen", fake_popen)
+
+    with pytest.raises(BorgError) as error_info:
+        client.extract_file_to_stdout_capped("/repo", "archive-old", "docs/file.txt", max_bytes=32)
+
+    assert error_info.value.stderr == "Repository not found\n"
+    assert process.stdout.closed is True
+
+
+def test_extract_file_to_stdout_capped_truncates_large_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    process = SimpleNamespace(stdout=io.BytesIO(b"abcdef"), stderr=io.BytesIO(), returncode=0, killed=False)
+
+    def fake_kill() -> None:
+        process.killed = True
+        process.returncode = -9
+
+    def fake_wait() -> int:
+        return int(process.returncode)
+
+    process.kill = fake_kill
+    process.wait = fake_wait
+
+    def fake_popen(
+        cmd: list[str],
+        stdout: int | None = None,
+        stderr: int | None = None,
+        env: dict[str, str] | None = None,
+    ) -> SimpleNamespace:
+        _ = (cmd, stdout, stderr, env)
+        return process
+
+    monkeypatch.setattr("borgboi.clients.borg_client.sp.Popen", fake_popen)
+
+    payload = client.extract_file_to_stdout_capped("/repo", "archive-old", "docs/file.txt", max_bytes=4)
+
+    assert payload.payload == b"abcd"
+    assert payload.truncated is True
+    assert process.killed is True
+    assert process.stdout.closed is True
+
+
+def test_extract_file_to_stdout_capped_bounds_stderr_thread_join(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = BorgClient(config=BorgConfig(executable_path="borg"), output_handler=SilentOutputHandler())
+    process = SimpleNamespace(stdout=io.BytesIO(b"ok"), stderr=io.BytesIO(), returncode=0)
+    join_timeouts: list[float | None] = []
+
+    class FakeThread:
+        def __init__(self, *, target: Callable[[], None], daemon: bool = False) -> None:
+            _ = daemon
+            self._target = target
+
+        def start(self) -> None:
+            self._target()
+
+        def join(self, timeout: float | None = None) -> None:
+            join_timeouts.append(timeout)
+
+    def fake_wait() -> int:
+        return int(process.returncode)
+
+    process.wait = fake_wait
+
+    def fake_popen(
+        cmd: list[str],
+        stdout: int | None = None,
+        stderr: int | None = None,
+        env: dict[str, str] | None = None,
+    ) -> SimpleNamespace:
+        _ = (cmd, stdout, stderr, env)
+        return process
+
+    monkeypatch.setattr("borgboi.clients.borg_client.sp.Popen", fake_popen)
+    monkeypatch.setattr("borgboi.clients.borg_client.threading.Thread", FakeThread)
+
+    payload = client.extract_file_to_stdout_capped("/repo", "archive-old", "docs/file.txt", max_bytes=32)
+
+    assert payload.payload == b"ok"
+    assert payload.truncated is False
+    assert join_timeouts == [5.0]
 
 
 def test_diff_archives_builds_borg_diff_command(monkeypatch: pytest.MonkeyPatch) -> None:

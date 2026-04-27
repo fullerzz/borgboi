@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
 from rich.markup import escape
 from textual.app import ComposeResult
@@ -44,8 +44,26 @@ class ConfigPanel(VerticalScroll):
 
     DEFAULT_CSS = ""
 
-    def __init__(self, config: Config | None = None, **kwargs: Any) -> None:
-        super().__init__(id="config-panel", **kwargs)
+    def __init__(
+        self,
+        config: Config | None = None,
+        *,
+        name: str | None = None,
+        classes: str | None = None,
+        disabled: bool = False,
+        can_focus: bool | None = None,
+        can_focus_children: bool | None = None,
+        can_maximize: bool | None = None,
+    ) -> None:
+        super().__init__(
+            name=name,
+            id="config-panel",
+            classes=classes,
+            disabled=disabled,
+            can_focus=can_focus,
+            can_focus_children=can_focus_children,
+            can_maximize=can_maximize,
+        )
         self._config = config
 
     @override
