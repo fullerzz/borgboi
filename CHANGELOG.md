@@ -1,3 +1,18 @@
+## v1.28.0 (2026-04-27)
+
+### 🚀 Features
+
+- Enhance Archive Comparison Screen ([#249](https://github.com/fullerzz/borgboi/issues/249)) ([9f2a541](https://github.com/fullerzz/borgboi/commit/9f2a5413038aacc04dc4856f7a7292d2448754e3))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies ([#246](https://github.com/fullerzz/borgboi/issues/246)) ([e7df0bf](https://github.com/fullerzz/borgboi/commit/e7df0bf7555ee59139b9f528b78577c9310fa955))
+
+- **ci-deps**: Update ci dependencies (major) ([#240](https://github.com/fullerzz/borgboi/issues/240)) ([cfdfb7e](https://github.com/fullerzz/borgboi/commit/cfdfb7e2ae725a02d1f64402b7fc378a5025603d))
+
+
 ## v1.27.1 (2026-04-24)
 
 ### 🐛 Bug Fixes
