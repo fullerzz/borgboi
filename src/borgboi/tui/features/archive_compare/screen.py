@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import shutil
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, ClassVar, Literal, override
 
 from rich.markup import escape
 from rich.style import Style
-from rich.text import Text
+from rich.text import Text, TextType
 from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
@@ -21,7 +20,6 @@ from textual.reactive import reactive
 from textual.screen import Screen
 from textual.widgets import (
     Button,
-    DirectoryTree,
     Footer,
     Header,
     Input,
@@ -31,7 +29,6 @@ from textual.widgets import (
     Switch,
     Tree,
 )
-from textual.widgets.directory_tree import DirEntry
 from textual.widgets.tree import TreeNode
 
 from borgboi.clients.borg import DiffChange, DiffResult, RepoArchive
@@ -63,6 +60,56 @@ class ComparePathState:
     older_exists: bool
     newer_exists: bool
     changes: tuple[DiffChange, ...]
+
+
+@dataclass
+class CompareTreeEntry:
+    """Node metadata for an in-memory archive compare tree."""
+
+    relative_path: Path
+    loaded: bool = False
+
+
+@dataclass(frozen=True)
+class ComparePathIndex:
+    """Side-specific path index used to hydrate compare tree nodes lazily."""
+
+    children: dict[Path, tuple[Path, ...]]
+
+    @classmethod
+    def from_paths(cls, paths: Iterable[Path]) -> ComparePathIndex:
+        child_sets: dict[Path, set[Path]] = {Path(): set()}
+        for path in paths:
+            if not path.parts:
+                continue
+            for part_count in range(1, len(path.parts) + 1):
+                child = Path(*path.parts[:part_count])
+                parent = Path(*path.parts[: part_count - 1])
+                child_sets.setdefault(parent, set()).add(child)
+                child_sets.setdefault(child, set())
+
+        children = {
+            parent: tuple(
+                sorted(child_paths, key=lambda child: (not child_sets[child], child.name.lower(), child.name))
+            )
+            for parent, child_paths in child_sets.items()
+        }
+        return cls(children=children)
+
+    def has_children(self, relative_path: Path) -> bool:
+        """Return whether a path has indexed children."""
+        return bool(self.children.get(relative_path))
+
+    def iter_visible_children(self, relative_path: Path, visible_paths: set[Path] | None) -> Iterable[Path]:
+        """Yield direct children visible under the active filter."""
+        for child in self.children.get(relative_path, ()):
+            if visible_paths is None or self._is_relative_path_visible(child, visible_paths):
+                yield child
+
+    @staticmethod
+    def _is_relative_path_visible(relative_path: Path, visible_paths: set[Path]) -> bool:
+        """Return True if a path is visible or is an ancestor of a visible path."""
+        return relative_path in visible_paths or any(relative_path in target.parents for target in visible_paths)
 
 
 CompareRowHighlight = Literal["green", "red"]
@@ -243,8 +290,8 @@ def _merge_compare_highlight(
     highlights[relative_path] = highlight if highlight == "green" or current is None else current
 
 
-class CompareDirectoryTree(DirectoryTree):
-    """Directory tree with compare-specific helpers and sync messages."""
+class CompareDirectoryTree(Tree[CompareTreeEntry]):
+    """In-memory archive compare tree with lazy child hydration."""
 
     ROW_HIGHLIGHT_STYLES: ClassVar[dict[CompareRowHighlight, Style]] = {
         "green": Style.parse("on #213a2c"),
@@ -267,57 +314,105 @@ class CompareDirectoryTree(DirectoryTree):
             self.path = path
             super().__init__()
 
+    class PathSelected(Message):
+        """Posted when a compare path is selected."""
+
+        def __init__(self, directory_tree: CompareDirectoryTree, path: Path) -> None:
+            self.directory_tree = directory_tree
+            self.path = path
+            super().__init__()
+
     def __init__(
         self,
-        path: str | Path,
+        label: str,
         *,
         name: str | None = None,
         id: str | None = None,
         classes: str | None = None,
         disabled: bool = False,
     ) -> None:
-        super().__init__(path, name=name, id=id, classes=classes, disabled=disabled)
-        self._compare_root_resolved = Path(path).resolve()
+        super().__init__(label, data=CompareTreeEntry(Path()), name=name, id=id, classes=classes, disabled=disabled)
+        self._path_index = ComparePathIndex.from_paths(())
         self._row_highlights: dict[Path, CompareRowHighlight] = {}
         self._modified_paths: set[Path] = set()
         self._modified_parent_paths: set[Path] = set()
         self._visible_paths: set[Path] | None = None
         self._mute_directory_messages: bool = False
+        self.root.expand()
 
-    def on_tree_node_expanded(self, event: Tree.NodeExpanded[DirEntry]) -> None:
+    @override
+    def process_label(self, label: TextType) -> Text:
+        """Process labels as literal path names, not Rich markup."""
+        text_label = Text(label) if isinstance(label, str) else label
+        return text_label
+
+    def set_path_index(self, paths: Iterable[Path]) -> None:
+        """Replace the backing path index and render root-level children."""
+        self._path_index = ComparePathIndex.from_paths(paths)
+        self._visible_paths = None
+        self._reset_tree(expanded_paths=frozenset())
+
+    def _reset_tree(self, *, expanded_paths: frozenset[str]) -> None:
+        """Rebuild visible nodes while preserving requested expanded paths."""
+        self.root.data = CompareTreeEntry(Path())
+        self.root.remove_children()
+        self.root.expand()
+        self._populate_node(self.root)
+        for expanded_path in sorted(expanded_paths, key=lambda item: (len(Path(item).parts), item)):
+            self._expand_relative_path(Path(expanded_path))
+        self.move_cursor(None)
+        self.scroll_to(0, 0, animate=False)
+
+    def on_tree_node_expanded(self, event: Tree.NodeExpanded[CompareTreeEntry]) -> None:
         """Relay directory expansion through a public custom message."""
-        if self._mute_directory_messages:
+        event.stop()
+        entry = event.node.data
+        if entry is None or not event.node.allow_expand:
             return
-        dir_entry = event.node.data
-        if dir_entry is None or not event.node.allow_expand:
-            return
-        self.post_message(self.DirectoryExpanded(self, dir_entry.path))
+        self._ensure_node_loaded_sync(event.node)
+        if not self._mute_directory_messages and entry.relative_path.parts:
+            self.post_message(self.DirectoryExpanded(self, entry.relative_path))
 
-    def on_tree_node_collapsed(self, event: Tree.NodeCollapsed[DirEntry]) -> None:
+    def on_tree_node_collapsed(self, event: Tree.NodeCollapsed[CompareTreeEntry]) -> None:
         """Relay directory collapse through a public custom message."""
-        if self._mute_directory_messages:
+        event.stop()
+        entry = event.node.data
+        if (
+            self._mute_directory_messages
+            or entry is None
+            or not event.node.allow_expand
+            or not entry.relative_path.parts
+        ):
             return
-        dir_entry = event.node.data
-        if dir_entry is None or not event.node.allow_expand:
-            return
-        self.post_message(self.DirectoryCollapsed(self, dir_entry.path))
+        self.post_message(self.DirectoryCollapsed(self, entry.relative_path))
 
-    async def ensure_node_loaded(self, node: TreeNode[DirEntry]) -> None:
+    def on_tree_node_selected(self, event: Tree.NodeSelected[CompareTreeEntry]) -> None:
+        """Publish selected compare paths to the screen."""
+        event.stop()
+        entry = event.node.data
+        if entry is None:
+            return
+        self.post_message(self.PathSelected(self, entry.relative_path))
+
+    async def ensure_node_loaded(self, node: TreeNode[CompareTreeEntry]) -> None:
         """Ensure a directory node's children are loaded using public APIs."""
-        if not node.allow_expand or node.data is None or node.data.loaded:
-            return
-        await self.reload_node(node)
+        self._ensure_node_loaded_sync(node)
 
-    async def find_node_by_relative_path(self, relative_path: Path) -> TreeNode[DirEntry] | None:
+    async def find_node_by_relative_path(self, relative_path: Path) -> TreeNode[CompareTreeEntry] | None:
         """Locate a node by relative path, loading ancestor directories as needed."""
-        current_node = self.root
-        if not relative_path.parts:
-            return current_node
+        return self._find_node_by_relative_path_sync(relative_path)
 
+    def _find_node_by_relative_path_sync(self, relative_path: Path) -> TreeNode[CompareTreeEntry] | None:
+        """Locate a node by relative path synchronously."""
+        current_node = self.root
         for part in relative_path.parts:
-            await self.ensure_node_loaded(current_node)
-            child_node: TreeNode[DirEntry] | None = next(
-                (child for child in current_node.children if child.data is not None and child.data.path.name == part),
+            self._ensure_node_loaded_sync(current_node)
+            child_node: TreeNode[CompareTreeEntry] | None = next(
+                (
+                    child
+                    for child in current_node.children
+                    if child.data is not None and child.data.relative_path.name == part
+                ),
                 None,
             )
             if child_node is None:
@@ -325,6 +420,34 @@ class CompareDirectoryTree(DirectoryTree):
             current_node = child_node
 
         return current_node
+
+    def _expand_relative_path(self, relative_path: Path) -> None:
+        """Expand a path and its ancestors if they are visible."""
+        for part_count in range(1, len(relative_path.parts) + 1):
+            node = self._find_node_by_relative_path_sync(Path(*relative_path.parts[:part_count]))
+            if node is None or not node.allow_expand:
+                return
+            node.expand()
+            self._ensure_node_loaded_sync(node)
+
+    def _ensure_node_loaded_sync(self, node: TreeNode[CompareTreeEntry]) -> None:
+        """Populate children for one indexed directory node if needed."""
+        if not node.allow_expand or node.data is None or node.data.loaded:
+            return
+        self._populate_node(node)
+
+    def _populate_node(self, node: TreeNode[CompareTreeEntry]) -> None:
+        """Populate a tree node from the in-memory index."""
+        if node.data is None:
+            return
+        node.remove_children()
+        for child_path in self._path_index.iter_visible_children(node.data.relative_path, self._visible_paths):
+            node.add(
+                child_path.name,
+                data=CompareTreeEntry(child_path),
+                allow_expand=self._path_index.has_children(child_path),
+            )
+        node.data.loaded = True
 
     def set_compare_overlays(
         self,
@@ -342,35 +465,25 @@ class CompareDirectoryTree(DirectoryTree):
     def set_visible_paths(self, visible_paths: set[Path] | None) -> None:
         """Restrict rendered entries to the given relative paths.
 
-        `None` disables filtering (full materialized mirror shown).
+        `None` disables filtering (all indexed paths shown).
         """
+        expanded_paths = self._expanded_relative_paths()
         self._visible_paths = visible_paths
+        self._reset_tree(expanded_paths=expanded_paths)
+
+    def _expanded_relative_paths(self) -> frozenset[str]:
+        """Return currently expanded non-root paths."""
+        expanded: set[str] = set()
+        nodes = list(self.root.children)
+        while nodes:
+            node = nodes.pop()
+            if node.data is not None and node.allow_expand and node.is_expanded and node.data.relative_path.parts:
+                expanded.add(node.data.relative_path.as_posix())
+            nodes.extend(node.children)
+        return frozenset(expanded)
 
     @override
-    def filter_paths(self, paths: Iterable[Path]) -> Iterable[Path]:
-        """Drop children that are not part of the active visible set."""
-        visible = self._visible_paths
-        if visible is None:
-            return list(paths)
-        kept: list[Path] = []
-        for path in paths:
-            try:
-                relative = path.resolve().relative_to(self._compare_root_resolved)
-            except ValueError:
-                continue
-            if self._is_relative_path_visible(relative, visible):
-                kept.append(path)
-        return kept
-
-    @staticmethod
-    def _is_relative_path_visible(relative: Path, visible: set[Path]) -> bool:
-        """Return True if the relative path is either visible or an ancestor of one."""
-        if relative in visible:
-            return True
-        return any(relative in target.parents for target in visible)
-
-    @override
-    def render_label(self, node: TreeNode[DirEntry], base_style: Style, style: Style) -> Text:
+    def render_label(self, node: TreeNode[CompareTreeEntry], base_style: Style, style: Style) -> Text:
         """Render a label with compare-specific tinting and parent indicators."""
         highlight = self._highlight_for_node(node)
         label = super().render_label(node, base_style, style)
@@ -382,7 +495,7 @@ class CompareDirectoryTree(DirectoryTree):
         highlight_style = self.ROW_HIGHLIGHT_STYLES[highlight]
         return super().render_label(node, base_style + highlight_style, style + highlight_style)
 
-    def _highlight_for_node(self, node: TreeNode[DirEntry]) -> CompareRowHighlight | None:
+    def _highlight_for_node(self, node: TreeNode[CompareTreeEntry]) -> CompareRowHighlight | None:
         """Return the compare highlight for a tree node, if any."""
         relative_path = self._relative_path_for_node(node)
         if relative_path is None:
@@ -390,22 +503,18 @@ class CompareDirectoryTree(DirectoryTree):
 
         return self._row_highlights.get(relative_path)
 
-    def _shows_modified_marker(self, node: TreeNode[DirEntry]) -> bool:
+    def _shows_modified_marker(self, node: TreeNode[CompareTreeEntry]) -> bool:
         """Return whether a node should show the dim modified marker."""
         relative_path = self._relative_path_for_node(node)
         if relative_path is None:
             return False
         return relative_path in self._modified_paths or relative_path in self._modified_parent_paths
 
-    def _relative_path_for_node(self, node: TreeNode[DirEntry]) -> Path | None:
+    def _relative_path_for_node(self, node: TreeNode[CompareTreeEntry]) -> Path | None:
         """Resolve the compare-relative path for one tree node."""
         if node.data is None:
             return None
-
-        try:
-            return node.data.path.resolve().relative_to(self._compare_root_resolved)
-        except ValueError:
-            return None
+        return node.data.relative_path
 
 
 class ArchiveCompareScreen(Screen[None]):
@@ -451,14 +560,6 @@ class ArchiveCompareScreen(Screen[None]):
         self._raw_compare_result = DiffResult(archive1="", archive2="", entries=[])
         self._ordered_change_paths: list[Path] = []
         self._change_cursor: int = -1
-        self._tempdir = TemporaryDirectory(prefix="borgboi-archive-compare-")
-        self._compare_temp_root = Path(self._tempdir.name)
-        self._older_root = self._compare_temp_root / "older"
-        self._newer_root = self._compare_temp_root / "newer"
-        self._older_root_resolved = self._older_root.resolve()
-        self._newer_root_resolved = self._newer_root.resolve()
-        self._older_root.mkdir(parents=True, exist_ok=True)
-        self._newer_root.mkdir(parents=True, exist_ok=True)
         super().__init__(**kwargs)
 
     @override
@@ -473,7 +574,7 @@ class ArchiveCompareScreen(Screen[None]):
                     yield Select[str]([], prompt="Older archive", id="archive-compare-older-select", disabled=True)
                     yield Static("Older archive", id="archive-compare-older-heading", markup=True)
                     yield CompareDirectoryTree(
-                        self._older_root,
+                        "Older archive",
                         id="archive-compare-older-tree",
                     )
                 with Vertical(id="archive-compare-details", classes="archive-compare-pane"):
@@ -496,7 +597,7 @@ class ArchiveCompareScreen(Screen[None]):
                     yield Select[str]([], prompt="Newer archive", id="archive-compare-newer-select", disabled=True)
                     yield Static("Newer archive", id="archive-compare-newer-heading", markup=True)
                     yield CompareDirectoryTree(
-                        self._newer_root,
+                        "Newer archive",
                         id="archive-compare-newer-tree",
                     )
         yield Footer()
@@ -512,10 +613,6 @@ class ArchiveCompareScreen(Screen[None]):
         self.query_one("#archive-compare-older-select", Select).loading = True
         self.query_one("#archive-compare-newer-select", Select).loading = True
         self._load_archive_choices()
-
-    def on_unmount(self) -> None:
-        """Clean up any temporary mirror directories created for comparison."""
-        self._cleanup_tempdir()
 
     def action_back(self) -> None:
         """Return to the previous screen."""
@@ -605,7 +702,8 @@ class ArchiveCompareScreen(Screen[None]):
 
     @work(thread=True, exclusive=True, group="archive-compare")
     def _compare_archives(self, older_archive: str, newer_archive: str, content_only: bool) -> None:
-        """Run the archive diff and materialize the temporary mirror trees."""
+        """Run the archive diff and build compare path state."""
+        started_at = time.perf_counter()
         try:
             result = self._orchestrator.diff_archives(
                 self._repo,
@@ -614,15 +712,17 @@ class ArchiveCompareScreen(Screen[None]):
                 options=DiffOptions(content_only=content_only),
                 validated=True,
             )
+            diff_elapsed_ms = (time.perf_counter() - started_at) * 1000
             path_states = build_compare_path_states(result)
-            self._reset_compare_roots()
-            self._materialize_compare_root(
-                self._older_root,
-                [state.relative_path for state in path_states.values() if state.older_exists],
-            )
-            self._materialize_compare_root(
-                self._newer_root,
-                [state.relative_path for state in path_states.values() if state.newer_exists],
+            total_elapsed_ms = (time.perf_counter() - started_at) * 1000
+            logger.debug(
+                "Loaded archive compare diff",
+                repo_name=self._repo.name,
+                older_archive=older_archive,
+                newer_archive=newer_archive,
+                entry_count=len(result.entries),
+                diff_elapsed_ms=round(diff_elapsed_ms, 2),
+                total_elapsed_ms=round(total_elapsed_ms, 2),
             )
         except Exception as exc:
             logger.exception(
@@ -637,35 +737,15 @@ class ArchiveCompareScreen(Screen[None]):
 
         self.app.call_from_thread(self._apply_compare_result, result, path_states, content_only)
 
-    def _reset_compare_roots(self) -> None:
-        """Clear any previous synthetic compare tree contents."""
-        for root in (self._older_root, self._newer_root):
-            shutil.rmtree(root, ignore_errors=True)
-            root.mkdir(parents=True, exist_ok=True)
-
-    def _materialize_compare_root(self, root: Path, paths: list[Path]) -> None:
-        """Write a lightweight filesystem mirror for a set of changed paths."""
-        normalized_paths = {path for path in paths if path.parts}
-        parent_directories = {parent for path in normalized_paths for parent in path.parents if parent.parts}
-
-        for directory in sorted(parent_directories, key=lambda item: (len(item.parts), item.as_posix())):
-            (root / directory).mkdir(parents=True, exist_ok=True)
-
-        for relative_path in sorted(normalized_paths, key=lambda item: item.as_posix()):
-            target = root / relative_path
-            if relative_path in parent_directories:
-                target.mkdir(parents=True, exist_ok=True)
-                continue
-
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.touch(exist_ok=True)
-
     def _apply_compare_result(
         self, result: DiffResult, path_states: dict[Path, ComparePathState], content_only: bool
     ) -> None:
         """Render the compare result after the background worker finishes."""
+        started_at = time.perf_counter()
         self._raw_compare_result = result
         self._raw_path_states = path_states
+        self._older_tree.set_path_index(state.relative_path for state in path_states.values() if state.older_exists)
+        self._newer_tree.set_path_index(state.relative_path for state in path_states.values() if state.newer_exists)
         self._set_compare_controls_enabled(True)
         self.query_one("#archive-compare-status", Label).update(
             self._render_status_line(result.archive1, result.archive2, content_only)
@@ -676,6 +756,14 @@ class ArchiveCompareScreen(Screen[None]):
         self._change_cursor = -1
         self.selected_path = None
         self._apply_filters()
+        logger.debug(
+            "Rendered archive compare result",
+            repo_name=self._repo.name,
+            older_archive=result.archive1,
+            newer_archive=result.archive2,
+            entry_count=len(result.entries),
+            elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+        )
 
     def _clear_compare_view(self, older_archive: str, newer_archive: str) -> None:
         """Remove any previous compare data from the screen."""
@@ -688,16 +776,16 @@ class ArchiveCompareScreen(Screen[None]):
         self._change_cursor = -1
         self.expanded_paths = frozenset()
         self.selected_path = None
-        self._reset_compare_roots()
+        self._older_tree.set_path_index(())
+        self._newer_tree.set_path_index(())
         self._older_tree.set_visible_paths(None)
         self._newer_tree.set_visible_paths(None)
         self._older_tree.set_compare_overlays(highlights={}, modified_paths=set(), modified_parent_paths=set())
         self._newer_tree.set_compare_overlays(highlights={}, modified_paths=set(), modified_parent_paths=set())
-        _ = self._older_tree.reload()
-        _ = self._newer_tree.reload()
 
     def _apply_filters(self) -> None:
         """Recompute visible states, overlays, and tree visibility from reactives."""
+        started_at = time.perf_counter()
         raw = self._raw_compare_result
         kinds = self.kind_filters
         needle = self.path_search
@@ -735,9 +823,6 @@ class ArchiveCompareScreen(Screen[None]):
         self._older_tree.set_visible_paths(older_visible if filter_active else None)
         self._newer_tree.set_visible_paths(newer_visible if filter_active else None)
 
-        _ = self._older_tree.reload()
-        _ = self._newer_tree.reload()
-
         if self.selected_path not in visible_states:
             self.selected_path = None
             self._change_cursor = -1
@@ -747,6 +832,14 @@ class ArchiveCompareScreen(Screen[None]):
             "No changed paths to inspect." if not visible_states else "No path selected."
         )
         self.query_one("#archive-compare-kind-filters", Static).update(self._render_kind_filter_chips(kinds))
+        logger.debug(
+            "Applied archive compare filters",
+            repo_name=self._repo.name,
+            raw_entry_count=len(raw.entries),
+            visible_entry_count=len(filtered_result.entries),
+            filter_active=filter_active,
+            elapsed_ms=round((time.perf_counter() - started_at) * 1000, 2),
+        )
 
     def _filters_are_active(self) -> bool:
         """Return whether any filter narrows the visible path set."""
@@ -930,12 +1023,8 @@ class ArchiveCompareScreen(Screen[None]):
             return
         self._start_compare()
 
-    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
-        """Update the detail panel when a file is selected in either tree."""
-        self._show_selected_path(event.path)
-
-    def on_directory_tree_directory_selected(self, event: DirectoryTree.DirectorySelected) -> None:
-        """Update the detail panel when a directory is selected in either tree."""
+    def on_compare_directory_tree_path_selected(self, event: CompareDirectoryTree.PathSelected) -> None:
+        """Update the detail panel when a path is selected in either tree."""
         self._show_selected_path(event.path)
 
     def on_compare_directory_tree_directory_expanded(self, event: CompareDirectoryTree.DirectoryExpanded) -> None:
@@ -948,8 +1037,8 @@ class ArchiveCompareScreen(Screen[None]):
 
     def _update_expanded_path(self, directory_path: Path, *, expanded: bool) -> None:
         """Update the shared expansion state from a tree event."""
-        relative_path = self._relative_compare_path(directory_path)
-        if relative_path is None or not relative_path.parts:
+        relative_path = directory_path
+        if not relative_path.parts:
             return
 
         relative_path_str = relative_path.as_posix()
@@ -1006,9 +1095,7 @@ class ArchiveCompareScreen(Screen[None]):
 
     def _show_selected_path(self, selected_path: Path) -> None:
         """Render details for the selected compare path or directory."""
-        relative_path = self._relative_compare_path(selected_path)
-        if relative_path is None:
-            return
+        relative_path = selected_path
 
         self._render_selection_from_relative_path(relative_path)
 
@@ -1024,16 +1111,6 @@ class ArchiveCompareScreen(Screen[None]):
 
         self.selected_path = None
         self._change_cursor = -1
-
-    def _relative_compare_path(self, absolute_path: Path) -> Path | None:
-        """Convert an absolute selected path into a relative compare path."""
-        resolved_path = absolute_path.resolve()
-        for root in (self._older_root_resolved, self._newer_root_resolved):
-            try:
-                return resolved_path.relative_to(root)
-            except ValueError:
-                continue
-        return None
 
     def _render_archive_heading(self, archive_name: str) -> str:
         """Render a heading for one side of the compare view."""
@@ -1067,14 +1144,3 @@ class ArchiveCompareScreen(Screen[None]):
                 ),
             ]
         )
-
-    def _cleanup_tempdir(self) -> None:
-        """Release the synthetic compare tree directory."""
-        try:
-            self._tempdir.cleanup()
-        except OSError as exc:
-            logger.warning(
-                "Failed to clean up temporary compare directory",
-                tempdir=self._compare_temp_root.as_posix(),
-                error=str(exc),
-            )

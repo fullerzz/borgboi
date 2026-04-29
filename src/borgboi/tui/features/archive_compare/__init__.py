@@ -4,6 +4,7 @@ from borgboi.tui.features.archive_compare.content_diff_modal import ContentDiffS
 from borgboi.tui.features.archive_compare.screen import (
     ArchiveCompareScreen,
     CompareDirectoryTree,
+    ComparePathIndex,
     ComparePathState,
     build_compare_path_states,
     build_compare_tree_highlights,
@@ -14,6 +15,7 @@ from borgboi.tui.features.archive_compare.screen import (
 __all__ = [
     "ArchiveCompareScreen",
     "CompareDirectoryTree",
+    "ComparePathIndex",
     "ComparePathState",
     "ContentDiffScreen",
     "build_compare_path_states",

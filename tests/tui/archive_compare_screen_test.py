@@ -7,7 +7,7 @@ from typing import Any, cast
 
 import pytest
 from rich.style import Style
-from textual.widgets import DirectoryTree, Input, Select, Static, Switch
+from textual.widgets import Input, Select, Static, Switch
 
 from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
 from borgboi.config import Config
@@ -16,6 +16,7 @@ from borgboi.tui.app import BorgBoiApp
 from borgboi.tui.features.archive_compare import (
     ArchiveCompareScreen,
     CompareDirectoryTree,
+    ComparePathIndex,
     build_compare_path_states,
     build_compare_tree_highlights,
     build_compare_tree_modified_paths,
@@ -164,6 +165,29 @@ def test_build_compare_tree_parent_indicators_marks_ancestor_only_directories() 
     assert Path("direct-dir") not in newer_indicators
 
 
+def test_compare_path_index_returns_visible_children_without_filesystem_mirror() -> None:
+    index = ComparePathIndex.from_paths(
+        [
+            Path("docs/file.txt"),
+            Path("docs/subdir/nested.txt"),
+            Path("removed.txt"),
+        ]
+    )
+
+    assert tuple(index.iter_visible_children(Path(), None)) == (Path("docs"), Path("removed.txt"))
+    assert tuple(index.iter_visible_children(Path("docs"), None)) == (Path("docs/subdir"), Path("docs/file.txt"))
+    assert tuple(index.iter_visible_children(Path(), {Path("docs/subdir/nested.txt")})) == (Path("docs"),)
+    assert tuple(index.iter_visible_children(Path("docs"), {Path("docs/subdir/nested.txt")})) == (Path("docs/subdir"),)
+    assert index.has_children(Path("docs")) is True
+    assert index.has_children(Path("docs/file.txt")) is False
+
+
+def test_compare_directory_tree_processes_path_labels_with_spaces_literally() -> None:
+    tree = CompareDirectoryTree("Archive")
+
+    assert tree.process_label("My Documents/report final.txt").plain == "My Documents/report final.txt"
+
+
 async def _open_archive_compare_screen(app: BorgBoiApp, pilot: Any) -> ArchiveCompareScreen:
     await pilot.pause()
     await pilot.press("i")
@@ -184,26 +208,23 @@ async def test_archive_compare_screen_builds_changed_path_trees(archive_compare_
     async with archive_compare_app.run_test() as pilot:
         screen = await _open_archive_compare_screen(archive_compare_app, pilot)
 
-        older_tree = screen.query_one("#archive-compare-older-tree", DirectoryTree)
-        newer_tree = screen.query_one("#archive-compare-newer-tree", DirectoryTree)
+        older_tree = screen.query_one("#archive-compare-older-tree", CompareDirectoryTree)
+        newer_tree = screen.query_one("#archive-compare-newer-tree", CompareDirectoryTree)
         summary = screen.query_one("#archive-compare-summary", Static)
         older_select = screen.query_one("#archive-compare-older-select", Select)
         newer_select = screen.query_one("#archive-compare-newer-select", Select)
         content_only = screen.query_one("#archive-compare-content-only-switch", Switch)
 
-        assert screen._compare_temp_root.exists() is True
-        assert older_tree.path == screen._older_root
-        assert newer_tree.path == screen._newer_root
         assert older_select.value == "2026-03-27_22:00:00"
         assert newer_select.value == "2026-03-28_22:00:00"
         assert content_only.value is False
 
-        assert (screen._older_root / "removed.txt").exists() is True
-        assert (screen._newer_root / "removed.txt").exists() is False
-        assert (screen._older_root / "added.txt").exists() is False
-        assert (screen._newer_root / "added.txt").exists() is True
-        assert (screen._older_root / "docs" / "file.txt").exists() is True
-        assert (screen._newer_root / "docs" / "file.txt").exists() is True
+        assert await older_tree.find_node_by_relative_path(Path("removed.txt")) is not None
+        assert await newer_tree.find_node_by_relative_path(Path("removed.txt")) is None
+        assert await older_tree.find_node_by_relative_path(Path("added.txt")) is None
+        assert await newer_tree.find_node_by_relative_path(Path("added.txt")) is not None
+        assert await older_tree.find_node_by_relative_path(Path("docs/file.txt")) is not None
+        assert await newer_tree.find_node_by_relative_path(Path("docs/file.txt")) is not None
         assert "Changed paths" in str(cast(Any, summary).content)
         assert "2026-03-27_22:00:00" in str(cast(Any, summary).content)
         assert "2026-03-28_22:00:00" in str(cast(Any, summary).content)
@@ -413,7 +434,7 @@ async def test_archive_compare_screen_updates_selected_path_details(archive_comp
     async with archive_compare_app.run_test() as pilot:
         screen = await _open_archive_compare_screen(archive_compare_app, pilot)
 
-        screen._show_selected_path(screen._newer_root / "docs" / "file.txt")
+        screen._show_selected_path(Path("docs/file.txt"))
         await pilot.pause()
 
         selection = screen.query_one("#archive-compare-selection", Static)
@@ -429,11 +450,11 @@ async def test_archive_compare_screen_clears_selected_file_when_directory_select
     async with archive_compare_app.run_test() as pilot:
         screen = await _open_archive_compare_screen(archive_compare_app, pilot)
 
-        screen._show_selected_path(screen._newer_root / "docs" / "file.txt")
+        screen._show_selected_path(Path("docs/file.txt"))
         await pilot.pause()
         assert screen.selected_path == Path("docs/file.txt")
 
-        screen._show_selected_path(screen._newer_root / "docs")
+        screen._show_selected_path(Path("docs"))
         await pilot.pause()
 
         assert screen.selected_path is None
@@ -445,7 +466,7 @@ async def test_archive_compare_screen_clears_selected_file_when_filters_hide_it(
     async with archive_compare_app.run_test() as pilot:
         screen = await _open_archive_compare_screen(archive_compare_app, pilot)
 
-        screen._show_selected_path(screen._newer_root / "docs" / "file.txt")
+        screen._show_selected_path(Path("docs/file.txt"))
         await pilot.pause()
         assert screen.selected_path == Path("docs/file.txt")
 
@@ -456,17 +477,14 @@ async def test_archive_compare_screen_clears_selected_file_when_filters_hide_it(
         assert screen.selected_path is None
 
 
-async def test_archive_compare_screen_cleans_up_tempdir_on_dismiss(archive_compare_app: BorgBoiApp) -> None:
+async def test_archive_compare_screen_dismisses_to_repo_details(archive_compare_app: BorgBoiApp) -> None:
     async with archive_compare_app.run_test() as pilot:
-        screen = await _open_archive_compare_screen(archive_compare_app, pilot)
-        temp_root = screen._compare_temp_root
-
-        assert temp_root.exists() is True
+        await _open_archive_compare_screen(archive_compare_app, pilot)
 
         await pilot.press("escape")
         await pilot.pause()
 
-        assert temp_root.exists() is False
+        assert isinstance(archive_compare_app.screen, RepoInfoScreen)
 
 
 async def test_archive_compare_screen_kind_filter_prunes_overlays_and_summary(
@@ -675,7 +693,8 @@ async def test_archive_compare_screen_clears_previous_diff_after_compare_failure
         screen = await _open_archive_compare_screen(archive_compare_app, pilot)
 
         assert screen._path_states
-        assert (screen._older_root / "removed.txt").exists() is True
+        older_tree = screen.query_one("#archive-compare-older-tree", CompareDirectoryTree)
+        assert await older_tree.find_node_by_relative_path(Path("removed.txt")) is not None
 
         def _raise_diff_failure(*_args: Any, **_kwargs: Any) -> DiffResult:
             raise RuntimeError("compare boom")
@@ -693,8 +712,9 @@ async def test_archive_compare_screen_clears_previous_diff_after_compare_failure
         newer_heading = screen.query_one("#archive-compare-newer-heading", Static)
 
         assert screen._path_states == {}
-        assert (screen._older_root / "removed.txt").exists() is False
-        assert (screen._newer_root / "added.txt").exists() is False
+        assert await older_tree.find_node_by_relative_path(Path("removed.txt")) is None
+        newer_tree = screen.query_one("#archive-compare-newer-tree", CompareDirectoryTree)
+        assert await newer_tree.find_node_by_relative_path(Path("added.txt")) is None
         assert "Archive comparison failed" in str(cast(Any, summary).content)
         assert "2026-03-27_22:00:00" in str(cast(Any, older_heading).content)
         assert "2026-03-28_22:00:00" in str(cast(Any, newer_heading).content)
