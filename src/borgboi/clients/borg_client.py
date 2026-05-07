@@ -17,7 +17,7 @@ from pathlib import Path
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind
 
-from borgboi.clients.borg import (
+from borgboi.clients.borg_models import (
     ArchivedFile,
     ArchiveInfo,
     DiffEntry,

@@ -15,7 +15,7 @@ from borgboi.rich_utils import console
 if TYPE_CHECKING:
     from rich.table import Table
 
-    from borgboi.clients.borg import ArchiveInfo, DiffResult
+    from borgboi.clients.borg_models import ArchiveInfo, DiffResult
 
 
 logger = get_logger(__name__)
@@ -349,7 +349,6 @@ def backup_contents(
     """List contents of an archive."""
     from pathlib import Path
 
-    from borgboi.clients import borg
     from borgboi.lib import utils
     from borgboi.lib.colors import COLOR_HEX
 
@@ -362,7 +361,7 @@ def backup_contents(
     )
     try:
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
-        contents = borg.list_archive_contents(repo_info.path, archive, passphrase=passphrase)
+        contents = ctx.orchestrator.borg.list_archive_contents(repo_info.path, archive, passphrase=passphrase)
         logger.debug(
             "Retrieved archive contents",
             repo_name=_repo_name(repo_info, name),

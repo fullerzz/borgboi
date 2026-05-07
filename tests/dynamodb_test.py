@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 def get_mock_metadata(repo_path: Path) -> str:
     """Return a mock JSON string representing a Borg repository's metadata."""
-    from borgboi.clients.borg import Encryption, RepoCache, RepoInfo, Repository, Stats
+    from borgboi.clients.borg_models import Encryption, RepoCache, RepoInfo, Repository, Stats
 
     repo_info = RepoInfo(
         cache=RepoCache(
@@ -40,7 +40,7 @@ def get_mock_metadata(repo_path: Path) -> str:
 
 @pytest.fixture
 def borgboi_repo(repo_storage_dir: Path, backup_target_dir: Path) -> BorgBoiRepo:
-    from borgboi.clients.borg import RepoInfo
+    from borgboi.clients.borg_models import RepoInfo
 
     metadata_json_str = get_mock_metadata(repo_storage_dir)
     return BorgBoiRepo(

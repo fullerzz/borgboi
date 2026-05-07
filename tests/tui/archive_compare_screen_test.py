@@ -9,7 +9,7 @@ import pytest
 from rich.style import Style
 from textual.widgets import Input, Select, Static, Switch
 
-from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
+from borgboi.clients.borg_models import DiffResult, RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import Repository
 from borgboi.tui.app import BorgBoiApp

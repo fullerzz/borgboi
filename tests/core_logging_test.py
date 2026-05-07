@@ -558,7 +558,7 @@ def test_dynamodb_client_logs_structured_events(
         deduped_size=250,
     )
 
-    monkeypatch.setattr("borgboi.clients.dynamodb.borg.info", lambda repo_path, passphrase=None: None)
+    monkeypatch.setattr("borgboi.clients.dynamodb._get_borg_client", lambda: Mock(info=lambda *args, **kwargs: None))
 
     add_repo_to_table(repo)
     add_archive_to_table(archive)

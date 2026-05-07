@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from borgboi.clients.borg import RepoInfo
+    from borgboi.clients.borg_models import RepoInfo
 
 ARCHIVE_NAME_FORMAT = "%Y-%m-%d_%H:%M:%S"
 BACKUP_DATE_FORMAT = "%a %b %d, %Y"

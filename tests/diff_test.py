@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from borgboi.clients.borg import DiffResult
+from borgboi.clients.borg_models import DiffResult
 from borgboi.lib.diff import filter_diff_result, resolve_entry_kind
 
 

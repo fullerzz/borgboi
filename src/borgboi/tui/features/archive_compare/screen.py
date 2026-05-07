@@ -31,7 +31,7 @@ from textual.widgets import (
 )
 from textual.widgets.tree import TreeNode
 
-from borgboi.clients.borg import DiffChange, DiffResult, RepoArchive
+from borgboi.clients.borg_models import DiffChange, DiffResult, RepoArchive
 from borgboi.core.errors import ValidationError
 from borgboi.core.logging import get_logger
 from borgboi.core.models import DiffOptions

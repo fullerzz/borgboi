@@ -14,8 +14,8 @@ from platform import system
 
 from pydantic import ValidationError as PydanticValidationError
 
-from borgboi.clients.borg import DiffResult, RepoArchive, RepoInfo
 from borgboi.clients.borg_client import BorgClient, ExtractedFileContent, create_borg_client
+from borgboi.clients.borg_models import DiffResult, RepoArchive, RepoInfo
 from borgboi.clients.s3_client import S3ClientInterface
 from borgboi.config import Config, get_config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError

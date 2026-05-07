@@ -8,7 +8,7 @@ from unittest.mock import ANY, Mock
 
 import pytest
 
-from borgboi.clients.borg import Encryption, RepoCache, RepoInfo, Repository, Stats
+from borgboi.clients.borg_models import Encryption, RepoCache, RepoInfo, Repository, Stats
 from borgboi.config import Config
 from borgboi.core.errors import RepositoryNotFoundError, StorageError, ValidationError
 from borgboi.core.models import DiffOptions, RetentionPolicy
