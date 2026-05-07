@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-04-26T02:48:05.509530933Z"
+exclude-newer = "2026-05-06T01:42:37.637194587Z"
 exclude-newer-span = "PT24H"
 
 [[package]]
@@ -180,7 +180,7 @@ wheels = [
 
 [[package]]
 name = "borgboi"
-version = "1.28.0"
+version = "1.28.1"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },

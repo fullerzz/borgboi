@@ -1,3 +1,30 @@
+## v1.28.1 (2026-05-07)
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Lock file maintenance ([#250](https://github.com/fullerzz/borgboi/issues/250)) ([b3d2285](https://github.com/fullerzz/borgboi/commit/b3d2285b0201532f525de13f0dfc6d22a17dd330))
+
+
+
+### 💼 Other
+
+- Merge pull request [#251](https://github.com/fullerzz/borgboi/issues/251) from fullerzz/dev
+
+Refactor Archive Tree Comparison and Borg Client ([47fc450](https://github.com/fullerzz/borgboi/commit/47fc450edb647a1e9ab7d4566ba5774c9274c2a6))
+
+
+
+### 🚜 Refactor
+
+- Split borg models from execution ([f1a22d2](https://github.com/fullerzz/borgboi/commit/f1a22d2136d0980e9b3564aa620da7fc3c6b65de))
+
+
+
+### ⚡ Performance
+
+- Optimize archive compare tree loading ([9ce55bc](https://github.com/fullerzz/borgboi/commit/9ce55bcc0e9a6f84b7e536c416b5c578a6f710bc))
+
+
 ## v1.28.0 (2026-04-27)
 
 ### 🚀 Features
