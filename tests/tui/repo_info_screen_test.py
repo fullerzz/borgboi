@@ -7,7 +7,7 @@ import pytest
 from textual.containers import VerticalScroll
 from textual.widgets import Button, DataTable, DirectoryTree, Input, Label, Static, TabbedContent, TabPane, TextArea
 
-from borgboi.clients.borg import RepoArchive, RepoInfo
+from borgboi.clients.borg_models import RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import Repository, RetentionPolicy
 from borgboi.tui.app import BorgBoiApp

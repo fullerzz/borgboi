@@ -28,7 +28,7 @@ from textual.widgets import (
     TextArea,
 )
 
-from borgboi.clients.borg import RepoArchive, RepoInfo
+from borgboi.clients.borg_models import RepoArchive, RepoInfo
 from borgboi.core.logging import get_logger
 from borgboi.core.models import RetentionPolicy
 from borgboi.lib.utils import calculate_archive_age, format_iso_timestamp, format_last_backup, format_repo_size

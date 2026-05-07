@@ -10,7 +10,7 @@ from borgboi.cli.backup import (
     _build_archive_stats_tables,
     _render_diff_result,
 )
-from borgboi.clients.borg import ArchiveInfo, DiffResult
+from borgboi.clients.borg_models import ArchiveInfo, DiffResult
 from borgboi.core.models import BackupOptions, DiffOptions
 from borgboi.lib.diff import format_diff_change, summarize_diff_changes
 from tests.cli_helpers import invoke_cli

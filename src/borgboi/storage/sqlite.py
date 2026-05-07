@@ -6,7 +6,7 @@ from typing import override
 
 from sqlalchemy import Engine
 
-from borgboi.clients.borg import RepoInfo
+from borgboi.clients.borg_models import RepoInfo
 from borgboi.core.errors import RepositoryNotFoundError, StorageError
 from borgboi.core.logging import get_logger
 from borgboi.core.models import RetentionPolicy

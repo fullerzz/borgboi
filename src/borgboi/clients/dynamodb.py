@@ -8,7 +8,7 @@ from botocore.config import Config
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from borgboi import validator
-from borgboi.clients import borg
+from borgboi.clients.borg_client import BorgClient, create_borg_client
 from borgboi.config import config
 from borgboi.core.logging import get_logger
 from borgboi.lib.passphrase import resolve_passphrase
@@ -17,6 +17,10 @@ from borgboi.rich_utils import console
 
 boto_config = Config(retries={"mode": "standard"})
 logger = get_logger(__name__)
+
+
+def _get_borg_client() -> BorgClient:
+    return create_borg_client(silent=True)
 
 
 class BorgBoiArchiveTableItem(BaseModel):
@@ -130,7 +134,7 @@ def _convert_table_item_to_repo(item: BorgBoiRepoTableItem) -> BorgBoiRepo:
             db_passphrase=item.passphrase,
             allow_env_fallback=True,
         )
-        metadata = borg.info(item.repo_path, passphrase=passphrase)
+        metadata = _get_borg_client().info(item.repo_path, passphrase=passphrase)
 
     return BorgBoiRepo(
         path=item.repo_path,
@@ -398,7 +402,7 @@ def build_archive_table_item(
         Populated archive table item ready for DynamoDB
     """
     logger.debug("Building archive table item", repo_name=repo.name, repo_path=repo.path, archive_name=archive_name)
-    archive_info = borg.archive_info(repo.path, archive_name, passphrase)
+    archive_info = _get_borg_client().archive_info(repo.path, archive_name, passphrase)
     archive_data = archive_info.archive
     archive_id = archive_data.get("id")
     hostname = archive_data.get("hostname")

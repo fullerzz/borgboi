@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Literal
 
-from borgboi.clients.borg import DiffChange, DiffEntry, DiffResult
+from borgboi.clients.borg_models import DiffChange, DiffEntry, DiffResult
 from borgboi.lib.utils import format_size_bytes
 
 DiffChangeKind = Literal["added", "removed", "modified", "mode"]

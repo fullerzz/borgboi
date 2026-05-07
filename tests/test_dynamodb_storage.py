@@ -67,7 +67,9 @@ def test_get_by_path_defaults_to_current_hostname(
     repo = _make_repo(hostname="storage-host")
     storage.save(repo)
     monkeypatch.setattr("borgboi.storage.dynamodb.socket.gethostname", lambda: "storage-host")
-    monkeypatch.setattr("borgboi.clients.dynamodb.borg.info", lambda repo_path, passphrase=None: None)
+    monkeypatch.setattr(
+        "borgboi.clients.dynamodb._get_borg_client", lambda: SimpleNamespace(info=lambda *args, **kwargs: None)
+    )
 
     result = storage.get_by_path(repo.path)
 

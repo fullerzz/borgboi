@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from borgboi.clients.borg import RepoArchive, RepoInfo
+from borgboi.clients.borg_models import RepoArchive, RepoInfo
 from borgboi.config import Config
 from borgboi.core.models import RepoMetadata, Repository, RetentionPolicy
 from borgboi.models import BorgBoiRepo

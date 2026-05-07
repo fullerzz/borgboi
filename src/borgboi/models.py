@@ -11,7 +11,7 @@ from platform import system
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
-from borgboi.clients.borg import RepoInfo
+from borgboi.clients.borg_models import RepoInfo
 
 # Re-export from core.models for new usage
 from borgboi.core.models import (
