@@ -114,6 +114,7 @@ no_implicit_reexport = false
 [[tool.mypy.overrides]]
 module = ["tests.*"]
 disallow_any_explicit = false
+disable_error_code = ["attr-defined"]
 
 
 [tool.pydantic-mypy]
