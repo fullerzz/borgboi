@@ -1,5 +1,7 @@
 """Repository management commands for BorgBoi CLI."""
 
+import shutil
+import subprocess
 from typing import Annotated
 
 from cyclopts import App, Parameter
@@ -10,10 +12,74 @@ from borgboi.rich_utils import console
 
 logger = get_logger(__name__)
 
+_RSYNC_BASE_FLAGS = [
+    "--archive",
+    "--hard-links",
+    "--delete",
+    "--partial",
+]
+_RSYNC_OPTIONAL_FLAGS = [
+    "--human-readable",
+    "--numeric-ids",
+    "--delete-delay",
+    "--acls",
+    "--xattrs",
+]
 repo = App(
     name="repo",
     help="Repository management commands.\n\nCreate, inspect, list, and delete Borg repositories.",
 )
+
+
+def _rsync_option_text(rsync: str, option: str) -> str:
+    result = subprocess.run(  # noqa: S603
+        [rsync, option],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return ""
+
+    return f"{result.stdout}\n{result.stderr}"
+
+
+def _build_rsync_flags(rsync: str) -> list[str]:
+    flags = [*_RSYNC_BASE_FLAGS]
+    help_text = _rsync_option_text(rsync, "--help")
+    flags.extend(flag for flag in _RSYNC_OPTIONAL_FLAGS if flag in help_text)
+
+    info_help = _rsync_option_text(rsync, "--info=help")
+    if "progress2" in info_help:
+        flags.append("--info=progress2")
+    elif "--progress" in help_text:
+        flags.append("--progress")
+
+    return flags
+
+
+def _terminate_rsync(proc: subprocess.Popen[bytes]) -> None:
+    if proc.poll() is not None:
+        return
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+
+
+def _run_rsync_command(command: list[str]) -> None:
+    proc = subprocess.Popen(command)  # noqa: S603
+    try:
+        returncode = proc.wait()
+    except BaseException:
+        _terminate_rsync(proc)
+        raise
+
+    if returncode != 0:
+        raise subprocess.CalledProcessError(returncode=returncode, cmd=command)
 
 
 @repo.command(name="create")
@@ -144,6 +210,93 @@ def repo_info(
         console.print(f"Path: {repo_info.path}")
     except Exception as error:
         logger.exception("Repository info command failed", error=str(error), repo_name=name, repo_path=path, raw=raw)
+        print_error_and_exit(str(error), error=error)
+
+
+@repo.command(name="rsync")
+def repo_rsync(
+    *,
+    destination: Annotated[str, Parameter(name=["--destination", "-d"], help="Mounted NFS/SMB destination path")],
+    path: Annotated[str | None, Parameter(name=["--path", "-p"], help="Repository path")] = None,
+    name: Annotated[str | None, Parameter(name=["--name", "-n"], help="Repository name")] = None,
+    dry_run: Annotated[
+        bool, Parameter(name="--dry-run", negative="", help="Show rsync actions without copying data")
+    ] = False,
+    ctx: ContextArg,
+) -> None:
+    """Copy a local Borg repository to mounted NFS/SMB storage with rsync."""
+    logger.info(
+        "Running repository rsync command", repo_name=name, repo_path=path, destination=destination, dry_run=dry_run
+    )
+    try:
+        rsync = shutil.which("rsync")
+        if rsync is None:
+            msg = "rsync was not found on PATH. Install rsync before using 'borgboi repo rsync'."
+            raise RuntimeError(msg)
+
+        repo_info = ctx.orchestrator.get_repo(name=name, path=path)
+        source = f"{repo_info.path.rstrip('/')}/"
+        console.print(f"Source: [bold cyan]{source}[/]")
+        console.print(f"Destination: [bold cyan]{destination}[/]")
+        console.print(
+            "[bold yellow]Warning:[/] rsync will delete destination files that are not in the source repository."
+        )
+        if not dry_run and not confirm_action("Continue with repository rsync?"):
+            logger.info(
+                "Repository rsync command aborted by user",
+                repo_name=repo_info.name,
+                repo_path=repo_info.path,
+                destination=destination,
+            )
+            console.print("Aborted.")
+            return
+
+        dry_run_flag = ["--dry-run"] if dry_run else []
+        command = [
+            rsync,
+            *_build_rsync_flags(rsync),
+            *dry_run_flag,
+            source,
+            destination,
+        ]
+        logger.info(
+            "Starting repository rsync",
+            repo_name=repo_info.name,
+            repo_path=repo_info.path,
+            destination=destination,
+            dry_run=dry_run,
+        )
+        _run_rsync_command(command)
+        logger.info(
+            "Repository rsync command completed",
+            repo_name=repo_info.name,
+            repo_path=repo_info.path,
+            destination=destination,
+            dry_run=dry_run,
+        )
+        if dry_run:
+            console.print("[bold yellow]Dry run completed - no changes made[/]")
+        else:
+            console.print(f"[bold green]Repository synced to {destination}[/]")
+    except subprocess.CalledProcessError as error:
+        logger.exception(
+            "Repository rsync command failed",
+            error=str(error),
+            repo_name=name,
+            repo_path=path,
+            destination=destination,
+            dry_run=dry_run,
+        )
+        print_error_and_exit(f"rsync failed with exit code {error.returncode}", error=error)
+    except Exception as error:
+        logger.exception(
+            "Repository rsync command failed",
+            error=str(error),
+            repo_name=name,
+            repo_path=path,
+            destination=destination,
+            dry_run=dry_run,
+        )
         print_error_and_exit(str(error), error=error)
 
 
