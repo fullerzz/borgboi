@@ -1,3 +1,22 @@
+## v1.29.0 (2026-05-13)
+
+### 🚀 Features
+
+- **repo**: Add rsync repository copy command ([#254](https://github.com/fullerzz/borgboi/issues/254)) ([9ccd940](https://github.com/fullerzz/borgboi/commit/9ccd9407e3371322009ccca85a47dabd7ac0f780))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Update terraform aws to v6.44.0 ([#218](https://github.com/fullerzz/borgboi/issues/218)) ([cff3346](https://github.com/fullerzz/borgboi/commit/cff33466634f13c37599ca8d9692f6245a342e69))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies ([#247](https://github.com/fullerzz/borgboi/issues/247)) ([8ead412](https://github.com/fullerzz/borgboi/commit/8ead4122e70e384170493d8820ece55e0b2d2a14))
+
+
 ## v1.28.1 (2026-05-07)
 
 ### 🐛 Bug Fixes

@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-05-06T01:42:37.637194587Z"
+exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "PT24H"
 
 [[package]]
@@ -180,7 +180,7 @@ wheels = [
 
 [[package]]
 name = "borgboi"
-version = "1.28.1"
+version = "1.29.0"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
