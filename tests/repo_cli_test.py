@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
@@ -136,13 +137,14 @@ def test_repo_info_routes_errors_to_print_error_and_exit(monkeypatch: pytest.Mon
         repo_module.repo_info(name="repo-one", ctx=cast(Any, ctx))
 
 
-def test_repo_rsync_runs_rsync_with_mirror_flags(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_repo_rsync_runs_rsync_with_mirror_flags(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     repo = SimpleNamespace(name="repo-one", path="/repo/one")
     orchestrator = SimpleNamespace(get_repo=Mock(return_value=repo))
     ctx = SimpleNamespace(orchestrator=orchestrator)
     proc = SimpleNamespace(wait=Mock(return_value=0))
     subprocess_popen = Mock(return_value=proc)
     console_print = Mock()
+    destination = str(tmp_path)
 
     monkeypatch.setattr(repo_module.shutil, "which", lambda command: "/usr/bin/rsync" if command == "rsync" else None)
     monkeypatch.setattr(repo_module.subprocess, "Popen", subprocess_popen)
@@ -150,7 +152,7 @@ def test_repo_rsync_runs_rsync_with_mirror_flags(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(repo_module, "confirm_action", lambda prompt: True)
     monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
 
-    repo_module.repo_rsync(name="repo-one", destination="/mnt/backup/repo-one", ctx=cast(Any, ctx))
+    repo_module.repo_rsync(name="repo-one", destination=destination, ctx=cast(Any, ctx))
 
     orchestrator.get_repo.assert_called_once_with(name="repo-one", path=None)
     subprocess_popen.assert_called_once_with(
@@ -161,21 +163,21 @@ def test_repo_rsync_runs_rsync_with_mirror_flags(monkeypatch: pytest.MonkeyPatch
             "--delete",
             "--partial",
             "/repo/one/",
-            "/mnt/backup/repo-one",
+            destination,
         ]
     )
     assert console_print.call_args_list == [
         (("Source: [bold cyan]/repo/one/[/]",), {}),
-        (("Destination: [bold cyan]/mnt/backup/repo-one[/]",), {}),
+        ((f"Destination: [bold cyan]{destination}[/]",), {}),
         (
             ("[bold yellow]Warning:[/] rsync will delete destination files that are not in the source repository.",),
             {},
         ),
-        (("[bold green]Repository synced to /mnt/backup/repo-one[/]",), {}),
+        ((f"[bold green]Repository synced to {destination}[/]",), {}),
     ]
 
 
-def test_repo_rsync_adds_dry_run_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_repo_rsync_adds_dry_run_flag(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     repo = SimpleNamespace(name="repo-one", path="/repo/one/")
     orchestrator = SimpleNamespace(get_repo=Mock(return_value=repo))
     ctx = SimpleNamespace(orchestrator=orchestrator)
@@ -183,6 +185,7 @@ def test_repo_rsync_adds_dry_run_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     subprocess_popen = Mock(return_value=proc)
     console_print = Mock()
     confirm_mock = Mock(side_effect=AssertionError("confirmation should not run"))
+    destination = str(tmp_path)
 
     monkeypatch.setattr(repo_module.shutil, "which", lambda command: "/usr/bin/rsync" if command == "rsync" else None)
     monkeypatch.setattr(repo_module.subprocess, "Popen", subprocess_popen)
@@ -190,15 +193,15 @@ def test_repo_rsync_adds_dry_run_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(repo_module, "confirm_action", confirm_mock)
     monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
 
-    repo_module.repo_rsync(path="/repo/one/", destination="/mnt/backup/repo-one", dry_run=True, ctx=cast(Any, ctx))
+    repo_module.repo_rsync(path="/repo/one/", destination=destination, dry_run=True, ctx=cast(Any, ctx))
 
     command = subprocess_popen.call_args.args[0]
     confirm_mock.assert_not_called()
     assert "--dry-run" in command
-    assert command[-2:] == ["/repo/one/", "/mnt/backup/repo-one"]
+    assert command[-2:] == ["/repo/one/", destination]
     assert console_print.call_args_list == [
         (("Source: [bold cyan]/repo/one/[/]",), {}),
-        (("Destination: [bold cyan]/mnt/backup/repo-one[/]",), {}),
+        ((f"Destination: [bold cyan]{destination}[/]",), {}),
         (
             ("[bold yellow]Warning:[/] rsync will delete destination files that are not in the source repository.",),
             {},
@@ -207,7 +210,7 @@ def test_repo_rsync_adds_dry_run_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
 
-def test_repo_rsync_aborts_when_confirmation_declined(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_repo_rsync_aborts_when_confirmation_declined(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     repo = SimpleNamespace(name="repo-one", path="/repo/one")
     orchestrator = SimpleNamespace(get_repo=Mock(return_value=repo))
     ctx = SimpleNamespace(orchestrator=orchestrator)
@@ -219,7 +222,7 @@ def test_repo_rsync_aborts_when_confirmation_declined(monkeypatch: pytest.Monkey
     monkeypatch.setattr(repo_module, "confirm_action", lambda prompt: False)
     monkeypatch.setattr("borgboi.cli.repo.console.print", console_print)
 
-    repo_module.repo_rsync(name="repo-one", destination="/mnt/backup/repo-one", ctx=cast(Any, ctx))
+    repo_module.repo_rsync(name="repo-one", destination=str(tmp_path), ctx=cast(Any, ctx))
 
     subprocess_popen.assert_not_called()
     assert console_print.call_args_list[-1] == (("Aborted.",), {})
@@ -306,7 +309,9 @@ def test_repo_rsync_routes_missing_rsync_to_print_error_and_exit(monkeypatch: py
         repo_module.repo_rsync(name="repo-one", destination="/mnt/backup/repo-one", ctx=cast(Any, ctx))
 
 
-def test_repo_rsync_routes_rsync_failure_to_print_error_and_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_repo_rsync_routes_rsync_failure_to_print_error_and_exit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     repo = SimpleNamespace(name="repo-one", path="/repo/one")
     ctx = SimpleNamespace(orchestrator=SimpleNamespace(get_repo=Mock(return_value=repo)))
 
@@ -320,7 +325,7 @@ def test_repo_rsync_routes_rsync_failure_to_print_error_and_exit(monkeypatch: py
     monkeypatch.setattr(repo_module, "print_error_and_exit", fail)
 
     with pytest.raises(AssertionError, match="rsync failed with exit code 23"):
-        repo_module.repo_rsync(name="repo-one", destination="/mnt/backup/repo-one", ctx=cast(Any, ctx))
+        repo_module.repo_rsync(name="repo-one", destination=str(tmp_path), ctx=cast(Any, ctx))
 
 
 def test_repo_delete_aborts_when_confirmation_declined(monkeypatch: pytest.MonkeyPatch) -> None:

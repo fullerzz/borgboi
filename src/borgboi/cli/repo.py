@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Annotated
 
 from cyclopts import App, Parameter
@@ -232,6 +233,14 @@ def repo_rsync(
         rsync = shutil.which("rsync")
         if rsync is None:
             msg = "rsync was not found on PATH. Install rsync before using 'borgboi repo rsync'."
+            raise RuntimeError(msg)
+
+        dest_path = Path(destination)
+        if not dest_path.exists():
+            msg = f"Destination path does not exist: {destination}"
+            raise RuntimeError(msg)
+        if not dest_path.is_dir():
+            msg = f"Destination path is not a directory: {destination}"
             raise RuntimeError(msg)
 
         repo_info = ctx.orchestrator.get_repo(name=name, path=path)
