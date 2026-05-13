@@ -16,6 +16,7 @@ It contains the following features:
 * Daily backup command that **creates** a new archive, **prunes** stale archives, and **compacts** the Borg repository to free up space
 * Metadata about your Borg repositories is stored in DynamoDB (or locally in offline mode)
 * Borg repositories are synced with S3 to enable cloud backups and archive restoration from other systems
+* Borg repositories can be copied to mounted NFS or SMB storage with `rsync`
 * **Offline mode** support for users who prefer not to use AWS services
 * **Cyclopts-powered CLI** with rich help output, global root flags, and organized subcommands (`repo`, `backup`, `s3`, `exclusions`, `config`, `tui`, `version`)
 * **Textual TUI** for browsing repositories, opening a full-screen config viewer and repository detail screen, and managing excludes files without leaving the terminal

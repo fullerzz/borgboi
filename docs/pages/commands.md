@@ -89,6 +89,31 @@ Show repository information.
 
 `--raw` prints Borg's raw repository info output instead of BorgBoi's formatted summary.
 
+### `repo rsync`
+
+Copy a local Borg repository to mounted NFS or SMB storage with `rsync`.
+
+- Requires `rsync` installed and available in `PATH`
+- Target the repository with `--name/-n` or `--path/-p`
+- Required: `--destination/-d`
+- Optional: `--dry-run`
+- Prompts for confirmation unless `--dry-run` is used
+
+```sh
+bb repo rsync --name my-docs-backup \
+    --destination /Volumes/Backups/my-docs-backup
+```
+
+Use `--dry-run` first to verify the source, destination, and rsync actions without copying data:
+
+```sh
+bb repo rsync --name my-docs-backup \
+    --destination /Volumes/Backups/my-docs-backup \
+    --dry-run
+```
+
+The command mirrors the repository into the destination with rsync flags suited for Borg repository copies, including archive mode, hard-link preservation, partial transfers, and destination deletion for files that no longer exist in the source. BorgBoi prints the source and destination before running, and non-dry-run copies require confirmation because `--delete` can remove unrelated files if the destination is wrong.
+
 ### `repo delete`
 
 Delete a Borg repository.

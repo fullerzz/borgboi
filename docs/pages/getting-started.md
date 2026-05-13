@@ -5,6 +5,9 @@
 
     Read installation methods here: [https://borgbackup.readthedocs.io/en/stable/installation.html](https://borgbackup.readthedocs.io/en/stable/installation.html).
 
+!!! tip "Install rsync for mounted-drive copies"
+    `bb repo rsync` expects `rsync` to be installed and available in `PATH`. Use this command when you want to copy a local Borg repository to mounted NFS or SMB storage.
+
 ## Installation
 
 BorgBoi isn't published to PyPI yet, so it is recommended to install it from the GitHub repo with [`uv`](https://docs.astral.sh/uv/).
@@ -301,6 +304,25 @@ bb repo set-quota --name my-docs-backup --quota 200G
 ```
 
 The new quota must be at least as large as the repo's current on-disk size and no larger than the remaining disk headroom after Borg's reserved free space plus the repo's current size. Borg-style decimal quotas like `1.5T` are supported.
+
+## Copy a Repository to Mounted Storage
+
+If you keep a second copy on a NAS or file share, mount the NFS or SMB destination first, then preview the rsync operation:
+
+```sh
+bb repo rsync --name my-docs-backup \
+    --destination /Volumes/Backups/my-docs-backup \
+    --dry-run
+```
+
+When the source and destination look correct, run the copy without `--dry-run`:
+
+```sh
+bb repo rsync --name my-docs-backup \
+    --destination /Volumes/Backups/my-docs-backup
+```
+
+BorgBoi uses rsync mirror-style behavior for this command. It preserves repository structure and hard links, resumes partial transfers where possible, and deletes destination files that are no longer present in the source repository. Non-dry-run copies prompt for confirmation before rsync starts.
 
 ## List Archives
 
