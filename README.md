@@ -11,6 +11,7 @@ It layers a grouped CLI, a Textual TUI, YAML-based configuration, local metadata
 - Creates and manages Borg repositories from a single CLI.
 - Runs daily backup workflows that create archives, prune old data, and compact repositories.
 - Syncs repositories to S3 and restores them when cloud mode is enabled.
+- Copies local repositories to mounted NFS or SMB storage with `rsync`.
 - Supports offline mode with local SQLite-backed metadata storage and no AWS dependency.
 - Stores repository passphrases in per-repo files under `~/.borgboi/passphrases/`.
 - Exposes a Cyclopts-powered CLI with grouped subcommands for repository, backup, S3, exclusions, and config workflows.
@@ -20,6 +21,7 @@ It layers a grouped CLI, a Textual TUI, YAML-based configuration, local metadata
 
 - Python 3.12 or newer
 - [BorgBackup](https://borgbackup.readthedocs.io/en/stable/installation.html) installed and available in `PATH`
+- `rsync` installed and available in `PATH` if you want to copy repositories to mounted NFS or SMB drives
 - AWS credentials with access to your S3 bucket and DynamoDB tables if you want online mode
 
 > [!IMPORTANT]
@@ -77,6 +79,12 @@ Run the daily backup workflow:
 
 ```bash
 bb backup daily --name my-docs-backup
+```
+
+Preview copying the repository to a mounted NAS or file share:
+
+```bash
+bb repo rsync --name my-docs-backup --destination /Volumes/Backups/my-docs-backup --dry-run
 ```
 
 Inspect repositories and archives:
