@@ -63,9 +63,26 @@ class BorgBoiApp(App[None]):
     def orchestrator(self) -> Orchestrator:
         """Return the shared orchestrator, constructing it lazily if not provided at init."""
         if self._orchestrator is None:
+            from borgboi.clients.s3_client import S3Client
+            from borgboi.config import get_config
             from borgboi.core.orchestrator import Orchestrator
+            from borgboi.storage.base import RepositoryStorage
+            from borgboi.storage.db import init_local_database
 
-            self._orchestrator = Orchestrator(config=self._config)
+            cfg = self._config or get_config()
+            storage: RepositoryStorage
+            if cfg.offline:
+                from borgboi.storage.sqlite import SQLiteStorage
+
+                storage = SQLiteStorage()
+                s3_client = None
+            else:
+                from borgboi.storage.dynamodb import DynamoDBStorage
+
+                init_local_database(cfg)
+                storage = DynamoDBStorage(config=cfg)
+                s3_client = S3Client(config=cfg.aws)
+            self._orchestrator = Orchestrator(config=cfg, storage=storage, s3_client=s3_client)
         return self._orchestrator
 
     @override
@@ -96,6 +113,10 @@ class BorgBoiApp(App[None]):
             },
         )
         logger.info("TUI app mounted", offline=self._config.offline if self._config else None)
+        if self._config is not None:
+            from borgboi.storage.db import init_local_database
+
+            init_local_database(self._config)
         self._main_screen = self.screen
 
         # Mode indicator in header subtitle

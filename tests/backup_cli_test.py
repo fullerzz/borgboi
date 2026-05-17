@@ -122,7 +122,7 @@ def test_backup_run_no_json_passes_options_and_skips_stats(
             raise AssertionError("archive_info should not be called when --no-json is used")
 
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
             self.borg = _FakeBorgClient()
 
@@ -173,7 +173,7 @@ def test_backup_run_default_fetches_stats_and_renders_table(
             return archive_info_result
 
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
             self.borg = _FakeBorgClient()
 
@@ -212,7 +212,7 @@ def test_backup_daily_accepts_repo_name(monkeypatch: pytest.MonkeyPatch) -> None
     fake_repo = SimpleNamespace(name="daily-repo", path="/fake/repo")
 
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def get_repo(self, name: str | None = None, path: str | None = None) -> object:
@@ -236,7 +236,7 @@ def test_backup_daily_name_respects_no_s3_sync_and_passphrase(monkeypatch: pytes
     fake_repo = SimpleNamespace(name="daily-repo", path="/fake/repo")
 
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def get_repo(self, name: str | None = None, path: str | None = None) -> object:
@@ -358,7 +358,7 @@ def test_backup_diff_defaults_to_two_most_recent_archives(
     fake_result = DiffResult.model_validate({"archive1": "archive-1", "archive2": "archive-2", "entries": []})
 
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def get_repo(self, name: str | None = None, path: str | None = None) -> object:
@@ -411,7 +411,7 @@ def test_backup_diff_passes_explicit_archives_and_filters(
     )
 
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def get_repo(self, name: str | None = None, path: str | None = None) -> object:
@@ -467,7 +467,7 @@ def test_backup_diff_passes_explicit_archives_and_filters(
 
 def test_backup_diff_requires_both_explicit_archives(capsys: pytest.CaptureFixture[str]) -> None:
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def get_repo(self, name: str | None = None, path: str | None = None) -> object:

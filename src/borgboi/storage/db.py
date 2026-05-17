@@ -3,6 +3,7 @@
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -18,6 +19,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.pool import NullPool
+
+from borgboi.core.logging import get_logger
+
+if TYPE_CHECKING:
+    from borgboi.config import Config
+
+logger = get_logger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -125,3 +133,36 @@ def init_db(db_path: Path) -> Engine:
             session.commit()
 
     return engine
+
+
+def init_local_database(config: "Config") -> None:
+    """Ensure the local metadata SQLite database exists and is migrated.
+
+    Idempotent: safe to call multiple times. Logs at info level when a legacy
+    layout will be migrated, debug otherwise. Disposes the engine before
+    returning so callers receive a clean handle through their own storage.
+    """
+    from borgboi.storage.sqlite_migration import auto_migrate_if_needed
+
+    db_path = get_db_path(config.borgboi_dir)
+    if _should_log_sqlite_migration(db_path):
+        logger.info("Migrating local metadata database", db_path=str(db_path))
+    else:
+        logger.debug("No SQLite migration needed", db_path=str(db_path))
+
+    engine = auto_migrate_if_needed(db_path)
+    engine.dispose()
+    logger.debug("Local SQLite database initialized successfully")
+
+
+def _should_log_sqlite_migration(db_path: Path) -> bool:
+    """Return True when a legacy storage migration is expected."""
+    if db_path.exists():
+        return False
+
+    borgboi_dir = db_path.parent.parent if db_path.parent.name == ".database" else db_path.parent
+
+    legacy_db_path = borgboi_dir / "borgboi.db"
+    legacy_data_path = borgboi_dir / "data"
+    legacy_metadata_path = borgboi_dir / ".borgboi_metadata"
+    return legacy_db_path.exists() or legacy_data_path.exists() or legacy_metadata_path.exists()
