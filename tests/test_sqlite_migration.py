@@ -2,14 +2,18 @@
 
 import json
 from pathlib import Path
-from typing import Any, cast
 
 import pytest
 
 from borgboi.config import Config
-from borgboi.core.orchestrator import Orchestrator
-from borgboi.core.output import CollectingOutputHandler
-from borgboi.storage.db import RepositoryRow, S3StatsCacheRow, get_db_path, get_session_factory, init_db
+from borgboi.storage.db import (
+    RepositoryRow,
+    S3StatsCacheRow,
+    get_db_path,
+    get_session_factory,
+    init_db,
+    init_local_database,
+)
 from borgboi.storage.sqlite_migration import (
     auto_migrate_if_needed,
     migrate_json_repositories,
@@ -186,8 +190,9 @@ class TestAutoMigration:
             engine.dispose()
 
 
-def test_online_orchestrator_bootstraps_local_sqlite(
+def test_init_local_database_migrates_legacy_layout(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv("BORGBOI_OFFLINE", raising=False)
 
@@ -212,21 +217,12 @@ def test_online_orchestrator_bootstraps_local_sqlite(
     finally:
         legacy_engine.dispose()
 
-    class DummyDynamoDBStorage:
-        def __init__(self, config: Config | None = None, table_name: str | None = None) -> None:
-            self.config = config
-            self.table_name = table_name
-
-    monkeypatch.setattr("borgboi.storage.dynamodb.DynamoDBStorage", DummyDynamoDBStorage)
-
-    output_handler = CollectingOutputHandler()
-    _ = Orchestrator(config=Config(offline=False), borg_client=cast(Any, object()), output_handler=output_handler)
+    init_local_database(Config(offline=False))
+    captured = capsys.readouterr()
 
     assert migrated_db_path.exists()
     assert not legacy_db_path.exists()
-    assert any(
-        message.startswith("Migrating local metadata database to") for _, message, _ in output_handler.log_messages
-    )
+    assert "Migrating local metadata database" in captured.out
 
     from borgboi.storage.sqlite import SQLiteStorage
 

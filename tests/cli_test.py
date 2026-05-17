@@ -67,7 +67,7 @@ def test_repo_create(
     backup_target_dir: Path,
 ) -> None:
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def create_repo(
@@ -110,7 +110,7 @@ def test_root_offline_flag_is_accepted(capsys: pytest.CaptureFixture[str]) -> No
 
 def test_cli_logging_redacts_passphrase_tokens(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def create_repo(
@@ -161,7 +161,7 @@ def test_repo_create_logs_structured_cli_events(monkeypatch: pytest.MonkeyPatch,
     home_dir = tmp_path / "home"
 
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def create_repo(
