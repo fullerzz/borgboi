@@ -15,10 +15,10 @@ from mypy_boto3_s3 import S3Client
 from borgboi.core.logging import _HANDLER_NAME, _LOGGER_NAMESPACE, _LoggingState
 from borgboi.core.telemetry import reset_telemetry_for_tests
 from borgboi.models import BorgBoiRepo
-from tests.orchestrator_test import EXCLUDES_SRC
 
 DYNAMO_TABLE_NAME = "borg-repos-test"
 DYNAMO_ARCHIVES_TABLE_NAME = "borg-archives-test"
+EXCLUDES_SRC = "tests/data/excludes.txt"
 
 
 def _cleanup_borg_security_files(repo_id: str, security_dir: str) -> None:
@@ -217,19 +217,30 @@ def backup_target_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp_path_factory.mktemp("borgboi-test-backup-target")
 
 
+def _create_test_repo(repo_storage_dir: Path, backup_target_dir: Path, repo_name: str) -> BorgBoiRepo:
+    from borgboi.config import Config
+    from borgboi.core.orchestrator import Orchestrator
+
+    orchestrator = Orchestrator(config=Config(offline=False))
+    return orchestrator.create_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name)
+
+
 @pytest.fixture
 def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None) -> Generator[BorgBoiRepo]:
-    """
-    Provides a BorgRepo with an excludes list already created.
-    """
-    from borgboi.orchestrator import create_borg_repo, create_excludes_list
+    """Provides a BorgRepo with an excludes list already created."""
+    from borgboi.config import get_config
 
     repo_name = uuid4().hex[0:5]
-    repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, offline=False)
-    exclusion_list = create_excludes_list(repo_name, EXCLUDES_SRC)
+    repo = _create_test_repo(repo_storage_dir, backup_target_dir, repo_name)
+
+    cfg = get_config()
+    excludes_path = cfg.borgboi_dir / f"{repo_name}_{cfg.excludes_filename}"
+    excludes_path.parent.mkdir(parents=True, exist_ok=True)
+    excludes_path.write_text(Path(EXCLUDES_SRC).read_text(encoding="utf-8"), encoding="utf-8")
+
     yield repo
-    exclusion_list.unlink(missing_ok=True)
-    # Clean up borg security files
+
+    excludes_path.unlink(missing_ok=True)
     if repo.metadata and repo.metadata.repository and repo.metadata.repository.id:
         _cleanup_borg_security_files(repo.metadata.repository.id, repo.metadata.security_dir)
 
@@ -238,14 +249,9 @@ def borg_repo(repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_t
 def borg_repo_without_excludes(
     repo_storage_dir: Path, backup_target_dir: Path, create_dynamodb_table: None
 ) -> Generator[BorgBoiRepo]:
-    """
-    Provides a BorgRepo without an excludes list already created.
-    """
-    from borgboi.orchestrator import create_borg_repo
-
+    """Provides a BorgRepo without an excludes list already created."""
     repo_name = uuid4().hex[0:5]
-    repo = create_borg_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name, False)
+    repo = _create_test_repo(repo_storage_dir, backup_target_dir, repo_name)
     yield repo
-    # Clean up borg security files
     if repo.metadata and repo.metadata.repository and repo.metadata.repository.id:
         _cleanup_borg_security_files(repo.metadata.repository.id, repo.metadata.security_dir)
