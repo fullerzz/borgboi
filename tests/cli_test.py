@@ -61,6 +61,19 @@ def test_package_exports_root_app() -> None:
     assert cli_package.cli is cli_main.cli
 
 
+@pytest.mark.parametrize("ci_value", ["1", "true", "TRUE", "yes"])
+def test_rich_tracebacks_are_disabled_in_ci(monkeypatch: pytest.MonkeyPatch, ci_value: str) -> None:
+    monkeypatch.setenv("CI", ci_value)
+
+    assert not cli_main._should_install_rich_tracebacks()
+
+
+def test_rich_tracebacks_are_enabled_outside_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CI", raising=False)
+
+    assert cli_main._should_install_rich_tracebacks()
+
+
 def test_repo_create(
     monkeypatch: pytest.MonkeyPatch,
     repo_storage_dir: Path,

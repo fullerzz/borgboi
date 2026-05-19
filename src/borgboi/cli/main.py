@@ -33,7 +33,13 @@ from borgboi.core.telemetry import (
 )
 from borgboi.rich_utils import console
 
-install(suppress=[cyclopts])
+
+def _should_install_rich_tracebacks() -> bool:
+    return os.environ.get("CI", "").lower() not in {"1", "true", "yes"}
+
+
+if _should_install_rich_tracebacks():
+    install(suppress=[cyclopts])
 
 
 class BorgBoiContext:
