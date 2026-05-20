@@ -1,3 +1,10 @@
+## v1.29.2 (2026-05-20)
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Lock file maintenance ([#258](https://github.com/fullerzz/borgboi/issues/258)) ([e82b5f6](https://github.com/fullerzz/borgboi/commit/e82b5f65da38b77a7c87c7476868e7031cc1410e))
+
+
 ## v1.29.1 (2026-05-13)
 
 ### 🐛 Bug Fixes
