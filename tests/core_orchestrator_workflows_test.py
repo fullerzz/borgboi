@@ -962,41 +962,6 @@ def test_delete_repo_cleans_up_local_state_when_s3_delete_fails(
     assert excludes_path.exists() is False
 
 
-def test_orchestrator_creates_default_s3_client_when_online(monkeypatch: pytest.MonkeyPatch) -> None:
-    created_configs: list[object] = []
-
-    class _FakeS3Client:
-        def __init__(self, config: object) -> None:
-            created_configs.append(config)
-
-    monkeypatch.setattr("borgboi.clients.s3_client.S3Client", _FakeS3Client)
-
-    orchestrator = Orchestrator(
-        config=Config(offline=False),
-        borg_client=cast(Any, Mock()),
-        storage=cast(Any, Mock()),
-    )
-
-    assert created_configs == [orchestrator.config.aws]
-    assert orchestrator.s3 is not None
-
-
-def test_orchestrator_skips_default_s3_client_when_offline(monkeypatch: pytest.MonkeyPatch) -> None:
-    class _FakeS3Client:
-        def __init__(self, config: object) -> None:
-            raise AssertionError("S3 client should not be created in offline mode")
-
-    monkeypatch.setattr("borgboi.clients.s3_client.S3Client", _FakeS3Client)
-
-    orchestrator = Orchestrator(
-        config=Config(offline=True),
-        borg_client=cast(Any, Mock()),
-        storage=cast(Any, Mock()),
-    )
-
-    assert orchestrator.s3 is None
-
-
 def test_sync_to_s3_renders_with_expected_rich_style() -> None:
     repo = _build_repo()
     storage = Mock()

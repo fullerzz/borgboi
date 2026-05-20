@@ -33,7 +33,13 @@ from borgboi.core.telemetry import (
 )
 from borgboi.rich_utils import console
 
-install(suppress=[cyclopts])
+
+def _should_install_rich_tracebacks() -> bool:
+    return os.environ.get("CI", "").lower() not in {"1", "true", "yes"}
+
+
+if _should_install_rich_tracebacks():
+    install(suppress=[cyclopts])
 
 
 class BorgBoiContext:
@@ -48,10 +54,26 @@ class BorgBoiContext:
 
     @property
     def orchestrator(self) -> Orchestrator:
+        from borgboi.clients.s3_client import S3Client
         from borgboi.core.orchestrator import Orchestrator
+        from borgboi.storage.base import RepositoryStorage
+        from borgboi.storage.db import init_local_database
 
         if self._orchestrator is None:
-            self._orchestrator = Orchestrator(config=self.config)
+            cfg = self.config
+            storage: RepositoryStorage
+            if cfg.offline:
+                from borgboi.storage.sqlite import SQLiteStorage
+
+                storage = SQLiteStorage()
+                s3_client = None
+            else:
+                from borgboi.storage.dynamodb import DynamoDBStorage
+
+                init_local_database(cfg)
+                storage = DynamoDBStorage(config=cfg)
+                s3_client = S3Client(config=cfg.aws)
+            self._orchestrator = Orchestrator(config=cfg, storage=storage, s3_client=s3_client)
         return self._orchestrator
 
     @property

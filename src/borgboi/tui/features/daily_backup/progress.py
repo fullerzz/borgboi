@@ -11,7 +11,7 @@ from typing import Protocol
 from sqlalchemy import Engine, func
 
 from borgboi.core.logging import get_logger
-from borgboi.storage.db import BackupStageTimingRow, get_db_path, get_session_factory, init_db
+from borgboi.storage.db import BackupStageTimingRow, get_session_factory, init_db
 
 logger = get_logger(__name__)
 
@@ -48,8 +48,14 @@ class SQLiteDailyBackupProgressHistory:
     """SQLite-backed stage timing history for TUI daily backup progress."""
 
     def __init__(self, db_path: Path | None = None, engine: Engine | None = None) -> None:
-        self._owns_engine = engine is None
-        self._engine = engine or init_db(db_path or get_db_path())
+        if engine is not None:
+            self._owns_engine = False
+            self._engine = engine
+        else:
+            if db_path is None:
+                raise ValueError("Either db_path or engine must be provided")
+            self._owns_engine = True
+            self._engine = init_db(db_path)
         self._session_factory = get_session_factory(self._engine)
         logger.debug(
             "SQLiteDailyBackupProgressHistory initialized", db_path=str(db_path), owns_engine=self._owns_engine

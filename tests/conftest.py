@@ -220,8 +220,10 @@ def backup_target_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 def _create_test_repo(repo_storage_dir: Path, backup_target_dir: Path, repo_name: str) -> BorgBoiRepo:
     from borgboi.config import Config
     from borgboi.core.orchestrator import Orchestrator
+    from borgboi.storage.dynamodb import DynamoDBStorage
 
-    orchestrator = Orchestrator(config=Config(offline=False))
+    cfg = Config(offline=False)
+    orchestrator = Orchestrator(config=cfg, storage=DynamoDBStorage(config=cfg))
     return orchestrator.create_repo(repo_storage_dir.as_posix(), backup_target_dir.as_posix(), repo_name)
 
 

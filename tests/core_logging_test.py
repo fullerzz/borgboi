@@ -49,6 +49,27 @@ def test_configure_logging_disabled_does_not_create_logs_dir() -> None:
     assert not cfg.logs_dir.exists()
 
 
+def test_configure_logging_disabled_in_ci_avoids_rich_exception_tracebacks(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setenv("CI", "true")
+    cfg = Config(logging=LoggingConfig(enabled=False))
+
+    configure_logging(cfg)
+
+    with caplog.at_level(logging.ERROR, logger="borgboi"):
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError:
+            get_logger("borgboi.test").exception("failed event")
+
+    rendered_records = "\n".join(record.getMessage() for record in caplog.records)
+    assert "failed event" in rendered_records
+    assert "RuntimeError: boom" in rendered_records
+    assert "\u256d" not in rendered_records
+
+
 def test_configure_logging_writes_stdlib_and_structlog_events() -> None:
     cfg = Config(logging=LoggingConfig(enabled=True))
 
