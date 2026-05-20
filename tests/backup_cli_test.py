@@ -147,7 +147,7 @@ def test_backup_run_no_json_passes_options_and_skips_stats(
     monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
     monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
 
-    exit_code = invoke_cli(cli_main.cli, ["backup", "run", "--path", str(tmp_path), "--no-json"])
+    exit_code = invoke_cli(cli_main.cli, ["--offline", "backup", "run", "--path", str(tmp_path), "--no-json"])
 
     assert exit_code == 0
     assert len(captured_options) == 1
@@ -198,7 +198,7 @@ def test_backup_run_default_fetches_stats_and_renders_table(
     monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
     monkeypatch.setattr("borgboi.cli.backup._render_archive_stats_table", lambda *args: render_calls.append(args))
 
-    exit_code = invoke_cli(cli_main.cli, ["backup", "run", "--path", str(tmp_path)])
+    exit_code = invoke_cli(cli_main.cli, ["--offline", "backup", "run", "--path", str(tmp_path)])
 
     assert exit_code == 0
     assert captured_options == [None]
@@ -224,7 +224,7 @@ def test_backup_daily_accepts_repo_name(monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
 
-    exit_code = invoke_cli(cli_main.cli, ["backup", "daily", "--name", "daily-repo"])
+    exit_code = invoke_cli(cli_main.cli, ["--offline", "backup", "daily", "--name", "daily-repo"])
 
     assert exit_code == 0
     assert get_repo_calls == [("daily-repo", None)]
@@ -250,7 +250,7 @@ def test_backup_daily_name_respects_no_s3_sync_and_passphrase(monkeypatch: pytes
 
     exit_code = invoke_cli(
         cli_main.cli,
-        ["backup", "daily", "--name", "daily-repo", "--passphrase", "cli-passphrase", "--no-s3-sync"],
+        ["--offline", "backup", "daily", "--name", "daily-repo", "--passphrase", "cli-passphrase", "--no-s3-sync"],
     )
 
     assert exit_code == 0
@@ -385,7 +385,7 @@ def test_backup_diff_defaults_to_two_most_recent_archives(
 
     monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
 
-    exit_code = invoke_cli(cli_main.cli, ["backup", "diff", "--name", "demo-repo"])
+    exit_code = invoke_cli(cli_main.cli, ["--offline", "backup", "diff", "--name", "demo-repo"])
     captured = capsys.readouterr()
 
     assert exit_code == 0
@@ -437,6 +437,7 @@ def test_backup_diff_passes_explicit_archives_and_filters(
     exit_code = invoke_cli(
         cli_main.cli,
         [
+            "--offline",
             "backup",
             "diff",
             "--name",
@@ -477,7 +478,10 @@ def test_backup_diff_requires_both_explicit_archives(capsys: pytest.CaptureFixtu
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr("borgboi.core.orchestrator.Orchestrator", _FakeOrchestrator)
 
-    exit_code = invoke_cli(cli_main.cli, ["backup", "diff", "--name", "demo-repo", "--archive1", "archive-a"])
+    exit_code = invoke_cli(
+        cli_main.cli,
+        ["--offline", "backup", "diff", "--name", "demo-repo", "--archive1", "archive-a"],
+    )
     try:
         captured = capsys.readouterr()
 

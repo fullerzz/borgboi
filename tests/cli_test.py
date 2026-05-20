@@ -99,6 +99,7 @@ def test_repo_create(
     exit_code = invoke_cli(
         cli_main.cli,
         [
+            "--offline",
             "repo",
             "create",
             "--path",
@@ -146,6 +147,7 @@ def test_cli_logging_redacts_passphrase_tokens(monkeypatch: pytest.MonkeyPatch, 
     exit_code = invoke_cli(
         cli_main.cli,
         [
+            "--offline",
             "repo",
             "create",
             "--path",
@@ -199,6 +201,7 @@ def test_repo_create_logs_structured_cli_events(monkeypatch: pytest.MonkeyPatch,
     exit_code = invoke_cli(
         cli_main.cli,
         [
+            "--offline",
             "repo",
             "create",
             "--path",

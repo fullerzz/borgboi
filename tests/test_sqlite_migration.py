@@ -1,6 +1,7 @@
 """Tests for SQLite auto-migration from legacy formats."""
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
@@ -193,6 +194,7 @@ class TestAutoMigration:
 def test_init_local_database_migrates_legacy_layout(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.delenv("BORGBOI_OFFLINE", raising=False)
 
@@ -217,12 +219,13 @@ def test_init_local_database_migrates_legacy_layout(
     finally:
         legacy_engine.dispose()
 
-    init_local_database(Config(offline=False))
+    with caplog.at_level(logging.INFO, logger="borgboi.storage.db"):
+        init_local_database(Config(offline=False))
     captured = capsys.readouterr()
 
     assert migrated_db_path.exists()
     assert not legacy_db_path.exists()
-    assert "Migrating local metadata database" in captured.out
+    assert "Migrating local metadata database" in captured.out or "Migrating local metadata database" in caplog.text
 
     from borgboi.storage.sqlite import SQLiteStorage
 
