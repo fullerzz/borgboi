@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import Callable, Iterable
 from importlib.metadata import version as get_version
 from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
@@ -12,11 +13,6 @@ from cyclopts import App, CycloptsError, Parameter, ResultAction
 from rich.console import Console
 from rich.prompt import Confirm
 from rich.traceback import install
-
-if TYPE_CHECKING:
-    from borgboi.core.orchestrator import Orchestrator
-
-import uuid_utils as uuid
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from borgboi.config import Config, get_config
@@ -33,6 +29,17 @@ from borgboi.core.telemetry import (
 )
 from borgboi.rich_utils import console
 
+if TYPE_CHECKING:
+    from borgboi.core.orchestrator import Orchestrator
+
+
+def _new_trace_id() -> str:
+    uuid7 = getattr(uuid, "uuid7", None)
+    if uuid7 is not None:
+        new_id: uuid.UUID = uuid7()
+        return new_id.hex
+    return uuid.uuid4().hex
+
 
 def _should_install_rich_tracebacks() -> bool:
     return os.environ.get("CI", "").lower() not in {"1", "true", "yes"}
@@ -48,7 +55,7 @@ class BorgBoiContext:
     def __init__(self, offline: bool = False, debug: bool = False) -> None:
         self.offline = offline
         self.debug = debug
-        self.trace_id = uuid.uuid7().hex
+        self.trace_id = _new_trace_id()
         self._orchestrator: Orchestrator | None = None
         self._config: Config | None = None
 
