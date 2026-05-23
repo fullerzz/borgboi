@@ -18,6 +18,7 @@ from borgboi.core.telemetry import (
     format_trace_id,
     get_current_span_context,
 )
+from borgboi.lib.utils import is_ci_environment
 
 LOG_FILE_BASENAME = "borgboi"
 _LOG_FILE_GLOB = f"{LOG_FILE_BASENAME}_*.log"
@@ -153,6 +154,8 @@ def configure_logging(config: Config) -> Path | None:
     _remove_managed_handlers(namespace_logger)
 
     if not config.logging.enabled:
+        if is_ci_environment():
+            _configure_structlog()
         _LoggingState.active_log_file = None
         namespace_logger.setLevel(stdlib_logging.NOTSET)
         namespace_logger.propagate = True

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from collections.abc import Callable, Iterable
 from importlib.metadata import version as get_version
 from typing import TYPE_CHECKING, Annotated, Literal, NoReturn
@@ -12,11 +13,6 @@ from cyclopts import App, CycloptsError, Parameter, ResultAction
 from rich.console import Console
 from rich.prompt import Confirm
 from rich.traceback import install
-
-if TYPE_CHECKING:
-    from borgboi.core.orchestrator import Orchestrator
-
-import uuid_utils as uuid
 from structlog.contextvars import bind_contextvars, clear_contextvars
 
 from borgboi.config import Config, get_config
@@ -31,9 +27,27 @@ from borgboi.core.telemetry import (
     set_span_attributes,
     telemetry_is_active,
 )
+from borgboi.lib.utils import is_ci_environment
 from borgboi.rich_utils import console
 
-install(suppress=[cyclopts])
+if TYPE_CHECKING:
+    from borgboi.core.orchestrator import Orchestrator
+
+
+def _new_trace_id() -> str:
+    uuid7 = getattr(uuid, "uuid7", None)
+    if uuid7 is not None:
+        new_id: uuid.UUID = uuid7()
+        return new_id.hex
+    return uuid.uuid4().hex
+
+
+def _should_install_rich_tracebacks() -> bool:
+    return not is_ci_environment()
+
+
+if _should_install_rich_tracebacks():
+    install(suppress=[cyclopts])
 
 
 class BorgBoiContext:
@@ -42,16 +56,32 @@ class BorgBoiContext:
     def __init__(self, offline: bool = False, debug: bool = False) -> None:
         self.offline = offline
         self.debug = debug
-        self.trace_id = uuid.uuid7().hex
+        self.trace_id = _new_trace_id()
         self._orchestrator: Orchestrator | None = None
         self._config: Config | None = None
 
     @property
     def orchestrator(self) -> Orchestrator:
+        from borgboi.clients.s3_client import S3Client
         from borgboi.core.orchestrator import Orchestrator
+        from borgboi.storage.base import RepositoryStorage
+        from borgboi.storage.db import init_local_database
 
         if self._orchestrator is None:
-            self._orchestrator = Orchestrator(config=self.config)
+            cfg = self.config
+            storage: RepositoryStorage
+            if cfg.offline:
+                from borgboi.storage.sqlite import SQLiteStorage
+
+                storage = SQLiteStorage()
+                s3_client = None
+            else:
+                from borgboi.storage.dynamodb import DynamoDBStorage
+
+                init_local_database(cfg)
+                storage = DynamoDBStorage(config=cfg)
+                s3_client = S3Client(config=cfg.aws)
+            self._orchestrator = Orchestrator(config=cfg, storage=storage, s3_client=s3_client)
         return self._orchestrator
 
     @property

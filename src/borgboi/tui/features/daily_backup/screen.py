@@ -13,6 +13,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Label, ProgressBar, RichLog, Select, Static, Switch
 
 from borgboi.core.logging import get_logger
+from borgboi.storage.db import get_db_path
 from borgboi.tui.features.daily_backup.output import TuiOutputHandler
 from borgboi.tui.features.daily_backup.progress import SQLiteDailyBackupProgressHistory
 
@@ -170,7 +171,7 @@ class DailyBackupScreen(Screen[None]):
         progress_history: SQLiteDailyBackupProgressHistory | None = None
         progress_history_error: str | None = None
         try:
-            progress_history = SQLiteDailyBackupProgressHistory()
+            progress_history = SQLiteDailyBackupProgressHistory(db_path=get_db_path(orch.config.borgboi_dir))
             logger.debug("Progress history initialized")
         except Exception as exc:
             progress_history_error = str(exc)

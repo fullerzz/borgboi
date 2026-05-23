@@ -61,13 +61,26 @@ def test_package_exports_root_app() -> None:
     assert cli_package.cli is cli_main.cli
 
 
+@pytest.mark.parametrize("ci_value", ["1", "true", "TRUE", "yes"])
+def test_rich_tracebacks_are_disabled_in_ci(monkeypatch: pytest.MonkeyPatch, ci_value: str) -> None:
+    monkeypatch.setenv("CI", ci_value)
+
+    assert not cli_main._should_install_rich_tracebacks()
+
+
+def test_rich_tracebacks_are_enabled_outside_ci(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CI", raising=False)
+
+    assert cli_main._should_install_rich_tracebacks()
+
+
 def test_repo_create(
     monkeypatch: pytest.MonkeyPatch,
     repo_storage_dir: Path,
     backup_target_dir: Path,
 ) -> None:
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def create_repo(
@@ -86,6 +99,7 @@ def test_repo_create(
     exit_code = invoke_cli(
         cli_main.cli,
         [
+            "--offline",
             "repo",
             "create",
             "--path",
@@ -110,7 +124,7 @@ def test_root_offline_flag_is_accepted(capsys: pytest.CaptureFixture[str]) -> No
 
 def test_cli_logging_redacts_passphrase_tokens(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def create_repo(
@@ -133,6 +147,7 @@ def test_cli_logging_redacts_passphrase_tokens(monkeypatch: pytest.MonkeyPatch, 
     exit_code = invoke_cli(
         cli_main.cli,
         [
+            "--offline",
             "repo",
             "create",
             "--path",
@@ -161,7 +176,7 @@ def test_repo_create_logs_structured_cli_events(monkeypatch: pytest.MonkeyPatch,
     home_dir = tmp_path / "home"
 
     class _FakeOrchestrator:
-        def __init__(self, config: object) -> None:
+        def __init__(self, config: object, **_: object) -> None:
             del config
 
         def create_repo(
@@ -186,6 +201,7 @@ def test_repo_create_logs_structured_cli_events(monkeypatch: pytest.MonkeyPatch,
     exit_code = invoke_cli(
         cli_main.cli,
         [
+            "--offline",
             "repo",
             "create",
             "--path",

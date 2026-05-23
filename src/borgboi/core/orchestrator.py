@@ -51,26 +51,27 @@ class Orchestrator:
     dependency-injected clients and storage backends.
 
     Example:
-        >>> orchestrator = Orchestrator()
+        >>> orchestrator = Orchestrator(storage=SQLiteStorage())
         >>> repo = orchestrator.create_repo("/path/to/repo", "/home/user", "my-backups")
         >>> orchestrator.backup(repo)
     """
 
     def __init__(
         self,
-        borg_client: BorgClient | None = None,
-        storage: RepositoryStorage | None = None,
-        s3_client: S3ClientInterface | None = None,
+        *,
+        storage: RepositoryStorage,
         config: Config | None = None,
+        borg_client: BorgClient | None = None,
+        s3_client: S3ClientInterface | None = None,
         output_handler: BaseOutputHandler | None = None,
     ) -> None:
-        """Initialize Orchestrator with optional dependencies.
+        """Initialize Orchestrator with injected dependencies.
 
         Args:
-            borg_client: Borg backup client (default: auto-created)
-            storage: Repository storage backend (default: auto-created based on config)
-            s3_client: S3 client for cloud sync (default: None)
+            storage: Repository storage backend (required — supplied by the composition root)
             config: Configuration instance (default: get_config())
+            borg_client: Borg backup client (default: auto-created)
+            s3_client: S3 client for cloud sync (default: None — cloud features disabled)
             output_handler: Handler for output messages (default: DefaultOutputHandler).
                 Handlers may optionally implement `render_command()` for richer
                 streaming output; legacy handlers remain supported.
@@ -78,69 +79,8 @@ class Orchestrator:
         self.config = config or get_config()
         self.output = output_handler or DefaultOutputHandler()
         self.borg = borg_client or create_borg_client(config=self.config)
-        self.storage = storage or self._create_default_storage()
-        self.s3: S3ClientInterface | None = s3_client or self._create_default_s3_client()
-
-    def _create_default_storage(self) -> RepositoryStorage:
-        """Create the default storage backend based on configuration.
-
-        Returns:
-            RepositoryStorage instance (SQLite for offline, DynamoDB for cloud)
-        """
-        if self.config.offline:
-            logger.debug("Creating SQLite storage for offline mode")
-            from borgboi.storage.sqlite import SQLiteStorage
-
-            return SQLiteStorage()
-        else:
-            logger.debug("Creating DynamoDB storage for cloud mode, initializing local SQLite cache")
-            self._ensure_local_sqlite_initialized()
-            from borgboi.storage.dynamodb import DynamoDBStorage
-
-            return DynamoDBStorage(config=self.config)
-
-    def _create_default_s3_client(self) -> S3ClientInterface | None:
-        """Create the default S3 client when cloud features are enabled."""
-        if self.config.offline:
-            logger.debug("Skipping S3 client creation in offline mode")
-            return None
-
-        logger.debug("Creating S3 client for cloud mode")
-        from borgboi.clients.s3_client import S3Client
-
-        return S3Client(config=self.config.aws)
-
-    def _ensure_local_sqlite_initialized(self) -> None:
-        """Initialize local SQLite storage and run migrations.
-
-        This keeps local metadata storage aligned even when cloud storage
-        (DynamoDB) is the active backend.
-        """
-        from borgboi.storage.db import get_db_path
-        from borgboi.storage.sqlite_migration import auto_migrate_if_needed
-
-        db_path = get_db_path()
-        if self._should_log_sqlite_migration(db_path):
-            logger.info("Migrating local metadata database", db_path=str(db_path))
-            self.output.on_log("info", f"Migrating local metadata database to {db_path}")
-        else:
-            logger.debug("No SQLite migration needed", db_path=str(db_path))
-
-        engine = auto_migrate_if_needed(db_path)
-        engine.dispose()
-        logger.debug("Local SQLite database initialized successfully")
-
-    def _should_log_sqlite_migration(self, db_path: Path) -> bool:
-        """Return True when a legacy storage migration is expected."""
-        if db_path.exists():
-            return False
-
-        borgboi_dir = db_path.parent.parent if db_path.parent.name == ".database" else db_path.parent
-
-        legacy_db_path = borgboi_dir / "borgboi.db"
-        legacy_data_path = borgboi_dir / "data"
-        legacy_metadata_path = borgboi_dir / ".borgboi_metadata"
-        return legacy_db_path.exists() or legacy_data_path.exists() or legacy_metadata_path.exists()
+        self.storage = storage
+        self.s3: S3ClientInterface | None = s3_client
 
     # Repository Workflows
 

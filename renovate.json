@@ -13,6 +13,8 @@
   ],
   "minimumReleaseAge": "1 day",
   "minimumReleaseAgeBehaviour": "timestamp-optional",
+  "internalChecksFilter": "strict",
+  "prCreation": "not-pending",
   "rebaseWhen": "behind-base-branch",
   "pruneStaleBranches": true,
   "osvVulnerabilityAlerts": true,
@@ -24,7 +26,8 @@
       ],
       "groupName": "python dependencies",
       "semanticCommitScope": "python-deps",
-      "semanticCommitType": "fix"
+      "semanticCommitType": "fix",
+      "minimumReleaseAgeBehaviour": "timestamp-required"
     },
     {
       "matchCategories": [
