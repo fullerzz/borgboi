@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging as stdlib_logging
-import os
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -19,6 +18,7 @@ from borgboi.core.telemetry import (
     format_trace_id,
     get_current_span_context,
 )
+from borgboi.lib.utils import is_ci_environment
 
 LOG_FILE_BASENAME = "borgboi"
 _LOG_FILE_GLOB = f"{LOG_FILE_BASENAME}_*.log"
@@ -31,7 +31,6 @@ _LOG_LEVELS = {
     "error": stdlib_logging.ERROR,
     "critical": stdlib_logging.CRITICAL,
 }
-_CI_TRUE_VALUES = {"1", "true", "yes"}
 
 
 class _LoggingState:
@@ -76,10 +75,6 @@ def _configure_structlog() -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
-
-
-def _is_ci() -> bool:
-    return os.environ.get("CI", "").lower() in _CI_TRUE_VALUES
 
 
 def _build_log_file_name(timestamp: datetime | None = None) -> str:
@@ -159,7 +154,7 @@ def configure_logging(config: Config) -> Path | None:
     _remove_managed_handlers(namespace_logger)
 
     if not config.logging.enabled:
-        if _is_ci():
+        if is_ci_environment():
             _configure_structlog()
         _LoggingState.active_log_file = None
         namespace_logger.setLevel(stdlib_logging.NOTSET)

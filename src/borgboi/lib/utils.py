@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -139,3 +140,8 @@ def format_duration_seconds(seconds: object) -> str:
     if hours > 0:
         return f"{hours}h {remaining_minutes}m {remaining_seconds}s"
     return f"{remaining_minutes}m {remaining_seconds}s"
+
+
+def is_ci_environment() -> bool:
+    """Return whether the current process is running in a CI environment."""
+    return os.environ.get("CI", "").lower() in {"1", "true", "yes"}

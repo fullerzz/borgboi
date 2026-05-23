@@ -27,6 +27,7 @@ from borgboi.core.telemetry import (
     set_span_attributes,
     telemetry_is_active,
 )
+from borgboi.lib.utils import is_ci_environment
 from borgboi.rich_utils import console
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ def _new_trace_id() -> str:
 
 
 def _should_install_rich_tracebacks() -> bool:
-    return os.environ.get("CI", "").lower() not in {"1", "true", "yes"}
+    return not is_ci_environment()
 
 
 if _should_install_rich_tracebacks():
