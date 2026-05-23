@@ -1,3 +1,40 @@
+## v1.29.3 (2026-05-23)
+
+### 💼 Other
+
+- Remove catppuccin dependency ([61e5869](https://github.com/fullerzz/borgboi/commit/61e5869584623b4c1d8ec24376c7995cb18b3ce5))
+
+- Merge pull request [#261](https://github.com/fullerzz/borgboi/issues/261) from fullerzz/dev
+
+Refactor orchestrator and storage architecture for dependency injection ([05c801c](https://github.com/fullerzz/borgboi/commit/05c801cc568b51ac257b9154232af27a016d0068))
+
+
+
+### 🚜 Refactor
+
+- Remove legacy orchestrator and offline storage ([#256](https://github.com/fullerzz/borgboi/issues/256)) ([6f40146](https://github.com/fullerzz/borgboi/commit/6f401465be5c8f46dc5f11972e8c743a1f87bc2e))
+
+- Move storage selection into composition root ([#257](https://github.com/fullerzz/borgboi/issues/257)) ([95ad93a](https://github.com/fullerzz/borgboi/commit/95ad93af31c5a630239210cd591573d02a280d26))
+
+- Centralize CI environment detection helper ([9a0b8ef](https://github.com/fullerzz/borgboi/commit/9a0b8efd89474aff1fea94d0849ca3be3e2a0471))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Update terraform aws to v6.45.0 ([#255](https://github.com/fullerzz/borgboi/issues/255)) ([13e43e3](https://github.com/fullerzz/borgboi/commit/13e43e3e89c718ac3a9f9666f391caecd9c80fb4))
+
+- **deps**: Drop uuid-utils dependency ([8617c12](https://github.com/fullerzz/borgboi/commit/8617c12f21333713e08b1d22f45dc299c1c3684f))
+
+- **renovate**: Update renovate config ([12ec106](https://github.com/fullerzz/borgboi/commit/12ec106c901a1409c476565e3ca643567f72f7f0))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies ([#253](https://github.com/fullerzz/borgboi/issues/253)) ([19ac7fa](https://github.com/fullerzz/borgboi/commit/19ac7fa26b04c91288feda07220eea47fe93622b))
+
+
 ## v1.29.2 (2026-05-20)
 
 ### 🐛 Bug Fixes
