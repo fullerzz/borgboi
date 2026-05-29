@@ -1,3 +1,22 @@
+## v1.29.4 (2026-05-29)
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Lock file maintenance ([#262](https://github.com/fullerzz/borgboi/issues/262)) ([cef6ac3](https://github.com/fullerzz/borgboi/commit/cef6ac390f9d2dad0d3ede095e99d070c289cc1a))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Update terraform aws to v6.46.0 ([#260](https://github.com/fullerzz/borgboi/issues/260)) ([a9d059f](https://github.com/fullerzz/borgboi/commit/a9d059fa0d72780d29547049ff30fbb9dfc4a3a6))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies ([#259](https://github.com/fullerzz/borgboi/issues/259)) ([0a24db5](https://github.com/fullerzz/borgboi/commit/0a24db557d8bdcfa9d840ae8d0d4558e42a572f0))
+
+
 ## v1.29.3 (2026-05-23)
 
 ### 💼 Other

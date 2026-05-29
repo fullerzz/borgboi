@@ -220,7 +220,7 @@ wheels = [
 
 [[package]]
 name = "borgboi"
-version = "1.29.3"
+version = "1.29.4"
 source = { editable = "." }
 dependencies = [
     { name = "boto3" },
