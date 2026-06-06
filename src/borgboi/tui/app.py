@@ -15,8 +15,7 @@ from textual.widgets import DataTable, Footer, Header, Sparkline, Static
 from borgboi.core.logging import get_logger
 from borgboi.core.telemetry import set_span_attributes
 from borgboi.lib.utils import format_last_backup, format_repo_size
-from borgboi.storage.db import get_db_path
-from borgboi.tui.features.daily_backup import DailyBackupScreen, SQLiteDailyBackupProgressHistory
+from borgboi.tui.features.daily_backup import DailyBackupScreen
 from borgboi.tui.features.repo_detail import RepoInfoScreen
 from borgboi.tui.screens import ConfigScreen, DefaultExcludesScreen
 from borgboi.tui.support import capture_span
@@ -26,11 +25,24 @@ logger = get_logger(__name__)
 if TYPE_CHECKING:
     from textual.screen import Screen
 
+    from borgboi.clients.borg_models import RepoArchive
     from borgboi.config import Config
     from borgboi.core.orchestrator import Orchestrator
     from borgboi.models import BorgBoiRepo
 
 SPARKLINE_DAYS = 14
+
+
+def _parse_archive_timestamp(archive: RepoArchive) -> datetime | None:
+    """Return the best available timestamp for an archive."""
+    for value in (archive.start, archive.time):
+        if not value:
+            continue
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            logger.debug("Invalid archive timestamp", archive=archive.name, timestamp=value)
+    return None
 
 
 class BorgBoiApp(App[None]):
@@ -192,13 +204,32 @@ class BorgBoiApp(App[None]):
         logger.debug("Loading sparkline data")
         try:
             today = datetime.now(UTC).date()
-            with SQLiteDailyBackupProgressHistory(
-                db_path=get_db_path(self._config.borgboi_dir if self._config else None)
-            ) as history:
-                data = history.get_daily_archive_counts(SPARKLINE_DAYS)
+            start_date = today - timedelta(days=SPARKLINE_DAYS - 1)
+            counts_by_date = {start_date + timedelta(days=index): 0 for index in range(SPARKLINE_DAYS)}
+
+            for repo in self.orchestrator.list_repos():
+                try:
+                    archives = self.orchestrator.list_archives(repo)
+                except Exception as error:
+                    logger.warning(
+                        "Failed to load archive activity for repository",
+                        repo_name=repo.name,
+                        error=str(error),
+                    )
+                    continue
+
+                for archive in archives:
+                    archive_time = _parse_archive_timestamp(archive)
+                    if archive_time is None:
+                        continue
+                    archive_date = archive_time.astimezone(UTC).date() if archive_time.tzinfo else archive_time.date()
+                    if start_date <= archive_date <= today:
+                        counts_by_date[archive_date] += 1
+
+            data = [float(counts_by_date[start_date + timedelta(days=index)]) for index in range(SPARKLINE_DAYS)]
             labels = [(today - timedelta(days=SPARKLINE_DAYS - 1 - i)).strftime("%m/%d") for i in range(SPARKLINE_DAYS)]
             set_span_attributes(trace.get_current_span(), {"borgboi.sparkline.points": len(data)})
-            logger.debug("Sparkline data loaded", data_points=len(data))
+            logger.debug("Sparkline data loaded", data_points=len(data), archive_count=sum(data))
             self.call_from_thread(self._update_sparkline, data, labels)
         except Exception:
             logger.debug("Failed to load sparkline data", exc_info=True)

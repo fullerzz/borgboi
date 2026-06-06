@@ -1,21 +1,32 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, Sparkline, Static
 
+from borgboi.clients.borg_models import RepoArchive
 from borgboi.config import Config, TelemetryConfig
 from borgboi.models import BorgBoiRepo
-from borgboi.storage.db import get_db_path
 from borgboi.tui.app import BorgBoiApp
 from borgboi.tui.features.daily_backup import DailyBackupScreen
 from borgboi.tui.features.repo_detail import RepoInfoScreen
 from borgboi.tui.screens import ConfigScreen, DefaultExcludesScreen
 
 from .conftest import FakeTracer, build_repo, make_orchestrator
+
+
+def _build_archive(name: str, timestamp: datetime) -> RepoArchive:
+    return RepoArchive.model_validate(
+        {
+            "archive": name,
+            "id": f"{name}-id",
+            "name": name,
+            "start": timestamp.isoformat(),
+            "time": timestamp.isoformat(),
+        }
+    )
 
 
 async def test_app_composes_with_data_table_and_sections(tui_app: BorgBoiApp) -> None:
@@ -205,25 +216,32 @@ async def test_action_refresh_reloads_repos(tui_config: Config) -> None:
             await pilot.pause(0.05)
             if call_count > initial_count:
                 break
-        assert call_count > initial_count
+    assert call_count > initial_count
 
 
-async def test_app_loads_sparkline_history_from_configured_db(
-    tui_config: Config,
-    monkeypatch: pytest.MonkeyPatch,
-    patch_sparkline_history: Callable[..., None],
-    tmp_path_factory: pytest.TempPathFactory,
-) -> None:
-    captured_db_paths: list[object] = []
-    alternate_home = tmp_path_factory.mktemp("alt-home")
+async def test_app_loads_sparkline_from_borg_archives(tui_config: Config) -> None:
+    today = datetime.now(UTC)
+    repos = [build_repo("alpha"), build_repo("beta")]
+    archives_by_repo = {
+        "alpha": [
+            _build_archive("alpha-today", today),
+            _build_archive("alpha-yesterday", today - timedelta(days=1)),
+            _build_archive("alpha-outside-window", today - timedelta(days=14)),
+        ],
+        "beta": [_build_archive("beta-today", today)],
+    }
 
-    orchestrator = make_orchestrator(list_repos=lambda: [build_repo("alpha")])
+    orchestrator = make_orchestrator(
+        list_repos=lambda: repos,
+        list_archives=lambda repo: archives_by_repo[repo.name],
+    )
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
-    monkeypatch.setenv("BORGBOI_HOME", alternate_home.as_posix())
-    patch_sparkline_history([0.0] * 14, captured_db_paths)
 
-    today = datetime.now(UTC).date()
-    expected_labels = [(today - timedelta(days=13 - index)).strftime("%m/%d") for index in range(14)]
+    today_date = today.date()
+    expected_labels = [(today_date - timedelta(days=13 - index)).strftime("%m/%d") for index in range(14)]
+    expected_data = [0.0] * 14
+    expected_data[-2] = 1.0
+    expected_data[-1] = 2.0
 
     async with app.run_test() as pilot:
         # Wait for sparkline labels to be populated
@@ -233,9 +251,10 @@ async def test_app_loads_sparkline_history_from_configured_db(
             if label.content:
                 break
         actual_labels = [app.query_one(f"#sparkline-x-label-{index}", Static).content for index in range(14)]
+        sparkline = app.query_one("#archive-sparkline", Sparkline)
+        assert sparkline.data is not None
         assert actual_labels == expected_labels
-
-    assert captured_db_paths == [get_db_path(tui_config.borgboi_dir)]
+        assert list(sparkline.data) == expected_data
 
 
 async def test_load_repos_error_shows_notification(tui_config: Config) -> None:
@@ -258,13 +277,11 @@ async def test_load_repos_error_shows_notification(tui_config: Config) -> None:
 
 async def test_app_captures_expected_tui_spans(
     fake_tui_tracer: FakeTracer,
-    patch_sparkline_history: Callable[..., None],
     tui_config: Config,
 ) -> None:
     tui_config.telemetry.enabled = True
     orchestrator = make_orchestrator(list_repos=lambda: [build_repo("alpha")])
     app = BorgBoiApp(config=tui_config, orchestrator=orchestrator)
-    patch_sparkline_history([1.0] * 14)
 
     async with app.run_test() as pilot:
         table = app.query_one("#repos-table", DataTable)
@@ -281,7 +298,6 @@ async def test_app_captures_expected_tui_spans(
 async def test_app_skips_tui_spans_when_capture_disabled(
     fake_tui_tracer: FakeTracer,
     monkeypatch: pytest.MonkeyPatch,
-    patch_sparkline_history: Callable[..., None],
     tmp_path: Any,
 ) -> None:
     monkeypatch.setenv("BORGBOI_HOME", tmp_path.as_posix())
@@ -291,7 +307,6 @@ async def test_app_skips_tui_spans_when_capture_disabled(
 
     orchestrator = make_orchestrator(list_repos=lambda: [build_repo("alpha")])
     app = BorgBoiApp(config=config, orchestrator=orchestrator)
-    patch_sparkline_history([1.0] * 14)
 
     async with app.run_test() as pilot:
         table = app.query_one("#repos-table", DataTable)

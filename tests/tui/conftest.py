@@ -102,6 +102,7 @@ def make_orchestrator(**overrides: Any) -> Any:
         "borg": None,
         "storage": None,
         "s3": None,
+        "list_archives": lambda _repo: [],
     }
     defaults.update(overrides)
     return cast(Any, SimpleNamespace(**defaults))
