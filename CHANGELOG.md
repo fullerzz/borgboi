@@ -1,3 +1,16 @@
+## v1.29.5 (2026-06-06)
+
+### 🐛 Bug Fixes
+
+- Split S3 progress output lines ([#266](https://github.com/fullerzz/borgboi/issues/266)) ([c7a7f4a](https://github.com/fullerzz/borgboi/commit/c7a7f4a3db81a9d6fc24b36cfff132627687db58))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update gitleaks/gitleaks-action action to v3 ([#265](https://github.com/fullerzz/borgboi/issues/265)) ([a3a45fc](https://github.com/fullerzz/borgboi/commit/a3a45fc117b5a40647dc2c3c5978ef2b313ff61c))
+
+
 ## v1.29.4 (2026-05-29)
 
 ### 🐛 Bug Fixes
