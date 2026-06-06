@@ -5,6 +5,7 @@ replacing the procedural functions in s3.py. It supports dependency injection
 for testing and different S3 backends.
 """
 
+import io
 import json
 import subprocess as sp
 from abc import ABC, abstractmethod
@@ -172,25 +173,26 @@ class S3Client(S3ClientInterface):
             StorageError: If the command fails
         """
         proc = sp.Popen(cmd, stdout=sp.PIPE, stderr=sp.PIPE)  # noqa: S603
-        out_stream = proc.stdout
-
-        if not out_stream:
+        if not proc.stdout:
             raise StorageError(f"{error_msg}: stdout is None")
 
-        while out_stream.readable():
-            line = out_stream.readline()
-            if not line:
-                if proc.stdout:
-                    proc.stdout.close()
-                if proc.stderr:
-                    proc.stderr.close()
-                break
-            yield line.decode("utf-8").rstrip("\n")
+        # AWS CLI progress messages use \r to redraw the current terminal line.
+        # Universal newlines normalize \r, \n, and \r\n so each update renders separately.
+        text_stream = io.TextIOWrapper(proc.stdout, encoding="utf-8", errors="replace")
+        try:
+            for line in text_stream:
+                yield line.rstrip("\n")
+        finally:
+            text_stream.close()
 
         returncode = proc.wait()
-        if returncode != 0:
-            stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
-            raise StorageError(f"{error_msg} (exit code {returncode}): {stderr}", operation="s3_sync")
+        try:
+            if returncode != 0:
+                stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
+                raise StorageError(f"{error_msg} (exit code {returncode}): {stderr}", operation="s3_sync")
+        finally:
+            if proc.stderr:
+                proc.stderr.close()
 
     @override
     def sync_to_bucket(self, local_path: str | Path, repo_name: str) -> Generator[str]:

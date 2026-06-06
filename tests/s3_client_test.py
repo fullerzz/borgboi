@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,24 +15,9 @@ from borgboi.core.errors import StorageError
 from borgboi.storage.models import S3RepoStats
 
 
-class _FakeStream:
+class _FakeStream(io.BytesIO):
     def __init__(self, lines: list[bytes] | None = None, read_data: bytes = b"") -> None:
-        self._lines = list(lines or [])
-        self._read_data = read_data
-
-    def readable(self) -> bool:
-        return True
-
-    def readline(self) -> bytes:
-        if self._lines:
-            return self._lines.pop(0)
-        return b""
-
-    def read(self) -> bytes:
-        return self._read_data
-
-    def close(self) -> None:
-        pass
+        super().__init__(b"".join(lines) if lines is not None else read_data)
 
 
 class _FakeProcess:
@@ -133,6 +120,41 @@ def test_run_streaming_command_yields_output_lines(
     lines = list(client._run_streaming_command(["aws", "s3", "sync"]))
 
     assert lines == ["first", "second"]
+
+
+@pytest.mark.parametrize(
+    ("script", "expected"),
+    [
+        pytest.param(
+            r"import sys; sys.stdout.buffer.write(b'alpha\nbeta\ngamma\n')",
+            ["alpha", "beta", "gamma"],
+            id="newline",
+        ),
+        pytest.param(
+            r"import sys; sys.stdout.buffer.write(b'tick1\rtick2\rtick3\r')",
+            ["tick1", "tick2", "tick3"],
+            id="carriage-return",
+        ),
+        pytest.param(
+            r"import sys; sys.stdout.buffer.write(b'line1\r\nline2\r\n')",
+            ["line1", "line2"],
+            id="crlf",
+        ),
+        pytest.param(
+            r"import sys; sys.stdout.buffer.write(b'progress\rinfo\nwarn\r\ndone\n')",
+            ["progress", "info", "warn", "done"],
+            id="mixed",
+        ),
+    ],
+)
+def test_run_streaming_command_splits_aws_progress_line_endings(
+    script: str,
+    expected: list[str],
+    client: s3_client_module.S3Client,
+) -> None:
+    lines = list(client._run_streaming_command([sys.executable, "-c", script]))
+
+    assert lines == expected
 
 
 def test_run_streaming_command_raises_when_stdout_missing(
