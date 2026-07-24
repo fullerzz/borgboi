@@ -14,18 +14,18 @@ jobs:
       contents: write
     steps:
       - name: Check out
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
           fetch-depth: 0
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.14"
       - name: Install uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          version: "0.11.19"
+          version: "0.11.31"
           enable-cache: true
       - name: Sync dependencies
         run: uv sync --frozen
@@ -54,7 +54,7 @@ jobs:
           git push origin "v${{ steps.cz.outputs.next_version }}"
       - name: Release
         if: ${{ steps.cz.outputs.next_version != steps.cz.outputs.previous_version }}
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           body_path: "body.md"
           tag_name: v${{ steps.cz.outputs.next_version }}
