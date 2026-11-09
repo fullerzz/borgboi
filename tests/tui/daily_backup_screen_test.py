@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import threading
 from collections.abc import Generator
 from types import SimpleNamespace
@@ -319,7 +320,7 @@ async def test_progress_bar_stays_visible_until_streaming_create_finishes(tui_co
         await pilot.click("#daily-backup-start")
 
         # Wait until streaming has started but hasn't finished
-        assert streaming_started.wait(timeout=5) is True
+        assert await asyncio.to_thread(streaming_started.wait, timeout=5) is True
         await pilot.pause(0.05)
 
         progress_bar = screen.query_one("#daily-backup-progress", ProgressBar)

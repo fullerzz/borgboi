@@ -69,7 +69,7 @@ def _make_handler(
     def capture_write(text: str | Text) -> None:
         written.append(text)
 
-    handler._write = capture_write  # type: ignore[method-assign] # ty: ignore[invalid-assignment]
+    handler._write = capture_write  # type: ignore[method-assign]
     return handler, written
 
 
@@ -113,7 +113,7 @@ def _make_handler_with_progress(
     def capture_write(text: str | Text) -> None:
         written.append(text)
 
-    handler._write = capture_write  # type: ignore[method-assign] # ty: ignore[invalid-assignment]
+    handler._write = capture_write  # type: ignore[method-assign]
     return handler, written, progress_bar, cft_calls
 
 
