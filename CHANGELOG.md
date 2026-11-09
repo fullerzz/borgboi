@@ -1,3 +1,34 @@
+## v1.29.7 (2026-11-09)
+
+### 🐛 Bug Fixes
+
+- **python-deps**: Lock file maintenance ([#278](https://github.com/fullerzz/borgboi/issues/278)) ([4c66cb8](https://github.com/fullerzz/borgboi/commit/4c66cb8f92318bb54cfbe1ad5a7cb94a6bc9973c))
+
+
+
+### 💼 Other
+
+- Add `pullfrog.yml` workflow ([f82c9ea](https://github.com/fullerzz/borgboi/commit/f82c9ea5eea23294bf1146f6cbceff25400e8db4))
+
+
+
+### ⚙️ Miscellaneous Tasks
+
+- **deps**: Update terraform aws to v6.55.0 ([#271](https://github.com/fullerzz/borgboi/issues/271)) ([63b62d2](https://github.com/fullerzz/borgboi/commit/63b62d234f06f084def95b34813b4065a22cb8c2))
+
+- **deps**: Update terraform aws to v6.61.0 ([#274](https://github.com/fullerzz/borgboi/issues/274)) ([f27ef9b](https://github.com/fullerzz/borgboi/commit/f27ef9b78c4e712587e54acf0f7255ac6ff75ee4))
+
+
+
+### 🎡 Continuous Integration
+
+- **ci-deps**: Update ci dependencies ([#268](https://github.com/fullerzz/borgboi/issues/268)) ([d6dd7ac](https://github.com/fullerzz/borgboi/commit/d6dd7acfa6215a7dbd7fe572f16c1f5d47a30cc5))
+
+- **ci-deps**: Update ci dependencies ([#275](https://github.com/fullerzz/borgboi/issues/275)) ([a560aba](https://github.com/fullerzz/borgboi/commit/a560aba331f3d25ce9f4ff0ec6d1fc91eee0304f))
+
+- **ci-deps**: Update ci dependencies (major) ([#273](https://github.com/fullerzz/borgboi/issues/273)) ([b0fc915](https://github.com/fullerzz/borgboi/commit/b0fc915084e13836832e71491278078d70eae7fc))
+
+
 ## v1.29.6 (2026-07-17)
 
 ### 🐛 Bug Fixes
