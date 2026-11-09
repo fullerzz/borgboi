@@ -38,19 +38,16 @@ class _LoggingState:
 
 
 def _build_shared_processors() -> list[Processor]:
-    return cast(
-        list[Processor],
-        [
-            structlog.contextvars.merge_contextvars,
-            _add_otel_trace_context,
-            structlog.stdlib.add_logger_name,
-            structlog.stdlib.add_log_level,
-            structlog.stdlib.ExtraAdder(),
-            structlog.processors.TimeStamper(fmt="iso"),
-            structlog.processors.StackInfoRenderer(),
-            structlog.processors.format_exc_info,
-        ],
-    )
+    return [
+        structlog.contextvars.merge_contextvars,
+        _add_otel_trace_context,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.ExtraAdder(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
 
 
 def _add_otel_trace_context(_: object, __: str, event_dict: EventDict) -> EventDict:
